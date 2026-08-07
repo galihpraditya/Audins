@@ -25,19 +25,32 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow non-browser requests (Postman, curl, server-to-server)
       if (!origin) return callback(null, true)
       
-      const isLocal = origin.startsWith('http://localhost') || 
-                      origin.startsWith('http://127.0.0.1') ||
-                      origin.match(/^http:\/\/192\.168\.\d+\.\d+/) ||
-                      origin.match(/^http:\/\/10\.\d+\.\d+\.\d+/) ||
-                      origin.match(/^http:\/\/172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/)
+      const cleanOrigin = origin.replace(/\/$/, '')
       
-      const isAllowedProd = process.env.FRONTEND_URL ? origin === process.env.FRONTEND_URL : false
+      const isLocal = cleanOrigin.startsWith('http://localhost') || 
+                      cleanOrigin.startsWith('http://127.0.0.1') ||
+                      cleanOrigin.match(/^http:\/\/192\.168\.\d+\.\d+/) ||
+                      cleanOrigin.match(/^http:\/\/10\.\d+\.\d+\.\d+/) ||
+                      cleanOrigin.match(/^http:\/\/172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/)
+      
+      let isAllowedProd = false
+      if (process.env.FRONTEND_URL) {
+        const allowedList = process.env.FRONTEND_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
+        isAllowedProd = allowedList.includes(cleanOrigin) || allowedList.includes('*')
+      }
+      
+      // Auto-allow all Vercel and Cloudflare Pages deployment URLs
+      if (cleanOrigin.endsWith('.vercel.app') || cleanOrigin.endsWith('.workers.dev')) {
+        isAllowedProd = true
+      }
       
       if (isLocal || isAllowedProd) {
         callback(null, true)
       } else {
+        console.warn(`CORS blocked request from origin: ${origin}`)
         callback(new Error('Not allowed by CORS'), false)
       }
     },
