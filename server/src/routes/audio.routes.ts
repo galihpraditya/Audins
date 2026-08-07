@@ -3,7 +3,8 @@ import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
 import { v4 as uuidv4 } from 'uuid'
-import { uploadAudioToSupabase } from '../services/supabase.service.js'
+import { uploadAudioToR2, isR2Enabled } from '../services/r2.service.js'
+import { uploadAudioToSupabase, isSupabaseEnabled } from '../services/supabase.service.js'
 import {
   getAllDocuments,
   getDocumentById,
@@ -131,19 +132,29 @@ router.post('/audio/upload', checkPortfolioRateLimit, upload.single('file'), asy
     // Default local file serving URL
     let serverAudioUrl = `http://localhost:3001/uploads/${path.basename(file.path)}`
 
-    // Supabase Storage Upload & local cleanup
+    // Cloudflare R2 Upload (Priority) -> Supabase Storage -> Local Fallback
     try {
-      const supabaseUrl = await uploadAudioToSupabase(file.path, path.basename(file.path), file.mimetype)
-      if (supabaseUrl) {
-        serverAudioUrl = supabaseUrl
-        // Safe to delete local file from Render container since it's now securely on Supabase Storage
-        if (fs.existsSync(file.path)) {
-          fs.unlinkSync(file.path)
-          console.log(`Successfully uploaded to Supabase Storage and deleted local file: ${file.path}`)
+      if (isR2Enabled()) {
+        const r2Url = await uploadAudioToR2(file.path, path.basename(file.path), file.mimetype)
+        if (r2Url) {
+          serverAudioUrl = r2Url
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path)
+            console.log(`Successfully uploaded to Cloudflare R2 and deleted local file: ${file.path}`)
+          }
+        }
+      } else if (isSupabaseEnabled()) {
+        const supabaseUrl = await uploadAudioToSupabase(file.path, path.basename(file.path), file.mimetype)
+        if (supabaseUrl) {
+          serverAudioUrl = supabaseUrl
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path)
+            console.log(`Successfully uploaded to Supabase Storage and deleted local file: ${file.path}`)
+          }
         }
       }
-    } catch (sbErr) {
-      console.error('Failed to upload audio to Supabase Storage, falling back to local file serving:', sbErr)
+    } catch (storageErr) {
+      console.error('Failed to upload audio to cloud storage, falling back to local file serving:', storageErr)
     }
 
     const newDoc: FullDocument = {
