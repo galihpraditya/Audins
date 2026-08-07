@@ -9,6 +9,7 @@ export interface DocumentItem {
   status: DocumentStatus
   audioUrl?: string
   createdAt: string
+  userId?: string
 }
 
 export interface TranscriptEntry {

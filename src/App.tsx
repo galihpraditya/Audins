@@ -6,7 +6,7 @@ import Dashboard from './components/dashboard/Dashboard'
 import Workspace from './components/workspace/Workspace'
 import RateLimitModal from './components/modals/RateLimitModal'
 import SettingsModal from './components/modals/SettingsModal'
-import { uploadAudioToApi, reSummarizeApi, fetchDocumentsFromApi, deleteDocumentApi, renameDocumentApi, duplicateDocumentApi, updateDocumentSummaryApi } from './services/api'
+import { uploadAudioToApi, reSummarizeApi, fetchDocumentsFromApi, deleteDocumentApi, renameDocumentApi, duplicateDocumentApi, updateDocumentSummaryApi, fetchRateLimitApi } from './services/api'
 import { useToast } from './components/ui/ToastContext'
 
 export default function App() {
@@ -49,11 +49,17 @@ export default function App() {
     }
   }, [])
 
-  // Fetch initial documents from backend
+  // Fetch initial documents and rate limit from backend
   useEffect(() => {
     fetchDocumentsFromApi().then((docs) => {
       if (docs) {
         setDocuments(docs.reverse())
+      }
+    })
+    fetchRateLimitApi().then((status) => {
+      if (status && status.maxLimit && typeof status.remaining === 'number') {
+        const used = status.maxLimit - status.remaining
+        setUploadCount(used)
       }
     })
   }, [])

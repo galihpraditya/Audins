@@ -128,15 +128,20 @@ loadDb()
 
 // --- Exported Async CRUD API ---
 
-export async function getAllDocuments(): Promise<FullDocument[]> {
+export async function getAllDocuments(userId?: string): Promise<FullDocument[]> {
   if (isSupabaseEnabled()) {
-    const docs = await getSupabaseAllDocuments()
+    const docs = await getSupabaseAllDocuments(userId)
     if (docs !== null) {
       // Sort by createdAt descending
       return docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     }
   }
-  return Array.from(documentsStore.values())
+  
+  const allLocalDocs = Array.from(documentsStore.values())
+  if (userId) {
+    return allLocalDocs.filter(d => d.userId === userId)
+  }
+  return allLocalDocs
 }
 
 export async function getDocumentById(id: string): Promise<FullDocument | undefined> {

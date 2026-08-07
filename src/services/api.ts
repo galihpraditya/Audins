@@ -3,6 +3,15 @@ import { DocumentItem, AISummary } from '../types'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api/v1'
 const HEALTH_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '/health')
 
+function getSessionId(): string {
+  let sessionId = localStorage.getItem('audin_session_id')
+  if (!sessionId) {
+    sessionId = crypto.randomUUID ? crypto.randomUUID() : 'sess-' + Math.random().toString(36).substring(2, 15)
+    localStorage.setItem('audin_session_id', sessionId)
+  }
+  return sessionId
+}
+
 export async function checkBackendHealth(): Promise<boolean> {
   try {
     const res = await fetch(HEALTH_URL)
@@ -14,7 +23,25 @@ export async function checkBackendHealth(): Promise<boolean> {
 
 export async function fetchDocumentsFromApi(): Promise<DocumentItem[] | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/documents`)
+    const res = await fetch(`${API_BASE_URL}/documents`, {
+      headers: {
+        'X-User-Session': getSessionId()
+      }
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function fetchRateLimitApi(): Promise<any | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/settings/rate-limit`, {
+      headers: {
+        'X-User-Session': getSessionId()
+      }
+    })
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -34,7 +61,9 @@ export async function uploadAudioToApi(
     if (duration) formData.append('duration', duration)
     if (durationSec !== undefined) formData.append('durationSec', durationSec.toString())
 
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {
+      'X-User-Session': getSessionId()
+    }
     if (userApiKey) {
       headers['X-Groq-API-Key'] = userApiKey
     }
@@ -59,7 +88,8 @@ export async function uploadAudioToApi(
 
 export async function reSummarizeApi(id: string | number, userApiKey?: string, customPrompt?: string): Promise<DocumentItem> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'X-User-Session': getSessionId()
   }
   if (userApiKey) {
     headers['X-Groq-API-Key'] = userApiKey
@@ -82,6 +112,7 @@ export async function reSummarizeApi(id: string | number, userApiKey?: string, c
 export async function deleteDocumentApi(id: string | number): Promise<boolean> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
     method: 'DELETE',
+    headers: { 'X-User-Session': getSessionId() }
   })
   return res.ok
 }
@@ -89,7 +120,7 @@ export async function deleteDocumentApi(id: string | number): Promise<boolean> {
 export async function renameDocumentApi(id: string | number, newName: string): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-User-Session': getSessionId() },
     body: JSON.stringify({ name: newName }),
   })
 
@@ -104,6 +135,7 @@ export async function renameDocumentApi(id: string | number, newName: string): P
 export async function duplicateDocumentApi(id: string | number): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}/duplicate`, {
     method: 'POST',
+    headers: { 'X-User-Session': getSessionId() }
   })
 
   if (!res.ok) {
@@ -117,7 +149,7 @@ export async function duplicateDocumentApi(id: string | number): Promise<Documen
 export async function updateDocumentSummaryApi(id: string | number, summary: AISummary): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}/summary`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-User-Session': getSessionId() },
     body: JSON.stringify({ summary }),
   })
 

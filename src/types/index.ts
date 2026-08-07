@@ -29,4 +29,5 @@ export interface DocumentItem {
   audioUrl?: string
   transcripts?: TranscriptEntry[]
   summary?: AISummary
+  userId?: string
 }

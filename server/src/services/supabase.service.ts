@@ -58,12 +58,14 @@ export async function uploadAudioToSupabase(filePath: string, fileName: string, 
 
 // --- Database API ---
 
-export async function getSupabaseAllDocuments(): Promise<FullDocument[] | null> {
+export async function getSupabaseAllDocuments(userId?: string): Promise<FullDocument[] | null> {
   if (!supabase || !isSupabaseEnabled()) return null
   try {
-    const { data, error } = await supabase
-      .from('documents')
-      .select('content')
+    let query = supabase.from('documents').select('content')
+    if (userId) {
+      query = query.contains('content', { userId })
+    }
+    const { data, error } = await query
     
     if (error) throw error
     return (data || []).map((row: any) => row.content as FullDocument)
@@ -124,5 +126,52 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
   } catch (error) {
     console.error(`Failed to delete document ${id} from Supabase:`, error)
     return false
+  }
+}
+
+// --- Rate Limit API ---
+
+export async function getSupabaseRateLimit(key: string): Promise<{ count: number, resetTime: Date } | null> {
+  if (!supabase || !isSupabaseEnabled()) return null
+  try {
+    const id = `rate_limit_${key}`
+    const { data, error } = await supabase
+      .from('documents')
+      .select('content')
+      .eq('id', id)
+      .single()
+    
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      throw error
+    }
+    if (data && data.content) {
+      return {
+        count: data.content.count,
+        resetTime: new Date(data.content.resetTime)
+      }
+    }
+    return null
+  } catch (error) {
+    console.error(`Failed to fetch rate limit for ${key} from Supabase:`, error)
+    return null
+  }
+}
+
+export async function saveSupabaseRateLimit(key: string, record: { count: number, resetTime: Date }): Promise<void> {
+  if (!supabase || !isSupabaseEnabled()) return
+  try {
+    const id = `rate_limit_${key}`
+    await supabase
+      .from('documents')
+      .upsert({
+        id,
+        content: {
+          count: record.count,
+          resetTime: record.resetTime.toISOString()
+        }
+      })
+  } catch (error) {
+    console.error(`Failed to save rate limit for ${key} to Supabase:`, error)
   }
 }

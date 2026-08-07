@@ -62,15 +62,16 @@ router.get('/', (req: Request, res: Response) => {
 })
 
 // GET /api/v1/settings/rate-limit - Check remaining demo quota
-router.get('/settings/rate-limit', (req: Request, res: Response) => {
-  const status = getRateLimitStatus(req)
+router.get('/settings/rate-limit', async (req: Request, res: Response) => {
+  const status = await getRateLimitStatus(req)
   res.json(status)
 })
 
 // GET /api/v1/documents - List all audio documents
 router.get('/documents', async (req: Request, res: Response) => {
   try {
-    const docs = await getAllDocuments()
+    const userId = getHeaderKey(req.headers['x-user-session'])
+    const docs = await getAllDocuments(userId)
     res.json(docs)
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch documents' })
@@ -168,6 +169,7 @@ router.post('/audio/upload', checkPortfolioRateLimit, upload.single('file'), asy
       audioUrl: serverAudioUrl,
       transcripts,
       summary,
+      userId: getHeaderKey(req.headers['x-user-session']),
     }
 
     await saveDocument(newDoc)
