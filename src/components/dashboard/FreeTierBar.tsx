@@ -27,21 +27,20 @@ export default function FreeTierBar({
 
 
   return (
-    <button
-      onClick={onUpgrade}
-      className="w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 bg-primary-dim border border-indigo-500/20 hover:bg-indigo-500/20 group"
-    >
+    <div className="w-full px-3 py-3 rounded-xl bg-surface-2 border border-border flex flex-col gap-3 relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-xl pointer-events-none" />
+      
       {/* Upload Limit */}
-      <div className="mb-4">
+      <div className="relative z-10">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs font-medium text-fg-secondary group-hover:text-fg">
+          <span className="text-xs font-medium text-fg-secondary">
             Daily AI Uploads
           </span>
-          <span className="text-xs text-primary-hover font-mono">
+          <span className="text-xs text-primary font-mono">
             {uploadCount} / {maxUploads}
           </span>
         </div>
-        <div className="h-1 rounded-full overflow-hidden bg-indigo-950">
+        <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle">
           <div
             className="h-full rounded-full transition-all duration-300"
             style={{
@@ -50,22 +49,22 @@ export default function FreeTierBar({
             }}
           />
         </div>
-        <p className="text-xs mt-1.5 text-fg-tertiary">
+        <p className="text-[10px] mt-1.5 text-fg-tertiary">
           {remaining} upload{remaining === 1 ? "" : "s"} remaining today
         </p>
       </div>
 
       {/* Storage Limit */}
-      <div className="relative group/storage">
+      <div className="relative z-10 group/storage">
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs font-medium text-fg-secondary group-hover:text-fg">
+          <span className="text-xs font-medium text-fg-secondary">
             Storage (Audio)
           </span>
           <span className="text-xs text-pink-400 font-mono">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
           </span>
         </div>
-        <div className="h-1 rounded-full overflow-hidden bg-indigo-950">
+        <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle">
           <div
             className="h-full rounded-full transition-all duration-300"
             style={{
@@ -74,10 +73,18 @@ export default function FreeTierBar({
             }}
           />
         </div>
-        <p className="text-xs mt-1.5 text-fg-tertiary">
+        <p className="text-[10px] mt-1.5 text-fg-tertiary">
           Audio files are auto-deleted after 7 days
         </p>
       </div>
-    </button>
+      
+      {/* Upgrade Button */}
+      <button
+        onClick={onUpgrade}
+        className="relative z-10 w-full mt-1 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary-hover hover:bg-primary/20 transition-colors"
+      >
+        Upgrade or enter API Key
+      </button>
+    </div>
   )
 }

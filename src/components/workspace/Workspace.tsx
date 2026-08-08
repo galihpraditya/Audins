@@ -496,27 +496,6 @@ export default function Workspace({
         </div>
       </div>
 
-      {isProcessing && (
-        <div className="bg-indigo-500/10 border-b border-indigo-500/20 px-4 py-2 flex items-center justify-between text-xs print:hidden">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-            <span className="font-medium text-primary">
-              {document.uploadProgress && document.uploadProgress < 100
-                ? `Uploading audio... ${document.uploadProgress}%`
-                : "AI is processing audio in the background. You can safely leave this page."}
-            </span>
-          </div>
-          {document.uploadProgress !== undefined && document.uploadProgress < 100 && (
-            <div className="w-1/3 max-w-xs h-1.5 bg-indigo-950 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary transition-all duration-300" 
-                style={{ width: `${document.uploadProgress}%` }} 
-              />
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Split Panels / Tabs for Mobile */}
       <div className="flex-1 flex flex-col overflow-hidden relative print:block print:overflow-visible print:h-auto">
         {/* Mobile Tabs Header */}

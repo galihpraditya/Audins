@@ -346,15 +346,30 @@ export default function SummaryEditor({
               </div>
 
               {document.status === "Processing" ? (
-                <div className="p-8 rounded-2xl bg-surface border border-border text-center space-y-3 no-print">
-                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                  <p className="text-sm font-medium text-fg">
-                    AI is analyzing the transcript...
-                  </p>
-                  <p className="text-xs text-fg-tertiary">
-                    Generating transcript with Whisper Large v3 and executive
-                    summary with Llama 3.3 70B.
-                  </p>
+                <div className="p-8 rounded-2xl bg-surface border border-indigo-500/20 text-center space-y-4 no-print flex flex-col items-center">
+                  <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-primary rounded-full animate-spin mx-auto mb-2"></div>
+                  {document.uploadProgress !== undefined && document.uploadProgress < 100 ? (
+                    <div className="w-full max-w-sm mx-auto">
+                      <p className="text-sm font-medium text-fg mb-3">
+                        Uploading audio... {document.uploadProgress}%
+                      </p>
+                      <div className="h-1.5 bg-indigo-950 rounded-full overflow-hidden w-full">
+                        <div 
+                          className="h-full bg-primary transition-all duration-300" 
+                          style={{ width: `${document.uploadProgress}%` }} 
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-fg">
+                        AI is processing your audio...
+                      </p>
+                      <p className="text-xs text-fg-tertiary">
+                        You can safely leave this page or minimize the app. It runs in the background.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : document.status === "Failed" ? (
                 <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-center space-y-2 no-print">

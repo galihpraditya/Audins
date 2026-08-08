@@ -169,9 +169,7 @@ router.post(
           )
           if (r2Url) {
             serverAudioUrl = r2Url
-            if (fs.existsSync(file.path)) {
-              fs.unlinkSync(file.path)
-            }
+            // File is kept local for Groq Whisper in background task
           }
         } else if (isSupabaseEnabled()) {
           const supabaseUrl = await uploadAudioToSupabase(
@@ -181,9 +179,7 @@ router.post(
           )
           if (supabaseUrl) {
             serverAudioUrl = supabaseUrl
-            if (fs.existsSync(file.path)) {
-              fs.unlinkSync(file.path)
-            }
+            // File is kept local for Groq Whisper in background task
           }
         }
       } catch (storageErr) {
@@ -239,6 +235,11 @@ router.post(
           console.error("Background AI processing failed for doc:", docId, error)
           newDoc.status = "Failed"
           await saveDocument(newDoc)
+        } finally {
+          // Cleanup local file after AI processing finishes
+          if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path)
+          }
         }
       })()
     } catch (error) {
