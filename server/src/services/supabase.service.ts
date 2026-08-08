@@ -69,6 +69,25 @@ export async function uploadAudioToSupabase(
   }
 }
 
+export async function deleteAudioFromSupabase(
+  fileName: string,
+): Promise<boolean> {
+  if (!supabase || !isSupabaseEnabled()) {
+    return false
+  }
+
+  try {
+    const bucketName = "audin-audio"
+    const { error } = await supabase.storage.from(bucketName).remove([fileName])
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    console.error("Error deleting file from Supabase storage:", error)
+    return false
+  }
+}
+
 // --- Database API ---
 
 export async function getSupabaseAllDocuments(

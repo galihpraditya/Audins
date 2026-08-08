@@ -8,6 +8,9 @@ interface SidebarProps {
   setModal: (v: boolean) => void
   onOpenSettings: () => void
   uploadCount: number
+  storageUsed?: number
+  storageLimit?: number
+  documents: DocumentItem[]
 }
 
 export function NavItems({
@@ -88,6 +91,9 @@ export default function Sidebar({
   setModal,
   onOpenSettings,
   uploadCount,
+  storageUsed,
+  storageLimit,
+  documents,
 }: SidebarProps) {
   return (
     <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-border bg-surface print:hidden">
@@ -125,10 +131,14 @@ export default function Sidebar({
           </svg>
           Settings
         </button>
-        <FreeTierBar
-          onUpgrade={() => setModal(true)}
-          uploadCount={uploadCount}
-        />
+        <div className="mt-auto px-4 pb-4">
+          <FreeTierBar 
+            onUpgrade={() => setModal(true)} 
+            uploadCount={uploadCount} 
+            storageUsed={storageUsed}
+            storageLimit={storageLimit}
+          />
+        </div>
       </div>
     </aside>
   )

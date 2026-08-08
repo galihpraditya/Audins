@@ -10,6 +10,7 @@ export interface DocumentItem {
   audioUrl?: string
   createdAt: string
   userId?: string
+  sizeBytes?: number
 }
 
 export interface TranscriptEntry {
@@ -41,4 +42,6 @@ export interface RateLimitResponse {
   maxLimit: number
   resetTime: string
   ip: string
+  storageUsed: number
+  storageLimit: number
 }

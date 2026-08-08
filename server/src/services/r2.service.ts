@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import fs from "node:fs"
 
 const hasR2Config =
@@ -61,5 +61,26 @@ export async function uploadAudioToR2(
   } catch (error) {
     console.error("Error uploading file to Cloudflare R2:", error)
     throw new Error(`Cloudflare R2 upload failed: ${(error as Error).message}`)
+  }
+}
+
+export async function deleteAudioFromR2(fileName: string): Promise<boolean> {
+  if (!s3 || !isR2Enabled()) {
+    return false
+  }
+
+  const bucketName = process.env.R2_BUCKET_NAME || ""
+
+  try {
+    await s3.send(
+      new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: fileName,
+      }),
+    )
+    return true
+  } catch (error) {
+    console.error("Error deleting file from Cloudflare R2:", error)
+    return false
   }
 }

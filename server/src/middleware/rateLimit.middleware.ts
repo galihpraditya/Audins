@@ -5,6 +5,7 @@ import {
   saveSupabaseRateLimit,
   isSupabaseEnabled,
 } from "../services/supabase.service.js"
+import { calculateStorageUsed, cleanupExpiredAudio } from "../services/storage.service.js"
 
 interface IPRecord {
   count: number
@@ -44,12 +45,19 @@ export async function getRateLimitStatus(
     record = await getSupabaseRateLimit(key)
   }
 
+  // Passive cleanup of expired audio files for this user
+  await cleanupExpiredAudio(key)
+  const storageUsed = await calculateStorageUsed(key)
+  const storageLimit = 500 * 1024 * 1024 // 500 MB
+
   if (!record || now > record.resetTime) {
     return {
       remaining: MAX_FREE_DAILY_UPLOADS,
       maxLimit: MAX_FREE_DAILY_UPLOADS,
       resetTime: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
       ip: key,
+      storageUsed,
+      storageLimit,
     }
   }
 
@@ -58,6 +66,8 @@ export async function getRateLimitStatus(
     maxLimit: MAX_FREE_DAILY_UPLOADS,
     resetTime: record.resetTime.toISOString(),
     ip: key,
+    storageUsed,
+    storageLimit,
   }
 }
 

@@ -10,6 +10,8 @@ interface MobileNavProps {
   setModal: (v: boolean) => void
   onOpenSettings: () => void
   uploadCount: number
+  storageUsed?: number
+  storageLimit?: number
 }
 
 export default function MobileNav({
@@ -18,6 +20,8 @@ export default function MobileNav({
   setModal,
   onOpenSettings,
   uploadCount,
+  storageUsed,
+  storageLimit,
 }: MobileNavProps) {
   const [open, setOpen] = useState(false)
 
@@ -130,6 +134,8 @@ export default function MobileNav({
               setModal(true)
             }}
             uploadCount={uploadCount}
+            storageUsed={storageUsed}
+            storageLimit={storageLimit}
           />
         </div>
       </aside>

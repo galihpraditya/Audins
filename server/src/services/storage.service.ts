@@ -13,7 +13,9 @@ import {
   getSupabaseDocumentById,
   saveSupabaseDocument,
   deleteSupabaseDocument,
+  deleteAudioFromSupabase,
 } from "./supabase.service.js"
+import { isR2Enabled, deleteAudioFromR2 } from "./r2.service.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -206,6 +208,47 @@ export async function getAllDocuments(
   return allLocalDocs
 }
 
+export async function calculateStorageUsed(userId?: string): Promise<number> {
+  const docs = await getAllDocuments(userId)
+  return docs.reduce((acc, doc) => acc + (doc.sizeBytes || 0), 0)
+}
+
+export async function cleanupExpiredAudio(userId?: string): Promise<void> {
+  const docs = await getAllDocuments(userId)
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+  const now = Date.now()
+
+  for (const doc of docs) {
+    if (!doc.audioUrl || doc.audioUrl === "Expired") continue
+    const docAge = now - new Date(doc.createdAt).getTime()
+    
+    if (docAge > SEVEN_DAYS) {
+      console.log(`Auto-deleting expired audio for doc: ${doc.id}`)
+      try {
+        const url = new URL(doc.audioUrl)
+        const fileName = path.basename(url.pathname)
+
+        if (isR2Enabled()) {
+          await deleteAudioFromR2(fileName)
+        } else if (isSupabaseEnabled()) {
+          await deleteAudioFromSupabase(fileName)
+        } else if (doc.audioUrl.includes("localhost")) {
+          // Local fallback deletion
+          const localPath = path.join(__dirname, "../../../uploads", fileName)
+          if (fs.existsSync(localPath)) fs.unlinkSync(localPath)
+        }
+
+        // Mark as expired and remove size payload
+        doc.audioUrl = "Expired"
+        doc.sizeBytes = 0
+        await saveDocument(doc)
+      } catch (err) {
+        console.error("Failed to delete expired audio:", err)
+      }
+    }
+  }
+}
+
 export async function getDocumentById(
   id: string,
 ): Promise<FullDocument | undefined> {
@@ -228,6 +271,24 @@ export async function saveDocument(doc: FullDocument): Promise<FullDocument> {
 }
 
 export async function deleteDocument(id: string): Promise<boolean> {
+  const doc = await getDocumentById(id)
+  if (doc && doc.audioUrl && doc.audioUrl !== "Expired") {
+    try {
+      const url = new URL(doc.audioUrl)
+      const fileName = path.basename(url.pathname)
+      if (isR2Enabled()) {
+        await deleteAudioFromR2(fileName)
+      } else if (isSupabaseEnabled()) {
+        await deleteAudioFromSupabase(fileName)
+      } else if (doc.audioUrl.includes("localhost")) {
+        const localPath = path.join(__dirname, "../../../uploads", fileName)
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath)
+      }
+    } catch (e) {
+      console.error("Failed to delete cloud audio on doc delete:", e)
+    }
+  }
+
   if (isSupabaseEnabled()) {
     return await deleteSupabaseDocument(id)
   }

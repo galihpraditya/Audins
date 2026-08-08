@@ -15,6 +15,7 @@ import {
   deleteDocument,
   renameDocument,
   duplicateDocument,
+  calculateStorageUsed,
 } from "../services/storage.service.js"
 import {
   transcribeAudioWithGroq,
@@ -130,6 +131,7 @@ router.post(
 
     try {
       const file = req.file
+      const userId = getHeaderKey(req.headers["x-user-session"])
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
 
       if (!file) {
@@ -137,22 +139,18 @@ router.post(
         return
       }
 
+      // Check 500MB storage limit
+      const storageUsed = await calculateStorageUsed(userId)
+      if (storageUsed + file.size > 500 * 1024 * 1024) {
+        fs.unlinkSync(file.path)
+        res.status(403).json({
+          error: "Storage limit exceeded (500MB). Please delete some files.",
+        })
+        return
+      }
+
       const docId = `doc-${uuidv4().substring(0, 8)}`
       const now = new Date()
-
-      // 1. Transcribe audio with Groq Whisper
-      const transcripts = await transcribeAudioWithGroq(file.path, customApiKey)
-
-      // Combined transcript text for AI summary
-      const fullText = transcripts.map((t) => t.text).join(" ")
-
-      // 2. Generate summary with Groq Llama
-      const summary = await summarizeTranscriptWithGroq(
-        fullText,
-        file.originalname,
-        customApiKey,
-      )
-
       const durationStr = req.body.duration || "0m 0s"
       const durationSec = req.body.durationSec
         ? parseInt(req.body.durationSec, 10)
@@ -173,9 +171,6 @@ router.post(
             serverAudioUrl = r2Url
             if (fs.existsSync(file.path)) {
               fs.unlinkSync(file.path)
-              console.log(
-                `Successfully uploaded to Cloudflare R2 and deleted local file: ${file.path}`,
-              )
             }
           }
         } else if (isSupabaseEnabled()) {
@@ -188,9 +183,6 @@ router.post(
             serverAudioUrl = supabaseUrl
             if (fs.existsSync(file.path)) {
               fs.unlinkSync(file.path)
-              console.log(
-                `Successfully uploaded to Supabase Storage and deleted local file: ${file.path}`,
-              )
             }
           }
         }
@@ -211,17 +203,44 @@ router.post(
         }),
         duration: durationStr,
         durationSec: durationSec,
-        status: "Completed",
+        status: "Processing",
         createdAt: now.toISOString(),
         audioUrl: serverAudioUrl,
-        transcripts,
-        summary,
-        userId: getHeaderKey(req.headers["x-user-session"]),
+        transcripts: [],
+        userId: userId,
+        sizeBytes: file.size,
       }
 
       await saveDocument(newDoc)
 
-      res.status(201).json(newDoc)
+      // Immediately return 202 Accepted to the frontend for background processing
+      res.status(202).json(newDoc)
+
+      // Background AI Processing Task
+      ;(async () => {
+        try {
+          // 1. Transcribe audio with Groq Whisper
+          const transcripts = await transcribeAudioWithGroq(file.path, customApiKey)
+          const fullText = transcripts.map((t) => t.text).join(" ")
+
+          // 2. Generate summary with Groq Llama
+          const summary = await summarizeTranscriptWithGroq(
+            fullText,
+            file.originalname,
+            customApiKey,
+          )
+
+          // 3. Mark completed
+          newDoc.transcripts = transcripts
+          newDoc.summary = summary
+          newDoc.status = "Completed"
+          await saveDocument(newDoc)
+        } catch (error) {
+          console.error("Background AI processing failed for doc:", docId, error)
+          newDoc.status = "Failed"
+          await saveDocument(newDoc)
+        }
+      })()
     } catch (error) {
       console.error("Upload processing error:", error)
       res

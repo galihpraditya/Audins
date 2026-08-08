@@ -52,41 +52,72 @@ export async function fetchRateLimitApi(): Promise<any | null> {
   }
 }
 
-export async function uploadAudioToApi(
+export function uploadAudioToApi(
   file: File,
   userApiKey?: string,
   duration?: string,
   durationSec?: number,
+  onProgress?: (progress: number) => void,
 ): Promise<any | null> {
-  try {
+  return new Promise((resolve, reject) => {
     const formData = new FormData()
     formData.append("file", file)
     if (duration) formData.append("duration", duration)
     if (durationSec !== undefined)
       formData.append("durationSec", durationSec.toString())
 
-    const headers: Record<string, string> = {
-      "X-User-Session": getSessionId(),
-    }
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", `${API_BASE_URL}/audio/upload`)
+    xhr.setRequestHeader("X-User-Session", getSessionId())
     if (userApiKey) {
-      headers["X-Groq-API-Key"] = userApiKey
+      xhr.setRequestHeader("X-Groq-API-Key", userApiKey)
     }
 
-    const res = await fetch(`${API_BASE_URL}/audio/upload`, {
-      method: "POST",
-      headers,
-      body: formData,
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded * 100) / e.total)
+          onProgress(percent)
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText))
+        } catch (e) {
+          resolve(null)
+        }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText)
+          reject(new Error(err.error || err.message || "Upload failed"))
+        } catch (e) {
+          reject(new Error(`Upload failed with status ${xhr.status}`))
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error("Network error occurred during upload"))
+    }
+
+    xhr.send(formData)
+  })
+}
+
+export async function pollDocumentStatusApi(id: string | number): Promise<DocumentItem | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+      headers: {
+        "X-User-Session": getSessionId(),
+      },
     })
-
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error || err.message || "Upload failed")
-    }
-
+    if (!res.ok) return null
     return await res.json()
-  } catch (error) {
-    console.error("Backend API call failed:", error)
-    throw error
+  } catch {
+    return null
   }
 }
 

@@ -15,6 +15,7 @@ import {
   duplicateDocumentApi,
   updateDocumentSummaryApi,
   fetchRateLimitApi,
+  pollDocumentStatusApi,
 } from "./services/api"
 import { useToast } from "./components/ui/ToastContext"
 
@@ -30,6 +31,8 @@ export default function App() {
     null,
   )
   const [uploadCount, setUploadCount] = useState<number>(0)
+  const [storageUsed, setStorageUsed] = useState<number>(0)
+  const [storageLimit, setStorageLimit] = useState<number>(500 * 1024 * 1024)
 
   // API Key & Model state with localStorage persistence
   const [userApiKey, setUserApiKey] = useState<string>(() => {
@@ -73,6 +76,10 @@ export default function App() {
       if (status && status.maxLimit && typeof status.remaining === "number") {
         const used = status.maxLimit - status.remaining
         setUploadCount(used)
+        if (status.storageUsed !== undefined) {
+          setStorageUsed(status.storageUsed)
+          setStorageLimit(status.storageLimit || 500 * 1024 * 1024)
+        }
       }
     })
   }, [])
@@ -148,12 +155,14 @@ export default function App() {
     const newDoc: DocumentItem = {
       id: newId,
       name: file.name,
+      createdAt: nowStr,
       date: nowStr,
       duration: durationStr,
       durationSec,
       status: "Processing",
       audioUrl: blobUrl,
       transcripts: [],
+      uploadProgress: 0,
     }
 
     setDocuments((prev) => [newDoc, ...prev])
@@ -168,19 +177,56 @@ export default function App() {
         userApiKey,
         durationStr,
         durationSec,
+        (progress) => {
+          setDocuments((prev) =>
+            prev.map((d) =>
+              d.id === newId ? { ...d, uploadProgress: progress } : d,
+            ),
+          )
+          if (activeDocument?.id === newId) {
+            setActiveDocument((prev) =>
+              prev ? { ...prev, uploadProgress: progress } : null,
+            )
+          }
+        },
       )
 
-      if (apiResult && apiResult.transcripts) {
-        // Backend API returned real Groq Whisper transcript & summary
-        const completedDoc: DocumentItem = {
-          ...apiResult, // Use the full backend result (including the real ID)
+      if (apiResult && apiResult.id) {
+        // Backend API returned 202 Accepted (Background Processing) or 201 Completed
+        const processingDoc: DocumentItem = {
+          ...apiResult, 
           audioUrl: apiResult.audioUrl || blobUrl,
+          uploadProgress: 100, // Finish upload bar
         }
 
         setDocuments((prev) =>
-          prev.map((d) => (d.id === newId ? completedDoc : d)),
+          prev.map((d) => (d.id === newId ? processingDoc : d)),
         )
-        setActiveDocument(completedDoc)
+        setActiveDocument(processingDoc)
+        
+        if (processingDoc.status === "Processing") {
+           showToast("Upload Complete! AI is now processing your audio in the background. You can safely leave this page.", "info")
+           
+           // Start polling
+           const pollInterval = setInterval(async () => {
+             const updated = await pollDocumentStatusApi(processingDoc.id)
+             if (updated && updated.status !== "Processing") {
+                clearInterval(pollInterval)
+                setDocuments((prev) =>
+                  prev.map((d) => (d.id === processingDoc.id ? updated : d)),
+                )
+                setActiveDocument((prev) => 
+                  prev?.id === processingDoc.id ? updated : prev
+                )
+                
+                if (updated.status === "Completed") {
+                  showToast(`Processing finished for ${updated.name}!`, "success")
+                } else {
+                  showToast(`Processing failed for ${updated.name}.`, "error")
+                }
+             }
+           }, 3000)
+        }
         return
       } else {
         throw new Error("Invalid response from backend")
@@ -322,6 +368,8 @@ export default function App() {
         setModal={setRateModalOpen}
         onOpenSettings={() => setSettingsModalOpen(true)}
         uploadCount={uploadCount}
+        storageUsed={storageUsed}
+        storageLimit={storageLimit}
       />
 
       {/* Desktop Sidebar */}
@@ -331,6 +379,8 @@ export default function App() {
         setModal={setRateModalOpen}
         onOpenSettings={() => setSettingsModalOpen(true)}
         uploadCount={uploadCount}
+        storageUsed={storageUsed}
+        storageLimit={storageLimit}
         documents={documents}
         activeDocument={activeDocument}
         onSelectDocument={(doc) => {
