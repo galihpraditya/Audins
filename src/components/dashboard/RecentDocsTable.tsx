@@ -62,8 +62,12 @@ export default function RecentDocsTable({
       showToast(`Downloading "${filename}"...`, "info")
 
       try {
-        const res = await fetch(doc.audioUrl)
-        if (!res.ok) throw new Error("Fetch failed")
+        // Use backend proxy to avoid CORS issues with cloud storage
+        const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
+        const res = await fetch(proxyUrl, {
+          headers: { "X-User-Session": localStorage.getItem("audin_session_id") || "" },
+        })
+        if (!res.ok) throw new Error("Download failed")
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
@@ -75,18 +79,8 @@ export default function RecentDocsTable({
         setTimeout(() => window.URL.revokeObjectURL(url), 1000)
         showToast(`Downloaded "${filename}" successfully`, "success")
       } catch (err) {
-        console.warn(
-          "Direct fetch failed, falling back to backend download proxy:",
-          err,
-        )
-        const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
-        const a = document.createElement("a")
-        a.href = proxyUrl
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        showToast(`Downloaded "${filename}"`, "success")
+        console.error("Download failed:", err)
+        showToast("Download failed. Please try again.", "error")
       }
     } else if (action === "Delete") {
       setDeleteModalDoc(doc)

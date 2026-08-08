@@ -12,6 +12,8 @@ interface MobileNavProps {
   uploadCount: number
   storageUsed?: number
   storageLimit?: number
+  hasCustomKey?: boolean
+  apiKeyStatus?: "idle" | "validating" | "valid" | "invalid"
 }
 
 export default function MobileNav({
@@ -22,10 +24,11 @@ export default function MobileNav({
   uploadCount,
   storageUsed,
   storageLimit,
+  hasCustomKey,
+  apiKeyStatus,
 }: MobileNavProps) {
   const [open, setOpen] = useState(false)
 
-  // Close drawer on Escape key press
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -112,6 +115,8 @@ export default function MobileNav({
             uploadCount={uploadCount}
             storageUsed={storageUsed}
             storageLimit={storageLimit}
+            hasCustomKey={hasCustomKey}
+            apiKeyStatus={apiKeyStatus}
           />
           <button
             onClick={() => {

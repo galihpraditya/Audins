@@ -1,4 +1,4 @@
-import { Screen } from "../../types"
+import { Screen, DocumentItem } from "../../types"
 import Logo from "./Logo"
 import FreeTierBar from "../dashboard/FreeTierBar"
 
@@ -10,7 +10,14 @@ interface SidebarProps {
   uploadCount: number
   storageUsed?: number
   storageLimit?: number
+  hasCustomKey?: boolean
+  apiKeyStatus?: "idle" | "validating" | "valid" | "invalid"
   documents: DocumentItem[]
+  activeDocument?: DocumentItem | null
+  onSelectDocument?: (doc: DocumentItem) => void
+  onDeleteDocument?: (id: number | string) => void
+  onRenameDocument?: (id: number | string, newName: string) => void
+  onDuplicateDocument?: (doc: DocumentItem) => void
 }
 
 export function NavItems({
@@ -93,7 +100,8 @@ export default function Sidebar({
   uploadCount,
   storageUsed,
   storageLimit,
-  documents,
+  hasCustomKey,
+  apiKeyStatus,
 }: SidebarProps) {
   return (
     <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-border bg-surface print:hidden">
@@ -101,6 +109,7 @@ export default function Sidebar({
       <div className="px-5 py-5 border-b border-border">
         <Logo />
       </div>
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         <NavItems screen={screen} setScreen={setScreen} />
@@ -108,14 +117,16 @@ export default function Sidebar({
 
       {/* Bottom section */}
       <div className="flex flex-col gap-2 mt-auto p-3 border-t border-border">
-        <FreeTierBar 
-          onUpgrade={() => setModal(true)} 
-          uploadCount={uploadCount} 
+        <FreeTierBar
+          onUpgrade={() => setModal(true)}
+          uploadCount={uploadCount}
           storageUsed={storageUsed}
           storageLimit={storageLimit}
+          hasCustomKey={hasCustomKey}
+          apiKeyStatus={apiKeyStatus}
         />
-        
-        {/* Settings button with Gear Icon */}
+
+        {/* Settings button */}
         <button
           onClick={onOpenSettings}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150"

@@ -48,6 +48,33 @@ export default function App() {
     localStorage.setItem("audin_user_api_key", userApiKey)
   }, [userApiKey])
 
+  // API key validation
+  const [apiKeyStatus, setApiKeyStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle")
+
+  useEffect(() => {
+    const key = userApiKey?.trim()
+    if (!key) {
+      setApiKeyStatus("idle")
+      return
+    }
+
+    setApiKeyStatus("validating")
+    const controller = new AbortController()
+    
+    fetch("https://api.groq.com/openai/v1/models", {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    })
+      .then((res) => {
+        setApiKeyStatus(res.ok ? "valid" : "invalid")
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setApiKeyStatus("invalid")
+      })
+
+    return () => controller.abort()
+  }, [userApiKey])
+
   useEffect(() => {
     localStorage.setItem("audin_selected_model", selectedModel)
   }, [selectedModel])
@@ -383,6 +410,8 @@ export default function App() {
         uploadCount={uploadCount}
         storageUsed={storageUsed}
         storageLimit={storageLimit}
+        hasCustomKey={!!userApiKey?.trim()}
+        apiKeyStatus={apiKeyStatus}
       />
 
       {/* Desktop Sidebar */}
@@ -394,6 +423,8 @@ export default function App() {
         uploadCount={uploadCount}
         storageUsed={storageUsed}
         storageLimit={storageLimit}
+        hasCustomKey={!!userApiKey?.trim()}
+        apiKeyStatus={apiKeyStatus}
         documents={documents}
         activeDocument={activeDocument}
         onSelectDocument={(doc) => {
