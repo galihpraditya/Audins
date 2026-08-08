@@ -255,7 +255,7 @@ export default function RecentDocsTable({
 
                     {/* Status */}
                     <td className="px-5 py-3.5">
-                      <StatusBadge status={doc.status} />
+                      <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} />
                     </td>
 
                     {/* Actions Kebab Menu */}

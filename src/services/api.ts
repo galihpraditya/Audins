@@ -58,6 +58,7 @@ export function uploadAudioToApi(
   duration?: string,
   durationSec?: number,
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<any | null> {
   return new Promise((resolve, reject) => {
     const formData = new FormData()
@@ -71,6 +72,18 @@ export function uploadAudioToApi(
     xhr.setRequestHeader("X-User-Session", getSessionId())
     if (userApiKey) {
       xhr.setRequestHeader("X-Groq-API-Key", userApiKey)
+    }
+
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort()
+        reject(new Error("Upload cancelled"))
+        return
+      }
+      signal.addEventListener("abort", () => {
+        xhr.abort()
+        reject(new Error("Upload cancelled"))
+      })
     }
 
     if (onProgress && xhr.upload) {
@@ -101,6 +114,10 @@ export function uploadAudioToApi(
 
     xhr.onerror = () => {
       reject(new Error("Network error occurred during upload"))
+    }
+
+    xhr.onabort = () => {
+      reject(new Error("Upload cancelled"))
     }
 
     xhr.send(formData)

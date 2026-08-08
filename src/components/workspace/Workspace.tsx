@@ -19,6 +19,7 @@ interface WorkspaceProps {
   onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
   onUpdateSummary: (id: number | string, summary: any) => void
+  onCancelUpload?: (id: number | string) => void
 }
 
 export default function Workspace({
@@ -33,6 +34,7 @@ export default function Workspace({
   onRenameDocument,
   onDuplicateDocument,
   onUpdateSummary,
+  onCancelUpload,
 }: WorkspaceProps) {
   const { showToast } = useToast()
   const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
@@ -182,7 +184,7 @@ export default function Workspace({
                         </svg>
                       </div>
                       <div className="flex items-center gap-2">
-                        <StatusBadge status={doc.status} />
+                        <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} />
                         <div className="relative">
                           <button
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface border border-transparent hover:border-border transition-all"
@@ -550,6 +552,7 @@ export default function Workspace({
               document={document}
               onUpdateSummary={onUpdateSummary}
               onReSummarize={onReSummarize}
+              onCancelUpload={onCancelUpload}
             />
           </div>
         </div>

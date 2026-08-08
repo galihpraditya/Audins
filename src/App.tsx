@@ -27,9 +27,8 @@ export default function App() {
 
   // Start with empty documents list (no fake/dummy documents)
   const [documents, setDocuments] = useState<DocumentItem[]>([])
-  const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(
-    null,
-  )
+  const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(null)
+  const uploadControllersRef = useRef<Map<string | number, AbortController>>(new Map())
   const [uploadCount, setUploadCount] = useState<number>(0)
   const [storageUsed, setStorageUsed] = useState<number>(0)
   const [storageLimit, setStorageLimit] = useState<number>(500 * 1024 * 1024)
@@ -197,6 +196,9 @@ export default function App() {
     setActiveDocument(newDoc)
     setScreen("workspace")
 
+    const controller = new AbortController()
+    uploadControllersRef.current.set(newId, controller)
+
     // 2. Try uploading to backend API or process AI
     try {
       const apiResult = await uploadAudioToApi(
@@ -210,13 +212,15 @@ export default function App() {
               d.id === newId ? { ...d, uploadProgress: progress } : d,
             ),
           )
-          if (activeDocument?.id === newId) {
-            setActiveDocument((prev) =>
-              prev ? { ...prev, uploadProgress: progress } : null,
-            )
-          }
+          setActiveDocument((prev) =>
+            prev && prev.id === newId
+              ? { ...prev, uploadProgress: progress }
+              : prev,
+          )
         },
+        controller.signal,
       )
+      uploadControllersRef.current.delete(newId)
 
       if (apiResult && apiResult.id) {
         // Backend API returned 202 Accepted (Background Processing) or 201 Completed
@@ -266,6 +270,10 @@ export default function App() {
         throw new Error("Invalid response from backend")
       }
     } catch (err: any) {
+      uploadControllersRef.current.delete(newId)
+      if (err.message === "Upload cancelled") {
+        return
+      }
       console.error("Upload failed:", err)
       const errorDoc: DocumentItem = {
         ...newDoc,
@@ -399,6 +407,17 @@ export default function App() {
     setScreen(newScreen)
   }
 
+  const handleCancelUpload = (id: string | number) => {
+    const controller = uploadControllersRef.current.get(id)
+    if (controller) {
+      controller.abort()
+      uploadControllersRef.current.delete(id)
+    }
+    setDocuments((prev) => prev.filter((d) => d.id !== id))
+    setActiveDocument((prev) => (prev?.id === id ? null : prev))
+    showToast("Upload cancelled", "info")
+  }
+
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto">
       {/* Mobile Top Navigation & Drawer */}
@@ -463,6 +482,7 @@ export default function App() {
             onRenameDocument={handleRenameDocument}
             onDuplicateDocument={handleDuplicateDocument}
             onUpdateSummary={handleUpdateSummary}
+            onCancelUpload={handleCancelUpload}
           />
         )}
       </div>

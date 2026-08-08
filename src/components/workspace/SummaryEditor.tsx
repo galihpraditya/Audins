@@ -7,12 +7,14 @@ interface SummaryEditorProps {
   document: DocumentItem
   onUpdateSummary?: (id: number | string, summary: any) => void
   onReSummarize?: (id: string | number, customPrompt?: string) => void
+  onCancelUpload?: (id: number | string) => void
 }
 
 export default function SummaryEditor({
   document,
   onUpdateSummary,
   onReSummarize,
+  onCancelUpload,
 }: SummaryEditorProps) {
   const { showToast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -349,10 +351,24 @@ export default function SummaryEditor({
                 <div className="p-8 rounded-2xl bg-surface border border-indigo-500/20 text-center space-y-4 no-print flex flex-col items-center">
                   <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-primary rounded-full animate-spin mx-auto mb-2"></div>
                   {document.uploadProgress !== undefined && document.uploadProgress < 100 ? (
-                    <div className="w-full max-w-sm mx-auto">
-                      <p className="text-sm font-medium text-fg mb-3">
-                        Uploading audio... {document.uploadProgress}%
-                      </p>
+                    <div className="w-full max-w-sm mx-auto space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-fg">
+                          Uploading audio... {document.uploadProgress}%
+                        </p>
+                        {onCancelUpload && (
+                          <button
+                            onClick={() => onCancelUpload(document.id)}
+                            className="px-2.5 py-1 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors flex items-center gap-1"
+                            title="Cancel upload"
+                          >
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
+                              <path strokeLinecap="round" d="M4 4l8 8M12 4l-8 8" />
+                            </svg>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                       <div className="h-1.5 bg-indigo-950 rounded-full overflow-hidden w-full">
                         <div 
                           className="h-full bg-primary transition-all duration-300" 
