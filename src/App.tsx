@@ -241,16 +241,14 @@ export default function App() {
       setActiveDocument(errorDoc)
 
       // If error is related to API key, prompt user
+      const msg = err.message?.toLowerCase() || ""
       if (
-        err.message?.toLowerCase().includes("api key") ||
-        err.message?.toLowerCase().includes("limit")
+        !msg.includes("storage") &&
+        (msg.includes("api key") || msg.includes("limit") || msg.includes("429"))
       ) {
         setRateModalOpen(true)
       } else {
-        showToast(
-          `Processing failed: ${err.message || "Unknown error"}`,
-          "error",
-        )
+        showToast(err.message || "Failed to process audio", "error")
       }
     }
   }
