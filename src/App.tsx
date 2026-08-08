@@ -448,6 +448,7 @@ export default function App() {
             onDuplicateDocument={handleDuplicateDocument}
             setModal={setRateModalOpen}
             uploadCount={uploadCount}
+            hasCustomKey={!!userApiKey?.trim()}
           />
         ) : (
           <Workspace
