@@ -147,7 +147,7 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
 
 export async function getSupabaseRateLimit(
   key: string,
-): Promise<{ count: number resetTime: Date } | null> {
+): Promise<{ count: number; resetTime: Date } | null> {
   if (!supabase || !isSupabaseEnabled()) return null
   try {
     const id = `rate_limit_${key}`
@@ -176,7 +176,7 @@ export async function getSupabaseRateLimit(
 
 export async function saveSupabaseRateLimit(
   key: string,
-  record: { count: number resetTime: Date },
+  record: { count: number; resetTime: Date },
 ): Promise<void> {
   if (!supabase || !isSupabaseEnabled()) return
   try {
