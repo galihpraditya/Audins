@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Screen, DocumentItem } from "./types"
 import Sidebar from "./components/layout/Sidebar"
 import MobileNav from "./components/layout/MobileNav"
