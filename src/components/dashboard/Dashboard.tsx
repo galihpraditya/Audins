@@ -64,7 +64,7 @@ export default function Dashboard({
         title="Help & Documentation"
         onClick={() =>
           showToast(
-            "Audin AI Help & Documentation: Drag & drop audio/video files to transcribe and generate summaries!",
+            "Audins AI Help & Documentation: Drag & drop audio/video files to transcribe and generate summaries!",
             "info",
           )
         }

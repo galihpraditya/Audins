@@ -28,12 +28,14 @@ function sliceAudioChunk(
   duration: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .setStartTime(startTime)
+    ffmpeg()
+      .input(inputPath)
+      .inputOptions([`-ss ${startTime}`])
       .setDuration(duration)
       .noVideo()
       .audioCodec("libmp3lame")
-      .audioBitrate(64)
+      .audioBitrate("48k")
+      .audioChannels(1)
       .output(outputPath)
       .on("end", () => resolve())
       .on("error", (err) => reject(err))
@@ -197,6 +199,8 @@ export async function transcribeAudioWithGroq(
           } catch {}
         }
       }
+      // Allow event loop to run & GC to flush memory between chunks
+      await new Promise((r) => setTimeout(r, 200))
     }
 
     if (allEntries.length === 0) {
@@ -243,7 +247,7 @@ export async function summarizeTranscriptWithGroq(
     ? `\nUSER SPECIFIC INSTRUCTIONS FOR THIS SUMMARY: "${userCustomPrompt}"\nPlease ensure your summary directly addresses these instructions.`
     : ""
 
-  const prompt = `You are Audin, an expert executive AI assistant. Analyze the following audio transcript from file "${fileName}" and output a structured JSON summary.
+  const prompt = `You are Audins, an expert executive AI assistant. Analyze the following audio transcript from file "${fileName}" and output a structured JSON summary.
 Do NOT use a fixed format. Adapt the summary structure to best fit the context of the audio (e.g. if it's a casual conversation, summarize the flow and decisions; if it's a lecture, extract key concepts; if it's a meeting, extract action items and highlights).
 
 Return a JSON object with the following keys:

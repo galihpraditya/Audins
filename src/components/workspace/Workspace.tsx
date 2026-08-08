@@ -5,6 +5,7 @@ import TranscriptPanel from "./TranscriptPanel"
 import SummaryEditor from "./SummaryEditor"
 import StatusBadge from "../dashboard/StatusBadge"
 import { useToast } from "../ui/ToastContext"
+import { API_BASE_URL } from "../../services/api"
 
 interface WorkspaceProps {
   documents: DocumentItem[]
@@ -409,7 +410,17 @@ export default function Workspace({
       showToast("Audio file not found", "error")
       return
     }
-    showToast(`Downloading "${doc.name}"...`, "info")
+
+    // Determine correct filename with proper format extension
+    let filename = doc.name.trim()
+    const extRegex = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
+    if (!extRegex.test(filename)) {
+      const urlExtMatch = doc.audioUrl.match(extRegex)
+      const ext = urlExtMatch ? urlExtMatch[0] : ".mp3"
+      filename = `${filename}${ext}`
+    }
+
+    showToast(`Downloading "${filename}"...`, "info")
 
     try {
       const res = await fetch(doc.audioUrl)
@@ -418,16 +429,22 @@ export default function Workspace({
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = doc.name
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-      showToast(`Downloaded "${doc.name}" successfully`, "success")
+      showToast(`Downloaded "${filename}" successfully`, "success")
     } catch (err) {
-      console.error("Fetch download failed, falling back to window.open:", err)
-      // Fallback if fetch fails
-      window.open(doc.audioUrl, "_blank")
+      console.warn("Direct blob download failed, using backend proxy download:", err)
+      const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
+      const a = document.createElement("a")
+      a.href = proxyUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      showToast(`Downloaded "${filename}"`, "success")
     }
   }
 

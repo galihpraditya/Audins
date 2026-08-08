@@ -247,7 +247,7 @@ export default function SettingsModal({
             <div className="space-y-4 text-xs text-fg-secondary leading-relaxed">
               <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-2">
                 <p className="font-semibold text-fg text-sm font-display">
-                  Audin — Audio Intelligence Platform
+                  Audins — Audio Intelligence Platform
                 </p>
                 <p>Version 1.0.0 (Portfolio Showcase Edition)</p>
                 <p className="text-fg-tertiary">

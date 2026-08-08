@@ -62,7 +62,7 @@ const upload = multer({
 // GET /api/v1 - API Index & Documentation
 router.get("/", (req: Request, res: Response) => {
   res.json({
-    service: "Audin AI Audio Intelligence API v1",
+    service: "Audins AI Audio Intelligence API v1",
     status: "online",
     endpoints: {
       health: "GET /health",
@@ -125,6 +125,9 @@ router.post(
   checkPortfolioRateLimit,
   upload.single("file"),
   async (req: Request, res: Response) => {
+    // Prevent socket timeout during long upload and chunking
+    if (req.socket) req.socket.setTimeout(0)
+
     try {
       const file = req.file
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
@@ -346,6 +349,74 @@ router.delete("/documents/:id", async (req: Request, res: Response) => {
     res.json({ success: true, id: docId })
   } catch (error) {
     res.status(500).json({ error: "Failed to delete document" })
+  }
+})
+
+// GET /api/v1/documents/:id/download - Secure download proxy with proper original filename and extension
+router.get("/documents/:id/download", async (req: Request, res: Response) => {
+  try {
+    const docId = getParamId(req.params.id)
+    const doc = await getDocumentById(docId)
+
+    if (!doc || !doc.audioUrl) {
+      res.status(404).json({ error: "Document or audio file not found" })
+      return
+    }
+
+    // Determine correct filename with proper extension
+    let filename = doc.name.trim()
+    const extRegex = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
+    if (!extRegex.test(filename)) {
+      const urlExtMatch = doc.audioUrl.match(extRegex)
+      const ext = urlExtMatch ? urlExtMatch[0] : ".mp3"
+      filename = `${filename}${ext}`
+    }
+
+    const encodedFilename = encodeURIComponent(filename)
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
+    )
+
+    // If local upload file path
+    if (doc.audioUrl.includes("/uploads/")) {
+      const localBasename = path.basename(doc.audioUrl)
+      const localFilePath = path.join(process.cwd(), "uploads", localBasename)
+      if (fs.existsSync(localFilePath)) {
+        res.download(localFilePath, filename)
+        return
+      }
+    }
+
+    // Remote storage (R2 / Supabase) -> Proxy download stream
+    const audioRes = await fetch(doc.audioUrl)
+    if (!audioRes.ok) {
+      // Fallback: Redirect directly to audioUrl if proxy fetch fails
+      res.redirect(doc.audioUrl)
+      return
+    }
+
+    const contentType =
+      audioRes.headers.get("content-type") || "application/octet-stream"
+    res.setHeader("Content-Type", contentType)
+
+    if (audioRes.body) {
+      const reader = audioRes.body.getReader()
+      const streamData = async () => {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          res.write(Buffer.from(value))
+        }
+        res.end()
+      }
+      await streamData()
+    } else {
+      res.redirect(doc.audioUrl)
+    }
+  } catch (error) {
+    console.error("Download proxy error:", error)
+    res.status(500).json({ error: "Failed to download audio file" })
   }
 })
 

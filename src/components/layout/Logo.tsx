@@ -8,9 +8,9 @@ export default function Logo() {
       />
       <div>
         <p className="text-sm font-semibold leading-none font-display text-fg">
-          Audin
+          Audins
         </p>
-        <p className="text-xs mt-0.5 text-fg-tertiary">Audio Intelligence</p>
+        <p className="text-xs mt-0.5 text-fg-tertiary">Audio Insight</p>
       </div>
     </div>
   )

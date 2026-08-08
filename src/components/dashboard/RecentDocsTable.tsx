@@ -2,6 +2,7 @@ import { useState, MouseEvent } from "react"
 import { DocumentItem } from "../../types"
 import StatusBadge from "./StatusBadge"
 import { useToast } from "../ui/ToastContext"
+import { API_BASE_URL } from "../../services/api"
 
 interface RecentDocsTableProps {
   documents: DocumentItem[]
@@ -48,7 +49,18 @@ export default function RecentDocsTable({
         showToast("Audio file not found", "error")
         return
       }
-      showToast(`Downloading "${doc.name}"...`, "info")
+
+      // Ensure filename ends with correct format extension
+      let filename = doc.name.trim()
+      const extRegex = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
+      if (!extRegex.test(filename)) {
+        const urlExtMatch = doc.audioUrl.match(extRegex)
+        const ext = urlExtMatch ? urlExtMatch[0] : ".mp3"
+        filename = `${filename}${ext}`
+      }
+
+      showToast(`Downloading "${filename}"...`, "info")
+
       try {
         const res = await fetch(doc.audioUrl)
         if (!res.ok) throw new Error("Fetch failed")
@@ -56,18 +68,25 @@ export default function RecentDocsTable({
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url
-        a.download = doc.name
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
         setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-        showToast(`Downloaded "${doc.name}" successfully`, "success")
+        showToast(`Downloaded "${filename}" successfully`, "success")
       } catch (err) {
-        console.error(
-          "Fetch download failed, falling back to window.open:",
+        console.warn(
+          "Direct fetch failed, falling back to backend download proxy:",
           err,
         )
-        window.open(doc.audioUrl, "_blank")
+        const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
+        const a = document.createElement("a")
+        a.href = proxyUrl
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        showToast(`Downloaded "${filename}"`, "success")
       }
     } else if (action === "Delete") {
       setDeleteModalDoc(doc)

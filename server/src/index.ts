@@ -49,7 +49,8 @@ app.use(
       // Auto-allow all Vercel and Cloudflare Pages deployment URLs
       if (
         cleanOrigin.endsWith(".vercel.app") ||
-        cleanOrigin.endsWith(".workers.dev")
+        cleanOrigin.endsWith(".workers.dev") ||
+        cleanOrigin.endsWith(".pages.dev")
       ) {
         isAllowedProd = true
       }
@@ -72,7 +73,7 @@ app.use("/uploads", express.static(uploadsDir))
 app.get("/", (req, res) => {
   res.json({
     status: "online",
-    service: "Audin AI Audio Intelligence Backend API",
+    service: "Audins AI Audio Intelligence Backend API",
     apiRoot: `http://localhost:${PORT}/api/v1`,
     health: `http://localhost:${PORT}/health`,
   })
@@ -82,7 +83,7 @@ app.get("/", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({
     status: "online",
-    service: "Audin AI Audio Intelligence Backend",
+    service: "Audins AI Audio Intelligence Backend",
     version: "1.0.0",
     timestamp: new Date().toISOString(),
   })
@@ -138,10 +139,15 @@ app.use(
 )
 
 // Start Express Server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`=================================================`)
   console.log(` 🎙️  Audin AI Backend Server Running on Port ${PORT}`)
   console.log(` 🚀 API Endpoint: http://localhost:${PORT}/api/v1`)
   console.log(` 🟢 Health Check:  http://localhost:${PORT}/health`)
   console.log(`=================================================`)
 })
+
+// Configure server timeouts to prevent Render reset during long uploads / chunking
+server.timeout = 0 // Disable timeout on long requests
+server.keepAliveTimeout = 120000 // 2 minutes keep-alive
+server.headersTimeout = 125000 // 125 seconds header timeout
