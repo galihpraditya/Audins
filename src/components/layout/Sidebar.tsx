@@ -124,8 +124,29 @@ export default function Sidebar({
       }`}
     >
       {/* Logo */}
-      <div className={`py-5 border-b border-border ${isCollapsed ? 'px-2' : 'px-5'}`}>
+      <div className={`py-5 border-b border-border relative group flex ${isCollapsed ? 'px-2 justify-center' : 'px-5 items-center justify-between'}`}>
         <Logo isCollapsed={isCollapsed} />
+        
+        {/* Toggle Collapse Button */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          className={`
+            flex items-center justify-center p-1.5 rounded-lg text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150
+            ${isCollapsed ? "absolute inset-0 m-auto w-8 h-8 opacity-0 group-hover:opacity-100 bg-surface/80 backdrop-blur-sm" : ""}
+          `}
+          aria-label="Toggle Sidebar"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -170,24 +191,6 @@ export default function Sidebar({
             <circle cx="12" cy="12" r="3" />
           </svg>
           {!isCollapsed && <span>Settings</span>}
-        </button>
-
-        {/* Toggle Collapse Button */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          className={`w-full flex items-center justify-center py-2 mt-1 rounded-xl text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150`}
-          aria-label="Toggle Sidebar"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
         </button>
       </div>
     </aside>
