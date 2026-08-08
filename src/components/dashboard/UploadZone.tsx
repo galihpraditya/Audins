@@ -5,6 +5,7 @@ interface UploadZoneProps {
   onShowLimitModal: () => void
   uploadCount: number
   maxUploads?: number
+  hasCustomKey?: boolean
 }
 
 export default function UploadZone({
@@ -12,6 +13,7 @@ export default function UploadZone({
   onShowLimitModal,
   uploadCount,
   maxUploads = 5,
+  hasCustomKey = false,
 }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -28,7 +30,7 @@ export default function UploadZone({
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragging(false)
-    if (uploadCount >= maxUploads) {
+    if (!hasCustomKey && uploadCount >= maxUploads) {
       onShowLimitModal()
       return
     }
@@ -39,7 +41,7 @@ export default function UploadZone({
   }
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (uploadCount >= maxUploads) {
+    if (!hasCustomKey && uploadCount >= maxUploads) {
       onShowLimitModal()
       return
     }
@@ -50,7 +52,7 @@ export default function UploadZone({
   }
 
   const handleClick = () => {
-    if (uploadCount >= maxUploads) {
+    if (!hasCustomKey && uploadCount >= maxUploads) {
       onShowLimitModal()
       return
     }
