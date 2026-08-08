@@ -1,39 +1,52 @@
-import { useState, useEffect } from 'react'
-import { Screen, DocumentItem } from './types'
-import Sidebar from './components/layout/Sidebar'
-import MobileNav from './components/layout/MobileNav'
-import Dashboard from './components/dashboard/Dashboard'
-import Workspace from './components/workspace/Workspace'
-import RateLimitModal from './components/modals/RateLimitModal'
-import SettingsModal from './components/modals/SettingsModal'
-import { uploadAudioToApi, reSummarizeApi, fetchDocumentsFromApi, deleteDocumentApi, renameDocumentApi, duplicateDocumentApi, updateDocumentSummaryApi, fetchRateLimitApi } from './services/api'
-import { useToast } from './components/ui/ToastContext'
+import { useState, useEffect } from "react"
+import { Screen, DocumentItem } from "./types"
+import Sidebar from "./components/layout/Sidebar"
+import MobileNav from "./components/layout/MobileNav"
+import Dashboard from "./components/dashboard/Dashboard"
+import Workspace from "./components/workspace/Workspace"
+import RateLimitModal from "./components/modals/RateLimitModal"
+import SettingsModal from "./components/modals/SettingsModal"
+import {
+  uploadAudioToApi,
+  reSummarizeApi,
+  fetchDocumentsFromApi,
+  deleteDocumentApi,
+  renameDocumentApi,
+  duplicateDocumentApi,
+  updateDocumentSummaryApi,
+  fetchRateLimitApi,
+} from "./services/api"
+import { useToast } from "./components/ui/ToastContext"
 
 export default function App() {
   const { showToast } = useToast()
-  const [screen, setScreen] = useState<Screen>('dashboard')
+  const [screen, setScreen] = useState<Screen>("dashboard")
   const [rateModalOpen, setRateModalOpen] = useState<boolean>(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false)
 
   // Start with empty documents list (no fake/dummy documents)
   const [documents, setDocuments] = useState<DocumentItem[]>([])
-  const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(null)
+  const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(
+    null,
+  )
   const [uploadCount, setUploadCount] = useState<number>(0)
 
   // API Key & Model state with localStorage persistence
   const [userApiKey, setUserApiKey] = useState<string>(() => {
-    return localStorage.getItem('audin_user_api_key') || ''
+    return localStorage.getItem("audin_user_api_key") || ""
   })
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('audin_selected_model') || 'llama-3.3-70b-versatile'
+    return (
+      localStorage.getItem("audin_selected_model") || "llama-3.3-70b-versatile"
+    )
   })
 
   useEffect(() => {
-    localStorage.setItem('audin_user_api_key', userApiKey)
+    localStorage.setItem("audin_user_api_key", userApiKey)
   }, [userApiKey])
 
   useEffect(() => {
-    localStorage.setItem('audin_selected_model', selectedModel)
+    localStorage.setItem("audin_selected_model", selectedModel)
   }, [selectedModel])
 
   // Prevent default browser behavior for drag & drop globally to avoid unintended downloads
@@ -41,11 +54,11 @@ export default function App() {
     const preventDefault = (e: globalThis.DragEvent) => {
       e.preventDefault()
     }
-    window.addEventListener('dragover', preventDefault, false)
-    window.addEventListener('drop', preventDefault, false)
+    window.addEventListener("dragover", preventDefault, false)
+    window.addEventListener("drop", preventDefault, false)
     return () => {
-      window.removeEventListener('dragover', preventDefault, false)
-      window.removeEventListener('drop', preventDefault, false)
+      window.removeEventListener("dragover", preventDefault, false)
+      window.removeEventListener("drop", preventDefault, false)
     }
   }, [])
 
@@ -57,7 +70,7 @@ export default function App() {
       }
     })
     fetchRateLimitApi().then((status) => {
-      if (status && status.maxLimit && typeof status.remaining === 'number') {
+      if (status && status.maxLimit && typeof status.remaining === "number") {
         const used = status.maxLimit - status.remaining
         setUploadCount(used)
       }
@@ -66,7 +79,7 @@ export default function App() {
 
   const handleOpenDocument = (doc: DocumentItem) => {
     setActiveDocument(doc)
-    setScreen('workspace')
+    setScreen("workspace")
   }
 
   const handleUploadFile = async (file: File) => {
@@ -78,22 +91,30 @@ export default function App() {
 
     const blobUrl = URL.createObjectURL(file)
     const newId = Date.now()
-    const nowStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    const baseName = file.name.replace(/\.[^/.]+$/, '')
+    const nowStr = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+    const baseName = file.name.replace(/\.[^/.]+$/, "")
 
     // 1. Calculate audio duration using HTML5 Audio
     let durationSec = 30
-    let durationStr = '0m 30s'
+    let durationStr = "0m 30s"
 
     try {
       const audio = new Audio(blobUrl)
       await new Promise<void>((resolve) => {
         audio.onloadedmetadata = () => {
-          if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+          if (
+            audio.duration &&
+            !isNaN(audio.duration) &&
+            audio.duration !== Infinity
+          ) {
             durationSec = Math.floor(audio.duration)
             const m = Math.floor(durationSec / 60)
             const s = durationSec % 60
-            durationStr = `${m}m ${s.toString().padStart(2, '0')}s`
+            durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
             resolve()
           } else if (audio.duration === Infinity) {
             // Fix for Infinity duration bug in Chromium with blobs
@@ -101,11 +122,15 @@ export default function App() {
             audio.ontimeupdate = () => {
               audio.ontimeupdate = null
               audio.currentTime = 0
-              if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+              if (
+                audio.duration &&
+                !isNaN(audio.duration) &&
+                audio.duration !== Infinity
+              ) {
                 durationSec = Math.floor(audio.duration)
                 const m = Math.floor(durationSec / 60)
                 const s = durationSec % 60
-                durationStr = `${m}m ${s.toString().padStart(2, '0')}s`
+                durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
               }
               resolve()
             }
@@ -126,7 +151,7 @@ export default function App() {
       date: nowStr,
       duration: durationStr,
       durationSec,
-      status: 'Processing',
+      status: "Processing",
       audioUrl: blobUrl,
       transcripts: [],
     }
@@ -134,11 +159,16 @@ export default function App() {
     setDocuments((prev) => [newDoc, ...prev])
     setUploadCount((prev) => prev + 1)
     setActiveDocument(newDoc)
-    setScreen('workspace')
+    setScreen("workspace")
 
     // 2. Try uploading to backend API or process AI
     try {
-      const apiResult = await uploadAudioToApi(file, userApiKey, durationStr, durationSec)
+      const apiResult = await uploadAudioToApi(
+        file,
+        userApiKey,
+        durationStr,
+        durationSec,
+      )
 
       if (apiResult && apiResult.transcripts) {
         // Backend API returned real Groq Whisper transcript & summary
@@ -147,55 +177,82 @@ export default function App() {
           audioUrl: apiResult.audioUrl || blobUrl,
         }
 
-        setDocuments((prev) => prev.map((d) => (d.id === newId ? completedDoc : d)))
+        setDocuments((prev) =>
+          prev.map((d) => (d.id === newId ? completedDoc : d)),
+        )
         setActiveDocument(completedDoc)
         return
       } else {
-        throw new Error('Invalid response from backend')
+        throw new Error("Invalid response from backend")
       }
     } catch (err: any) {
-      console.error('Upload failed:', err)
+      console.error("Upload failed:", err)
       const errorDoc: DocumentItem = {
         ...newDoc,
-        status: 'Failed',
+        status: "Failed",
       }
       setDocuments((prev) => prev.map((d) => (d.id === newId ? errorDoc : d)))
       setActiveDocument(errorDoc)
-      
+
       // If error is related to API key, prompt user
-      if (err.message?.toLowerCase().includes('api key') || err.message?.toLowerCase().includes('limit')) {
+      if (
+        err.message?.toLowerCase().includes("api key") ||
+        err.message?.toLowerCase().includes("limit")
+      ) {
         setRateModalOpen(true)
       } else {
-        showToast(`Processing failed: ${err.message || 'Unknown error'}`, 'error')
+        showToast(
+          `Processing failed: ${err.message || "Unknown error"}`,
+          "error",
+        )
       }
     }
   }
 
-  const handleReSummarize = async (id: string | number, customPrompt?: string) => {
+  const handleReSummarize = async (
+    id: string | number,
+    customPrompt?: string,
+  ) => {
     if (!userApiKey && uploadCount >= 5) {
       setRateModalOpen(true)
       return
     }
-    
-    // Optimistic UI update to show processing
-    setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, status: 'Processing' } : d)))
-    if (activeDocument?.id === id) setActiveDocument(prev => prev ? { ...prev, status: 'Processing' } : null)
 
-    setUploadCount(prev => prev + 1)
-    
+    // Optimistic UI update to show processing
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, status: "Processing" } : d)),
+    )
+    if (activeDocument?.id === id)
+      setActiveDocument((prev) =>
+        prev ? { ...prev, status: "Processing" } : null,
+      )
+
+    setUploadCount((prev) => prev + 1)
+
     try {
       const updatedDoc = await reSummarizeApi(id, userApiKey, customPrompt)
       setDocuments((prev) => prev.map((d) => (d.id === id ? updatedDoc : d)))
       if (activeDocument?.id === id) setActiveDocument(updatedDoc)
     } catch (err: any) {
       // Revert status on failure
-      setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, status: 'Completed' } : d)))
-      if (activeDocument?.id === id) setActiveDocument(prev => prev ? { ...prev, status: 'Completed' } : null)
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, status: "Completed" } : d)),
+      )
+      if (activeDocument?.id === id)
+        setActiveDocument((prev) =>
+          prev ? { ...prev, status: "Completed" } : null,
+        )
 
-      if (err.message?.toLowerCase().includes('api key') || err.message?.toLowerCase().includes('rate limit')) {
+      if (
+        err.message?.toLowerCase().includes("api key") ||
+        err.message?.toLowerCase().includes("rate limit")
+      ) {
         setRateModalOpen(true)
       } else {
-        showToast(`Re-summarize failed: ${err.message || 'Unknown error'}`, 'error')
+        showToast(
+          `Re-summarize failed: ${err.message || "Unknown error"}`,
+          "error",
+        )
       }
     }
   }
@@ -211,7 +268,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      showToast(`Failed to delete document: ${err.message}`, 'error')
+      showToast(`Failed to delete document: ${err.message}`, "error")
     }
   }
 
@@ -219,13 +276,13 @@ export default function App() {
     try {
       const updatedDoc = await renameDocumentApi(id, newName)
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === id ? updatedDoc : doc))
+        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
       )
       if (activeDocument?.id === id) {
         setActiveDocument(updatedDoc)
       }
     } catch (err: any) {
-      showToast(`Failed to rename document: ${err.message}`, 'error')
+      showToast(`Failed to rename document: ${err.message}`, "error")
     }
   }
 
@@ -234,7 +291,7 @@ export default function App() {
       const copiedDoc = await duplicateDocumentApi(doc.id)
       setDocuments((prev) => [copiedDoc, ...prev])
     } catch (err: any) {
-      showToast(`Failed to duplicate document: ${err.message}`, 'error')
+      showToast(`Failed to duplicate document: ${err.message}`, "error")
     }
   }
 
@@ -242,13 +299,13 @@ export default function App() {
     try {
       const updatedDoc = await updateDocumentSummaryApi(id, summary)
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === id ? updatedDoc : doc))
+        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
       )
       if (activeDocument?.id === id) {
         setActiveDocument(updatedDoc)
       }
     } catch (err: any) {
-      showToast(`Failed to save summary: ${err.message}`, 'error')
+      showToast(`Failed to save summary: ${err.message}`, "error")
     }
   }
 
@@ -278,7 +335,7 @@ export default function App() {
         activeDocument={activeDocument}
         onSelectDocument={(doc) => {
           setActiveDocument(doc)
-          setScreen('workspace')
+          setScreen("workspace")
         }}
         onDeleteDocument={handleDeleteDocument}
         onRenameDocument={handleRenameDocument}
@@ -287,7 +344,7 @@ export default function App() {
 
       {/* Main Screen Router */}
       <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto">
-        {screen === 'dashboard' ? (
+        {screen === "dashboard" ? (
           <Dashboard
             documents={documents}
             onOpenDocument={handleOpenDocument}

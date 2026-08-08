@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { Screen, DocumentItem } from '../../types'
-import AudioPlayer from './AudioPlayer'
-import TranscriptPanel from './TranscriptPanel'
-import SummaryEditor from './SummaryEditor'
-import StatusBadge from '../dashboard/StatusBadge'
-import { useToast } from '../ui/ToastContext'
+import { useState } from "react"
+import { Screen, DocumentItem } from "../../types"
+import AudioPlayer from "./AudioPlayer"
+import TranscriptPanel from "./TranscriptPanel"
+import SummaryEditor from "./SummaryEditor"
+import StatusBadge from "../dashboard/StatusBadge"
+import { useToast } from "../ui/ToastContext"
 
 interface WorkspaceProps {
   documents: DocumentItem[]
@@ -35,35 +35,48 @@ export default function Workspace({
 }: WorkspaceProps) {
   const { showToast } = useToast()
   const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
-  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(null)
-  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(null)
-  const [renameValue, setRenameValue] = useState('')
+  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(
+    null,
+  )
+  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(
+    null,
+  )
+  const [renameValue, setRenameValue] = useState("")
   const [currentTime, setCurrentTime] = useState<number>(0)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'Processing'>('all')
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] =
+    useState<"all" | "Completed" | "Processing">("all")
   const [showReSummarizeModal, setShowReSummarizeModal] = useState(false)
-  const [customPrompt, setCustomPrompt] = useState('')
-  const [activeTab, setActiveTab] = useState<'transcript' | 'summary'>('transcript')
+  const [customPrompt, setCustomPrompt] = useState("")
+  const [activeTab, setActiveTab] = useState<"transcript" | "summary">(
+    "transcript",
+  )
 
   const filteredDocs = documents.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || doc.status === statusFilter
+    const matchesSearch = doc.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
+    const matchesStatus = statusFilter === "all" || doc.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  const handleActionClick = (e: React.MouseEvent, action: string, doc: DocumentItem) => {
+  const handleActionClick = (
+    e: React.MouseEvent,
+    action: string,
+    doc: DocumentItem,
+  ) => {
     e.stopPropagation()
     setOpenMenuId(null)
 
-    if (action === 'Rename') {
+    if (action === "Rename") {
       setRenameValue(doc.name)
       setRenameModalDoc(doc)
-    } else if (action === 'Delete') {
+    } else if (action === "Delete") {
       setDeleteModalDoc(doc)
-    } else if (action === 'Duplicate') {
+    } else if (action === "Duplicate") {
       onDuplicateDocument(doc)
-      showToast(`Duplicated "${doc.name}"`, 'success')
-    } else if (action === 'Download') {
+      showToast(`Duplicated "${doc.name}"`, "success")
+    } else if (action === "Download") {
       handleDownloadAudio(doc)
     }
   }
@@ -80,11 +93,12 @@ export default function Workspace({
                 Workspace Audio Files ({documents.length})
               </h1>
               <p className="text-sm text-fg-secondary">
-                Select an audio file from your library to open its player, transcript, and AI summary.
+                Select an audio file from your library to open its player,
+                transcript, and AI summary.
               </p>
             </div>
             <button
-              onClick={() => setScreen('dashboard')}
+              onClick={() => setScreen("dashboard")}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium bg-surface border border-border text-fg-secondary hover:text-fg hover:bg-surface-2 transition-all self-start sm:self-auto"
             >
               ← Back to Dashboard
@@ -108,19 +122,23 @@ export default function Workspace({
                 strokeWidth="1.5"
                 className="w-4 h-4 text-fg-tertiary absolute left-3 top-1/2 -translate-y-1/2"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 19l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 19l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
               </svg>
             </div>
 
             <div className="flex items-center gap-1.5 bg-surface p-1 rounded-xl border border-border">
-              {(['all', 'Completed', 'Processing'] as const).map((filter) => (
+              {(["all", "Completed", "Processing"] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setStatusFilter(filter)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
                     statusFilter === filter
-                      ? 'bg-primary-dim text-primary-hover border border-indigo-500/20 font-semibold'
-                      : 'text-fg-tertiary hover:text-fg'
+                      ? "bg-primary-dim text-primary-hover border border-indigo-500/20 font-semibold"
+                      : "text-fg-tertiary hover:text-fg"
                   }`}
                 >
                   {filter}
@@ -132,7 +150,10 @@ export default function Workspace({
           {/* File Grid */}
           {filteredDocs.length === 0 ? (
             <div className="rounded-2xl p-12 text-center border border-border bg-surface">
-              <p className="text-sm text-fg-tertiary">No audio files found. Upload a file on the Dashboard to get started!</p>
+              <p className="text-sm text-fg-tertiary">
+                No audio files found. Upload a file on the Dashboard to get
+                started!
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -145,8 +166,18 @@ export default function Workspace({
                   <div>
                     <div className="flex items-center justify-between mb-3 relative">
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary-dim border border-indigo-500/20 group-hover:scale-105 transition-transform">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-primary">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          className="w-5 h-5 text-primary"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3"
+                          />
                         </svg>
                       </div>
                       <div className="flex items-center gap-2">
@@ -156,12 +187,18 @@ export default function Workspace({
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface border border-transparent hover:border-border transition-all"
                             onClick={(e) => {
                               e.stopPropagation()
-                              setOpenMenuId(openMenuId === doc.id ? null : doc.id)
+                              setOpenMenuId(
+                                openMenuId === doc.id ? null : doc.id,
+                              )
                             }}
                             aria-label="More options"
                             title="More options"
                           >
-                            <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                            <svg
+                              viewBox="0 0 16 16"
+                              fill="currentColor"
+                              className="w-3.5 h-3.5"
+                            >
                               <circle cx="8" cy="3" r="1.25" />
                               <circle cx="8" cy="8" r="1.25" />
                               <circle cx="8" cy="13" r="1.25" />
@@ -175,17 +212,41 @@ export default function Workspace({
                               onClick={(e) => e.stopPropagation()}
                             >
                               {[
-                                { label: 'Rename', iconPath: 'M11.5 2.5a2.121 2.121 0 013 3L5 15H2v-3L11.5 2.5z' },
-                                { label: 'Download', iconPath: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
-                                { label: 'Duplicate', iconPath: 'M8 2H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V8m-6 0V2m0 0l4 4' },
+                                {
+                                  label: "Rename",
+                                  iconPath:
+                                    "M11.5 2.5a2.121 2.121 0 013 3L5 15H2v-3L11.5 2.5z",
+                                },
+                                {
+                                  label: "Download",
+                                  iconPath:
+                                    "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+                                },
+                                {
+                                  label: "Duplicate",
+                                  iconPath:
+                                    "M8 2H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V8m-6 0V2m0 0l4 4",
+                                },
                               ].map((item) => (
                                 <button
                                   key={item.label}
                                   className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors"
-                                  onClick={(e) => handleActionClick(e, item.label, doc)}
+                                  onClick={(e) =>
+                                    handleActionClick(e, item.label, doc)
+                                  }
                                 >
-                                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 flex-shrink-0">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d={item.iconPath} />
+                                  <svg
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    className="w-3.5 h-3.5 flex-shrink-0"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      d={item.iconPath}
+                                    />
                                   </svg>
                                   {item.label}
                                 </button>
@@ -193,10 +254,22 @@ export default function Workspace({
                               <div className="my-1 mx-2 h-px bg-border" />
                               <button
                                 className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                                onClick={(e) => handleActionClick(e, 'Delete', doc)}
+                                onClick={(e) =>
+                                  handleActionClick(e, "Delete", doc)
+                                }
                               >
-                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 flex-shrink-0">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <svg
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  className="w-3.5 h-3.5 flex-shrink-0"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
                                 </svg>
                                 Delete
                               </button>
@@ -226,10 +299,20 @@ export default function Workspace({
 
           {/* Modals for Rename and Delete */}
           {renameModalDoc && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={() => setRenameModalDoc(null)}>
-              <div className="w-full max-w-sm bg-surface border border-border shadow-2xl rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-fg mb-1">Rename Document</h3>
-                <p className="text-sm text-fg-secondary mb-4">Enter a new name for this file.</p>
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
+              onClick={() => setRenameModalDoc(null)}
+            >
+              <div
+                className="w-full max-w-sm bg-surface border border-border shadow-2xl rounded-2xl p-5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-fg mb-1">
+                  Rename Document
+                </h3>
+                <p className="text-sm text-fg-secondary mb-4">
+                  Enter a new name for this file.
+                </p>
                 <input
                   autoFocus
                   type="text"
@@ -238,13 +321,18 @@ export default function Workspace({
                   className="w-full px-3 py-2 bg-surface-2 border border-border rounded-xl text-sm text-fg focus:outline-none focus:border-primary mb-5"
                 />
                 <div className="flex justify-end gap-2">
-                  <button className="px-4 py-2 text-xs font-medium text-fg-secondary hover:text-fg hover:bg-surface-2 rounded-xl border border-transparent hover:border-border transition-colors" onClick={() => setRenameModalDoc(null)}>Cancel</button>
+                  <button
+                    className="px-4 py-2 text-xs font-medium text-fg-secondary hover:text-fg hover:bg-surface-2 rounded-xl border border-transparent hover:border-border transition-colors"
+                    onClick={() => setRenameModalDoc(null)}
+                  >
+                    Cancel
+                  </button>
                   <button
                     className="px-4 py-2 text-xs font-medium text-white bg-primary hover:bg-primary-hover rounded-xl shadow-sm transition-colors"
                     onClick={() => {
                       if (renameValue.trim()) {
                         onRenameDocument(renameModalDoc.id, renameValue.trim())
-                        showToast('Document renamed successfully', 'success')
+                        showToast("Document renamed successfully", "success")
                       }
                       setRenameModalDoc(null)
                     }}
@@ -257,24 +345,51 @@ export default function Workspace({
           )}
 
           {deleteModalDoc && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={() => setDeleteModalDoc(null)}>
-              <div className="w-full max-w-sm bg-surface border border-border shadow-2xl rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in"
+              onClick={() => setDeleteModalDoc(null)}
+            >
+              <div
+                className="w-full max-w-sm bg-surface border border-border shadow-2xl rounded-2xl p-5"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center mb-3">
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5 text-red-500">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    className="w-5 h-5 text-red-500"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-fg mb-1">Delete Document</h3>
+                <h3 className="text-lg font-semibold text-fg mb-1">
+                  Delete Document
+                </h3>
                 <p className="text-sm text-fg-secondary mb-5">
-                  Are you sure you want to delete <span className="text-fg font-medium">"{deleteModalDoc.name}"</span>? This action cannot be undone.
+                  Are you sure you want to delete{" "}
+                  <span className="text-fg font-medium">
+                    "{deleteModalDoc.name}"
+                  </span>
+                  ? This action cannot be undone.
                 </p>
                 <div className="flex justify-end gap-2">
-                  <button className="px-4 py-2 text-xs font-medium text-fg-secondary hover:text-fg hover:bg-surface-2 rounded-xl border border-transparent hover:border-border transition-colors" onClick={() => setDeleteModalDoc(null)}>Cancel</button>
+                  <button
+                    className="px-4 py-2 text-xs font-medium text-fg-secondary hover:text-fg hover:bg-surface-2 rounded-xl border border-transparent hover:border-border transition-colors"
+                    onClick={() => setDeleteModalDoc(null)}
+                  >
+                    Cancel
+                  </button>
                   <button
                     className="px-4 py-2 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl shadow-sm transition-colors"
                     onClick={() => {
                       onDeleteDocument(deleteModalDoc.id)
-                      showToast('Document deleted successfully', 'success')
+                      showToast("Document deleted successfully", "success")
                       setDeleteModalDoc(null)
                     }}
                   >
@@ -284,7 +399,6 @@ export default function Workspace({
               </div>
             </div>
           )}
-
         </div>
       </main>
     )
@@ -292,28 +406,28 @@ export default function Workspace({
 
   const handleDownloadAudio = async (doc: DocumentItem) => {
     if (!doc.audioUrl) {
-      showToast('Audio file not found', 'error')
+      showToast("Audio file not found", "error")
       return
     }
-    showToast(`Downloading "${doc.name}"...`, 'info')
-    
+    showToast(`Downloading "${doc.name}"...`, "info")
+
     try {
       const res = await fetch(doc.audioUrl)
-      if (!res.ok) throw new Error('Fetch failed')
+      if (!res.ok) throw new Error("Fetch failed")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
       a.download = doc.name
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-      showToast(`Downloaded "${doc.name}" successfully`, 'success')
+      showToast(`Downloaded "${doc.name}" successfully`, "success")
     } catch (err) {
-      console.error('Fetch download failed, falling back to window.open:', err)
+      console.error("Fetch download failed, falling back to window.open:", err)
       // Fallback if fetch fails
-      window.open(doc.audioUrl, '_blank')
+      window.open(doc.audioUrl, "_blank")
     }
   }
 
@@ -321,8 +435,8 @@ export default function Workspace({
   const docName = document.name
   const docDate = document.date
   const transcripts = document.transcripts || []
-  const isProcessing = document.status === 'Processing'
-  const hasError = document.status === 'Failed'
+  const isProcessing = document.status === "Processing"
+  const hasError = document.status === "Failed"
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background print:block print:overflow-visible print:h-auto">
@@ -335,8 +449,18 @@ export default function Workspace({
             aria-label="Back to workspace"
             title="Back to Workspace"
           >
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 13L5 8l5-5" />
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="w-4 h-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M10 13L5 8l5-5"
+              />
             </svg>
             <span className="hidden sm:inline">Workspace</span>
           </button>
@@ -347,7 +471,9 @@ export default function Workspace({
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
-              <p className="text-xs font-mono text-fg-tertiary">Saved · {docDate}</p>
+              <p className="text-xs font-mono text-fg-tertiary">
+                Saved · {docDate}
+              </p>
             </div>
           </div>
         </div>
@@ -359,17 +485,21 @@ export default function Workspace({
         <div className="md:hidden flex items-center border-b border-border bg-surface print:hidden">
           <button
             className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'transcript' ? 'border-primary text-primary-hover' : 'border-transparent text-fg-secondary hover:text-fg'
+              activeTab === "transcript"
+                ? "border-primary text-primary-hover"
+                : "border-transparent text-fg-secondary hover:text-fg"
             }`}
-            onClick={() => setActiveTab('transcript')}
+            onClick={() => setActiveTab("transcript")}
           >
             Audio & Transcript
           </button>
           <button
             className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${
-              activeTab === 'summary' ? 'border-primary text-primary-hover' : 'border-transparent text-fg-secondary hover:text-fg'
+              activeTab === "summary"
+                ? "border-primary text-primary-hover"
+                : "border-transparent text-fg-secondary hover:text-fg"
             }`}
-            onClick={() => setActiveTab('summary')}
+            onClick={() => setActiveTab("summary")}
           >
             AI Summary
           </button>
@@ -377,7 +507,11 @@ export default function Workspace({
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden print:block print:overflow-visible print:h-auto">
           {/* Left Panel: Audio Player & Raw Transcript */}
-          <div className={`w-full md:w-2/5 flex-col border-b md:border-b-0 md:border-r border-border bg-surface md:max-h-none overflow-hidden print:hidden ${activeTab === 'transcript' ? 'flex' : 'hidden md:flex'}`}>
+          <div
+            className={`w-full md:w-2/5 flex-col border-b md:border-b-0 md:border-r border-border bg-surface md:max-h-none overflow-hidden print:hidden ${
+              activeTab === "transcript" ? "flex" : "hidden md:flex"
+            }`}
+          >
             <AudioPlayer
               audioUrl={document.audioUrl}
               currentTime={currentTime}
@@ -393,10 +527,14 @@ export default function Workspace({
           </div>
 
           {/* Right Panel: Executive AI Summary */}
-          <div className={`w-full md:w-3/5 flex-col overflow-hidden bg-background print:block print:w-full print:overflow-visible print:h-auto ${activeTab === 'summary' ? 'flex' : 'hidden md:flex'}`}>
-            <SummaryEditor 
-              document={document} 
-              onUpdateSummary={onUpdateSummary} 
+          <div
+            className={`w-full md:w-3/5 flex-col overflow-hidden bg-background print:block print:w-full print:overflow-visible print:h-auto ${
+              activeTab === "summary" ? "flex" : "hidden md:flex"
+            }`}
+          >
+            <SummaryEditor
+              document={document}
+              onUpdateSummary={onUpdateSummary}
               onReSummarize={onReSummarize}
             />
           </div>

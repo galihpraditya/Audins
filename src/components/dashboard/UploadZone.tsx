@@ -1,4 +1,4 @@
-import { useState, useRef, DragEvent, ChangeEvent } from 'react'
+import { useState, useRef, DragEvent, ChangeEvent } from "react"
 
 interface UploadZoneProps {
   onUploadFile: (file: File) => void
@@ -7,7 +7,12 @@ interface UploadZoneProps {
   maxUploads?: number
 }
 
-export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount, maxUploads = 5 }: UploadZoneProps) {
+export default function UploadZone({
+  onUploadFile,
+  onShowLimitModal,
+  uploadCount,
+  maxUploads = 5,
+}: UploadZoneProps) {
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -56,8 +61,8 @@ export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount
     <div
       className={`rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer mb-8 sm:mb-10 group ${
         dragging
-          ? 'border-primary bg-indigo-500/10'
-          : 'border-border bg-surface hover:border-indigo-500/40 hover:bg-surface-2'
+          ? "border-primary bg-indigo-500/10"
+          : "border-border bg-surface hover:border-indigo-500/40 hover:bg-surface-2"
       }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -67,7 +72,7 @@ export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount
       tabIndex={0}
       aria-label="Upload audio or video file"
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
           handleClick()
         }
@@ -85,7 +90,7 @@ export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount
         {/* Icon */}
         <div
           className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl mb-4 sm:mb-5 flex items-center justify-center transition-all duration-200 border border-border ${
-            dragging ? 'bg-indigo-500/20' : 'bg-surface-2 group-hover:scale-105'
+            dragging ? "bg-indigo-500/20" : "bg-surface-2 group-hover:scale-105"
           }`}
         >
           <svg
@@ -94,7 +99,9 @@ export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount
             stroke="currentColor"
             strokeWidth="1.5"
             className={`w-5 h-5 sm:w-6 sm:h-6 transition-colors ${
-              dragging ? 'text-primary-hover' : 'text-fg-secondary group-hover:text-primary-hover'
+              dragging
+                ? "text-primary-hover"
+                : "text-fg-secondary group-hover:text-primary-hover"
             }`}
           >
             <path
@@ -114,7 +121,7 @@ export default function UploadZone({ onUploadFile, onShowLimitModal, uploadCount
 
         {/* Format pills */}
         <div className="flex flex-wrap items-center justify-center gap-2">
-          {['MP3', 'WAV', 'M4A', 'MP4', 'WebM', 'AAC'].map((fmt) => (
+          {["MP3", "WAV", "M4A", "MP4", "WebM", "AAC"].map((fmt) => (
             <span
               key={fmt}
               className="px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-surface-2 text-fg-tertiary border border-border"

@@ -1,6 +1,10 @@
-import { Request, Response, NextFunction } from 'express'
-import { RateLimitResponse } from '../types/index.js'
-import { getSupabaseRateLimit, saveSupabaseRateLimit, isSupabaseEnabled } from '../services/supabase.service.js'
+import { Request, Response, NextFunction } from "express"
+import { RateLimitResponse } from "../types/index.js"
+import {
+  getSupabaseRateLimit,
+  saveSupabaseRateLimit,
+  isSupabaseEnabled,
+} from "../services/supabase.service.js"
 
 interface IPRecord {
   count: number
@@ -8,28 +12,33 @@ interface IPRecord {
 }
 
 const localUsageStore = new Map<string, IPRecord>()
-const MAX_FREE_DAILY_UPLOADS = parseInt(process.env.MAX_FREE_DAILY_UPLOADS || '5', 10)
+const MAX_FREE_DAILY_UPLOADS = parseInt(
+  process.env.MAX_FREE_DAILY_UPLOADS || "5",
+  10,
+)
 
 export function getClientIP(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for']
-  if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim()
+  const forwarded = req.headers["x-forwarded-for"]
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0].trim()
   }
-  return req.socket.remoteAddress || '127.0.0.1'
+  return req.socket.remoteAddress || "127.0.0.1"
 }
 
 export function getRateLimitKey(req: Request): string {
-  const session = req.headers['x-user-session']
-  if (typeof session === 'string' && session.trim().length > 0) {
+  const session = req.headers["x-user-session"]
+  if (typeof session === "string" && session.trim().length > 0) {
     return session.trim()
   }
   return getClientIP(req)
 }
 
-export async function getRateLimitStatus(req: Request): Promise<RateLimitResponse> {
+export async function getRateLimitStatus(
+  req: Request,
+): Promise<RateLimitResponse> {
   const key = getRateLimitKey(req)
   const now = new Date()
-  
+
   let record: IPRecord | null | undefined = localUsageStore.get(key)
   if (isSupabaseEnabled()) {
     record = await getSupabaseRateLimit(key)
@@ -52,21 +61,30 @@ export async function getRateLimitStatus(req: Request): Promise<RateLimitRespons
   }
 }
 
-export async function checkPortfolioRateLimit(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function checkPortfolioRateLimit(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
-    const customApiKey = req.headers['x-groq-api-key']
+    const customApiKey = req.headers["x-groq-api-key"]
 
-    if (customApiKey && typeof customApiKey === 'string' && customApiKey.trim().length > 0) {
+    if (
+      customApiKey &&
+      typeof customApiKey === "string" &&
+      customApiKey.trim().length > 0
+    ) {
       return next()
     }
 
     const key = getRateLimitKey(req)
-    const isLocalhost = key === '127.0.0.1' || key === '::1' || key === '::ffff:127.0.0.1'
+    const isLocalhost =
+      key === "127.0.0.1" || key === "::1" || key === "::ffff:127.0.0.1"
     const effectiveMaxLimit = isLocalhost ? 100 : MAX_FREE_DAILY_UPLOADS
 
     const now = new Date()
     let record: IPRecord | null | undefined = localUsageStore.get(key)
-    
+
     if (isSupabaseEnabled()) {
       record = await getSupabaseRateLimit(key)
     }
@@ -79,7 +97,7 @@ export async function checkPortfolioRateLimit(req: Request, res: Response, next:
 
     if (record.count >= effectiveMaxLimit) {
       res.status(429).json({
-        error: 'Portfolio Free Demo Limit Reached',
+        error: "Portfolio Free Demo Limit Reached",
         message: `You've reached the free demo limit of ${effectiveMaxLimit} uploads today. Please provide your custom Groq API Key in Settings to continue.`,
         remaining: 0,
         maxLimit: effectiveMaxLimit,
@@ -90,14 +108,14 @@ export async function checkPortfolioRateLimit(req: Request, res: Response, next:
 
     record.count += 1
     localUsageStore.set(key, record)
-    
+
     if (isSupabaseEnabled()) {
       await saveSupabaseRateLimit(key, record)
     }
-    
+
     next()
   } catch (error) {
-    console.error('Rate limit error:', error)
+    console.error("Rate limit error:", error)
     next() // Fail open if storage error
   }
 }
