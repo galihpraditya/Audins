@@ -1,6 +1,6 @@
-export type Screen = 'dashboard' | 'workspace'
+export type Screen = "dashboard" | "workspace"
 
-export type DocumentStatus = 'Completed' | 'Processing' | 'Failed'
+export type DocumentStatus = "Completed" | "Processing" | "Failed"
 
 export interface TranscriptEntry {
   ts: string
