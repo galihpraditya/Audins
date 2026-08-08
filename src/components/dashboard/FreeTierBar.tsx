@@ -44,42 +44,45 @@ export default function FreeTierBar({
       <div className="relative z-10">
         {hasCustomKey ? (
           <>
-            <div className="flex justify-between items-center mb-1.5 gap-2">
-              <span className="text-xs font-medium text-fg-secondary shrink-0">
+            <div className="flex justify-between items-start mb-1.5 gap-2">
+              <span className="text-xs font-medium text-fg-secondary mt-0.5">
                 AI Uploads
               </span>
-              <span className="flex items-center gap-1.5">
+              <div className="flex flex-col items-end gap-1">
                 {apiKeyStatus === "validating" && (
-                  <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-amber-400">
+                    <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                    Validating...
+                  </span>
                 )}
                 {apiKeyStatus === "valid" && (
-                  <span className="flex items-center gap-1 text-emerald-400 text-[10px] font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Active
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-primary-hover">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                    Key Active
                   </span>
                 )}
                 {apiKeyStatus === "invalid" && (
-                  <span className="flex items-center gap-1 text-red-400 text-[10px] font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                    Invalid
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-red-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]" />
+                    Invalid Key
                   </span>
                 )}
-                <span className="text-xs text-emerald-400 font-mono">
+                <span className="text-xs text-primary font-mono font-semibold">
                   Unlimited
                 </span>
-              </span>
+              </div>
             </div>
-            <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle">
+            <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle relative mt-1">
               <div
-                className="h-full rounded-full w-full"
+                className="absolute inset-0 w-full"
                 style={{
-                  background:
-                    "linear-gradient(90deg, #34d399, #059669)",
+                  background: "linear-gradient(90deg, #6366f1, #7c3aed)",
+                  opacity: 0.85,
                 }}
               />
             </div>
-            <p className="text-[10px] mt-1.5 text-emerald-400/70">
-              Using your own API key — no daily limit
+            <p className="text-[10px] mt-1.5 text-fg-tertiary">
+              Custom API key is enabled
             </p>
           </>
         ) : (
@@ -135,11 +138,7 @@ export default function FreeTierBar({
       {/* Upgrade / Manage Button */}
       <button
         onClick={onUpgrade}
-        className={`relative z-10 w-full mt-1 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-          hasCustomKey
-            ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-            : "bg-primary/10 text-primary-hover hover:bg-primary/20"
-        }`}
+        className="relative z-10 w-full mt-1 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary-hover hover:bg-primary/20 transition-colors"
       >
         {hasCustomKey ? "Manage API Key" : "Upgrade or enter API Key"}
       </button>
