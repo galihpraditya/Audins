@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react"
 import { Screen, DocumentItem } from "../../types"
 import Logo from "./Logo"
 import FreeTierBar from "../dashboard/FreeTierBar"
@@ -24,10 +25,12 @@ export function NavItems({
   screen,
   setScreen,
   onNavigate,
+  isCollapsed = false,
 }: {
   screen: Screen
   setScreen: (s: Screen) => void
   onNavigate?: () => void
+  isCollapsed?: boolean
 }) {
   const items = [
     {
@@ -77,14 +80,17 @@ export function NavItems({
               setScreen(item.id)
               onNavigate?.()
             }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+            title={isCollapsed ? item.label : undefined}
+            className={`w-full flex items-center ${
+              isCollapsed ? "justify-center" : "gap-3 px-3"
+            } py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
               isActive
                 ? "bg-primary-dim text-primary-hover border border-indigo-500/20 shadow-sm"
                 : "text-fg-secondary hover:text-fg hover:bg-surface-2"
             }`}
           >
             {item.icon}
-            {item.label}
+            {!isCollapsed && <span>{item.label}</span>}
           </button>
         )
       })}
@@ -103,33 +109,50 @@ export default function Sidebar({
   hasCustomKey,
   apiKeyStatus,
 }: SidebarProps) {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("audin_sidebar_collapsed") === "true"
+  })
+
+  useEffect(() => {
+    localStorage.setItem("audin_sidebar_collapsed", isCollapsed.toString())
+  }, [isCollapsed])
+
   return (
-    <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-border bg-surface print:hidden">
+    <aside
+      className={`hidden md:flex flex-shrink-0 flex-col border-r border-border bg-surface transition-all duration-300 print:hidden ${
+        isCollapsed ? "w-20" : "w-56"
+      }`}
+    >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-border">
-        <Logo />
+      <div className={`py-5 border-b border-border ${isCollapsed ? 'px-2' : 'px-5'}`}>
+        <Logo isCollapsed={isCollapsed} />
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        <NavItems screen={screen} setScreen={setScreen} />
+        <NavItems screen={screen} setScreen={setScreen} isCollapsed={isCollapsed} />
       </nav>
 
       {/* Bottom section */}
       <div className="flex flex-col gap-2 mt-auto p-3 border-t border-border">
-        <FreeTierBar
-          onUpgrade={() => setModal(true)}
-          uploadCount={uploadCount}
-          storageUsed={storageUsed}
-          storageLimit={storageLimit}
-          hasCustomKey={hasCustomKey}
-          apiKeyStatus={apiKeyStatus}
-        />
+        {!isCollapsed && (
+          <FreeTierBar
+            onUpgrade={() => setModal(true)}
+            uploadCount={uploadCount}
+            storageUsed={storageUsed}
+            storageLimit={storageLimit}
+            hasCustomKey={hasCustomKey}
+            apiKeyStatus={apiKeyStatus}
+          />
+        )}
 
         {/* Settings button */}
         <button
           onClick={onOpenSettings}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150"
+          title={isCollapsed ? "Settings" : undefined}
+          className={`w-full flex items-center ${
+            isCollapsed ? "justify-center" : "gap-3 px-3"
+          } py-2.5 rounded-xl text-sm font-medium text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150`}
           aria-label="Settings"
         >
           <svg
@@ -146,7 +169,25 @@ export default function Sidebar({
             />
             <circle cx="12" cy="12" r="3" />
           </svg>
-          Settings
+          {!isCollapsed && <span>Settings</span>}
+        </button>
+
+        {/* Toggle Collapse Button */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          className={`w-full flex items-center justify-center py-2 mt-1 rounded-xl text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150`}
+          aria-label="Toggle Sidebar"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+          </svg>
         </button>
       </div>
     </aside>

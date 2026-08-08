@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, MouseEvent } from "react"
+import { useState, useRef, useEffect } from "react"
 
 interface AudioPlayerProps {
   audioUrl?: string
@@ -17,7 +17,10 @@ export default function AudioPlayer({
 }: AudioPlayerProps) {
   const [playing, setPlaying] = useState(false)
   const [duration, setDuration] = useState<number>(initialDurationSec)
+  const [isDragging, setIsDragging] = useState(false)
+  const [scrubTime, setScrubTime] = useState<number>(0)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const scrubberRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (initialDurationSec > 0) {
@@ -26,15 +29,16 @@ export default function AudioPlayer({
   }, [initialDurationSec])
 
   // Sync external currentTime prop changes to the actual audio element
-  // Only trigger if the difference is more than 1 second to avoid interrupting natural playback
+  // Only trigger if the difference is more than 1.5 seconds and we aren't dragging
   useEffect(() => {
     if (
       audioRef.current &&
+      !isDragging &&
       Math.abs(audioRef.current.currentTime - currentTime) > 1.5
     ) {
       audioRef.current.currentTime = currentTime
     }
-  }, [currentTime])
+  }, [currentTime, isDragging])
 
   // Play / Pause effect
   useEffect(() => {
@@ -61,21 +65,44 @@ export default function AudioPlayer({
   }
 
   const handleTimeUpdate = () => {
-    if (audioRef.current) {
+    if (audioRef.current && !isDragging) {
       setCurrentTime(Math.floor(audioRef.current.currentTime))
     }
   }
 
-  const handleSeek = (e: MouseEvent<HTMLDivElement>) => {
-    if (!duration || duration <= 0) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    const clickX = e.clientX - rect.left
-    const newRatio = clickX / rect.width
-    const targetTime = Math.floor(newRatio * duration)
-    setCurrentTime(targetTime)
-    if (audioRef.current) {
-      audioRef.current.currentTime = targetTime
+  const updateScrubTime = (clientX: number, commit = false) => {
+    if (!scrubberRef.current || !duration) return
+    const rect = scrubberRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
+    const ratio = x / rect.width
+    const targetTime = Math.floor(ratio * duration)
+    setScrubTime(targetTime)
+    
+    if (commit) {
+      setCurrentTime(targetTime)
+      if (audioRef.current) {
+        audioRef.current.currentTime = targetTime
+      }
     }
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!duration || duration <= 0 || !scrubberRef.current) return
+    setIsDragging(true)
+    scrubberRef.current.setPointerCapture(e.pointerId)
+    updateScrubTime(e.clientX)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !scrubberRef.current) return
+    updateScrubTime(e.clientX)
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging || !scrubberRef.current) return
+    setIsDragging(false)
+    scrubberRef.current.releasePointerCapture(e.pointerId)
+    updateScrubTime(e.clientX, true)
   }
 
   const formatTime = (secs: number) => {
@@ -90,9 +117,11 @@ export default function AudioPlayer({
     return `${remM}:${s.toString().padStart(2, "0")}`
   }
 
+  const displayTime = isDragging ? scrubTime : currentTime
+
   const progressPercent =
     duration > 0
-      ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
+      ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
       : 0
 
   return (
@@ -138,8 +167,12 @@ export default function AudioPlayer({
 
       {/* Scrubber bar */}
       <div
-        className="relative mb-2 cursor-pointer group"
-        onClick={handleSeek}
+        ref={scrubberRef}
+        className="relative mb-2 cursor-pointer group touch-none"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         role="slider"
         aria-valuenow={progressPercent}
         aria-valuemin={0}
@@ -163,7 +196,7 @@ export default function AudioPlayer({
       </div>
 
       <div className="flex justify-between items-center text-xs font-mono mb-3 text-fg-tertiary">
-        <span>{formatTime(currentTime)}</span>
+        <span>{formatTime(displayTime)}</span>
         <div className="flex items-center gap-2">
           {onDownload && (
             <button

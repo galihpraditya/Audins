@@ -20,6 +20,7 @@ interface WorkspaceProps {
   onDuplicateDocument: (doc: DocumentItem) => void
   onUpdateSummary: (id: number | string, summary: any) => void
   onCancelUpload?: (id: number | string) => void
+  onBackNavigation?: () => void
 }
 
 export default function Workspace({
@@ -35,6 +36,7 @@ export default function Workspace({
   onDuplicateDocument,
   onUpdateSummary,
   onCancelUpload,
+  onBackNavigation,
 }: WorkspaceProps) {
   const { showToast } = useToast()
   const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
@@ -460,10 +462,10 @@ export default function Workspace({
       <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-surface flex-shrink-0 print:hidden">
         <div className="flex items-center gap-3 min-w-0">
           <button
-            onClick={onClearSelectedDocument}
+            onClick={onBackNavigation || onClearSelectedDocument}
             className="p-1.5 rounded-lg text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors flex-shrink-0 flex items-center gap-1 text-xs font-medium"
-            aria-label="Back to workspace"
-            title="Back to Workspace"
+            aria-label="Back"
+            title="Back"
           >
             <svg
               viewBox="0 0 16 16"
@@ -478,7 +480,7 @@ export default function Workspace({
                 d="M10 13L5 8l5-5"
               />
             </svg>
-            <span className="hidden sm:inline">Workspace</span>
+            <span className="hidden sm:inline">Back</span>
           </button>
           <div className="w-px h-4 flex-shrink-0 bg-border" />
           <div className="min-w-0">

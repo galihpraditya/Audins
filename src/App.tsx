@@ -22,6 +22,7 @@ import { useToast } from "./components/ui/ToastContext"
 export default function App() {
   const { showToast } = useToast()
   const [screen, setScreen] = useState<Screen>("dashboard")
+  const [previousScreen, setPreviousScreen] = useState<Screen>("dashboard")
   const [rateModalOpen, setRateModalOpen] = useState<boolean>(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false)
 
@@ -95,7 +96,8 @@ export default function App() {
   useEffect(() => {
     fetchDocumentsFromApi().then((docs) => {
       if (docs) {
-        setDocuments(docs.reverse())
+        const sortedDocs = [...docs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setDocuments(sortedDocs)
       }
     })
     fetchRateLimitApi().then((status) => {
@@ -111,8 +113,14 @@ export default function App() {
   }, [])
 
   const handleOpenDocument = (doc: DocumentItem) => {
+    setPreviousScreen(screen)
     setActiveDocument(doc)
     setScreen("workspace")
+  }
+
+  const handleBackNavigation = () => {
+    setActiveDocument(null)
+    setScreen(previousScreen)
   }
 
   const handleUploadFile = async (file: File) => {
@@ -475,6 +483,7 @@ export default function App() {
             document={activeDocument}
             onSelectDocument={(doc) => setActiveDocument(doc)}
             onClearSelectedDocument={() => setActiveDocument(null)}
+            onBackNavigation={handleBackNavigation}
             setScreen={setScreen}
             setModal={setRateModalOpen}
             onReSummarize={handleReSummarize}
