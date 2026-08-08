@@ -91,7 +91,7 @@ export default function App() {
 
   const handleUploadFile = async (file: File) => {
     // Check if free portfolio limit is reached and user has no custom key
-    if (uploadCount >= 5 && !userApiKey) {
+    if (uploadCount >= 5 && !userApiKey?.trim()) {
       setRateModalOpen(true)
       return
     }
@@ -224,6 +224,13 @@ export default function App() {
                 } else {
                   showToast(`Processing failed for ${updated.name}.`, "error")
                 }
+                // Refresh storage info after processing completes
+                fetchRateLimitApi().then((status) => {
+                  if (status) {
+                    if (status.storageUsed !== undefined) setStorageUsed(status.storageUsed)
+                    if (status.storageLimit !== undefined) setStorageLimit(status.storageLimit)
+                  }
+                })
              }
            }, 3000)
         }
@@ -241,14 +248,16 @@ export default function App() {
       setActiveDocument(errorDoc)
 
       // If error is related to API key, prompt user
-      const msg = err.message?.toLowerCase() || ""
       if (
-        !msg.includes("storage") &&
-        (msg.includes("api key") || msg.includes("limit") || msg.includes("429"))
+        err.message?.toLowerCase().includes("api key") ||
+        (err.message?.toLowerCase().includes("rate limit") && !userApiKey?.trim())
       ) {
         setRateModalOpen(true)
       } else {
-        showToast(err.message || "Failed to process audio", "error")
+        showToast(
+          `Processing failed: ${err.message || "Unknown error"}`,
+          "error",
+        )
       }
     }
   }
@@ -257,7 +266,7 @@ export default function App() {
     id: string | number,
     customPrompt?: string,
   ) => {
-    if (!userApiKey && uploadCount >= 5) {
+    if (!userApiKey?.trim() && uploadCount >= 5) {
       setRateModalOpen(true)
       return
     }
@@ -308,8 +317,14 @@ export default function App() {
         setDocuments((prev) => prev.filter((doc) => doc.id !== id))
         if (activeDocument?.id === id) {
           setActiveDocument(null)
-          // Removed setScreen('dashboard') so it stays in workspace to show file grid
         }
+        // Refresh storage info after deletion
+        fetchRateLimitApi().then((status) => {
+          if (status) {
+            if (status.storageUsed !== undefined) setStorageUsed(status.storageUsed)
+            if (status.storageLimit !== undefined) setStorageLimit(status.storageLimit)
+          }
+        })
       }
     } catch (err: any) {
       showToast(`Failed to delete document: ${err.message}`, "error")

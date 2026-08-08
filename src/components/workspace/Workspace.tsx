@@ -423,28 +423,25 @@ export default function Workspace({
     showToast(`Downloading "${filename}"...`, "info")
 
     try {
-      const res = await fetch(doc.audioUrl)
-      if (!res.ok) throw new Error("Fetch failed")
+      // Always use backend proxy to avoid CORS issues with cloud storage
+      const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
+      const res = await fetch(proxyUrl, {
+        headers: { "X-User-Session": localStorage.getItem("audin_session_id") || "" },
+      })
+      if (!res.ok) throw new Error("Download failed")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
+      const a = window.document.createElement("a")
       a.href = url
       a.download = filename
-      document.body.appendChild(a)
+      window.document.body.appendChild(a)
       a.click()
-      document.body.removeChild(a)
+      window.document.body.removeChild(a)
       setTimeout(() => window.URL.revokeObjectURL(url), 1000)
       showToast(`Downloaded "${filename}" successfully`, "success")
     } catch (err) {
-      console.warn("Direct blob download failed, using backend proxy download:", err)
-      const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
-      const a = document.createElement("a")
-      a.href = proxyUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      showToast(`Downloaded "${filename}"`, "success")
+      console.error("Download failed:", err)
+      showToast("Download failed. Please try again.", "error")
     }
   }
 
