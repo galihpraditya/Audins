@@ -103,7 +103,16 @@ export default function MobileNav({
         </nav>
 
         {/* Drawer bottom */}
-        <div className="px-3 pb-6 space-y-2 border-t border-border pt-4">
+        <div className="flex flex-col gap-2 px-3 pb-6 border-t border-border pt-4">
+          <FreeTierBar
+            onUpgrade={() => {
+              setOpen(false)
+              setModal(true)
+            }}
+            uploadCount={uploadCount}
+            storageUsed={storageUsed}
+            storageLimit={storageLimit}
+          />
           <button
             onClick={() => {
               setOpen(false)
@@ -128,15 +137,6 @@ export default function MobileNav({
             </svg>
             Settings
           </button>
-          <FreeTierBar
-            onUpgrade={() => {
-              setOpen(false)
-              setModal(true)
-            }}
-            uploadCount={uploadCount}
-            storageUsed={storageUsed}
-            storageLimit={storageLimit}
-          />
         </div>
       </aside>
     </>

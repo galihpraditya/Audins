@@ -56,11 +56,11 @@ export default function FreeTierBar({
 
       {/* Storage Limit */}
       <div className="relative z-10 group/storage">
-        <div className="flex justify-between items-center mb-1.5">
-          <span className="text-xs font-medium text-fg-secondary">
-            Storage (Audio)
+        <div className="flex justify-between items-center mb-1.5 gap-2">
+          <span className="text-xs font-medium text-fg-secondary shrink-0">
+            Storage
           </span>
-          <span className="text-xs text-pink-400 font-mono">
+          <span className="text-xs text-pink-400 font-mono truncate text-right">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
           </span>
         </div>

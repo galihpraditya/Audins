@@ -101,14 +101,20 @@ export default function Sidebar({
       <div className="px-5 py-5 border-b border-border">
         <Logo />
       </div>
-
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         <NavItems screen={screen} setScreen={setScreen} />
       </nav>
 
       {/* Bottom section */}
-      <div className="px-3 pb-4 space-y-2 border-t border-border pt-4">
+      <div className="flex flex-col gap-2 mt-auto p-3 border-t border-border">
+        <FreeTierBar 
+          onUpgrade={() => setModal(true)} 
+          uploadCount={uploadCount} 
+          storageUsed={storageUsed}
+          storageLimit={storageLimit}
+        />
+        
         {/* Settings button with Gear Icon */}
         <button
           onClick={onOpenSettings}
@@ -131,14 +137,6 @@ export default function Sidebar({
           </svg>
           Settings
         </button>
-        <div className="mt-auto px-4 pb-4">
-          <FreeTierBar 
-            onUpgrade={() => setModal(true)} 
-            uploadCount={uploadCount} 
-            storageUsed={storageUsed}
-            storageLimit={storageLimit}
-          />
-        </div>
       </div>
     </aside>
   )
