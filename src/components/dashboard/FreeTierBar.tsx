@@ -30,6 +30,7 @@ export default function FreeTierBar({
     <button
       onClick={onUpgrade}
       className="w-full text-left px-3 py-2.5 rounded-xl transition-all duration-200 bg-primary-dim border border-indigo-500/20 hover:bg-indigo-500/20 group"
+    >
       {/* Upload Limit */}
       <div className="mb-4">
         <div className="flex justify-between items-center mb-1.5">
