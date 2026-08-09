@@ -130,6 +130,12 @@ export default function App() {
       return
     }
 
+    // Check file size on frontend (max 500MB)
+    if (file.size > 500 * 1024 * 1024) {
+      showToast("File is too large! Maximum file size is 500MB.", "error")
+      return
+    }
+
     const blobUrl = URL.createObjectURL(file)
     const newId = Date.now()
     const nowStr = new Date().toLocaleDateString("en-US", {
