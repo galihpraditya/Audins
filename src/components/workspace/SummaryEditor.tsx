@@ -341,7 +341,7 @@ export default function SummaryEditor({
               {/* Table wrapper for print to prevent content overlapping fixed headers */}
               <table className="w-full block print:table">
                 <thead className="hidden print:table-header-group">
-                  <tr><td><div className="h-[40mm]" /></td></tr>
+                  <tr><td><div className="h-[32mm]" /></td></tr>
                 </thead>
                 <tfoot className="hidden print:table-footer-group">
                   <tr><td><div className="h-[25mm]" /></td></tr>
@@ -349,7 +349,7 @@ export default function SummaryEditor({
                 <tbody className="block print:table-row-group">
                   <tr className="block print:table-row">
                     <td className="block print:table-cell">
-                      <div className="mb-8 mt-4 print:mt-12">
+                      <div className="mb-8 mt-4 print:mt-0">
                         <h1 className="text-2xl sm:text-3xl font-display font-semibold text-fg tracking-tight">
                           {editableSummary?.title || "Executive Summary"}
                         </h1>
@@ -430,15 +430,12 @@ export default function SummaryEditor({
                                 ),
                                 ul: ({ node, ...props }) => (
                                   <ul
-                                    className="space-y-2 list-none mb-3 last:mb-0"
+                                    className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 [&>li]:pl-4 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-indigo-500/50 [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden"
                                     {...props}
                                   />
                                 ),
                                 li: ({ node, ...props }) => (
-                                  <li
-                                    className="pl-4 relative before:absolute before:left-0 before:top-2 before:w-1.5 before:h-1.5 before:bg-indigo-500/50 before:rounded-full"
-                                    {...props}
-                                  />
+                                  <li {...props} />
                                 ),
                                 ol: ({ node, ...props }) => (
                                   <ol

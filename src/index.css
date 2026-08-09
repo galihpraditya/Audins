@@ -84,16 +84,32 @@ html {
 }
 
 @media print {
+  :root {
+    --color-background: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-2: #ffffff;
+    --color-border: #dddddd;
+    --color-border-subtle: #eeeeee;
+    --color-fg: #000000;
+    --color-fg-secondary: #333333;
+    --color-fg-tertiary: #555555;
+  }
+
   @page {
     /* Hide browser headers/footers by setting top/bottom margins to 0. 
        Keep side margins so text doesn't hit the left/right edge. */
     margin: 0 15mm;
   }
   
-  body {
+  html, body, #root {
     background-color: #ffffff !important;
+  }
+
+  body {
     color: #000000 !important;
     counter-reset: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   
   * {
