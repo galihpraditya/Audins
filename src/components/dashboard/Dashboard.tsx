@@ -12,6 +12,7 @@ interface DashboardProps {
   onDuplicateDocument: (doc: DocumentItem) => void
   setModal: (v: boolean) => void
   uploadCount: number
+  maxUploads?: number
   hasCustomKey?: boolean
 }
 
@@ -24,6 +25,7 @@ export default function Dashboard({
   onDuplicateDocument,
   setModal,
   uploadCount,
+  maxUploads,
   hasCustomKey,
 }: DashboardProps) {
   const { showToast } = useToast()
@@ -47,6 +49,7 @@ export default function Dashboard({
           onUploadFile={onUploadFile}
           onShowLimitModal={() => setModal(true)}
           uploadCount={uploadCount}
+          maxUploads={maxUploads}
           hasCustomKey={hasCustomKey}
         />
 

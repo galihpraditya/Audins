@@ -9,6 +9,7 @@ interface SidebarProps {
   setModal: (v: boolean) => void
   onOpenSettings: () => void
   uploadCount: number
+  maxUploads?: number
   storageUsed?: number
   storageLimit?: number
   hasCustomKey?: boolean
@@ -104,6 +105,7 @@ export default function Sidebar({
   setModal,
   onOpenSettings,
   uploadCount,
+  maxUploads,
   storageUsed,
   storageLimit,
   hasCustomKey,
@@ -160,6 +162,7 @@ export default function Sidebar({
           <FreeTierBar
             onUpgrade={onOpenSettings}
             uploadCount={uploadCount}
+            maxUploads={maxUploads}
             storageUsed={storageUsed}
             storageLimit={storageLimit}
             hasCustomKey={hasCustomKey}

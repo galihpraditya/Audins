@@ -31,6 +31,7 @@ export default function App() {
   const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(null)
   const uploadControllersRef = useRef<Map<string | number, AbortController>>(new Map())
   const [uploadCount, setUploadCount] = useState<number>(0)
+  const [maxUploads, setMaxUploads] = useState<number>(10)
   const [storageUsed, setStorageUsed] = useState<number>(0)
   const [storageLimit, setStorageLimit] = useState<number>(500 * 1024 * 1024)
 
@@ -98,6 +99,7 @@ export default function App() {
       if (status && status.maxLimit && typeof status.remaining === "number") {
         const used = status.maxLimit - status.remaining
         setUploadCount(used)
+        setMaxUploads(status.maxLimit)
         if (status.resetTime) setResetTime(status.resetTime)
         if (status.storageUsed !== undefined) {
           setStorageUsed(status.storageUsed)
@@ -436,6 +438,7 @@ export default function App() {
         setModal={setRateModalOpen}
         onOpenSettings={() => setSettingsModalOpen(true)}
         uploadCount={uploadCount}
+        maxUploads={maxUploads}
         storageUsed={storageUsed}
         storageLimit={storageLimit}
         hasCustomKey={!!userApiKey?.trim()}
@@ -449,6 +452,7 @@ export default function App() {
         setModal={setRateModalOpen}
         onOpenSettings={() => setSettingsModalOpen(true)}
         uploadCount={uploadCount}
+        maxUploads={maxUploads}
         storageUsed={storageUsed}
         storageLimit={storageLimit}
         hasCustomKey={!!userApiKey?.trim()}
@@ -476,6 +480,7 @@ export default function App() {
             onDuplicateDocument={handleDuplicateDocument}
             setModal={setRateModalOpen}
             uploadCount={uploadCount}
+            maxUploads={maxUploads}
             hasCustomKey={!!userApiKey?.trim()}
           />
         ) : (
@@ -519,6 +524,7 @@ export default function App() {
             setSettingsModalOpen(false)
           }}
           uploadCount={uploadCount}
+          maxUploads={maxUploads}
         />
       )}
     </div>

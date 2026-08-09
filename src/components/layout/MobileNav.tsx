@@ -10,6 +10,7 @@ interface MobileNavProps {
   setModal: (v: boolean) => void
   onOpenSettings: () => void
   uploadCount: number
+  maxUploads?: number
   storageUsed?: number
   storageLimit?: number
   hasCustomKey?: boolean
@@ -22,6 +23,7 @@ export default function MobileNav({
   setModal,
   onOpenSettings,
   uploadCount,
+  maxUploads,
   storageUsed,
   storageLimit,
   hasCustomKey,
@@ -113,6 +115,7 @@ export default function MobileNav({
               onOpenSettings()
             }}
             uploadCount={uploadCount}
+            maxUploads={maxUploads}
             storageUsed={storageUsed}
             storageLimit={storageLimit}
             hasCustomKey={hasCustomKey}

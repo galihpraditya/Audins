@@ -12,7 +12,7 @@ export default function UploadZone({
   onUploadFile,
   onShowLimitModal,
   uploadCount,
-  maxUploads = 5,
+  maxUploads = 10,
   hasCustomKey = false,
 }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false)
