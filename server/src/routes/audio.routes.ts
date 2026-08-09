@@ -24,6 +24,7 @@ import {
 import {
   checkPortfolioRateLimit,
   getRateLimitStatus,
+  refundRateLimit,
 } from "../middleware/rateLimit.middleware.js"
 import { FullDocument, TranscriptEntry } from "../types/index.js"
 
@@ -124,7 +125,28 @@ router.get("/documents/:id", async (req: Request, res: Response) => {
 router.post(
   "/audio/upload",
   checkPortfolioRateLimit,
-  upload.single("file"),
+  (req: Request, res: Response, next: import("express").NextFunction) => {
+    let hasRefunded = false
+    const refundOnce = async () => {
+      if (!hasRefunded) {
+        hasRefunded = true
+        await refundRateLimit(req)
+      }
+    }
+    
+    req.on("aborted", async () => {
+      console.log("Client aborted upload. Refunding rate limit.")
+      await refundOnce()
+    })
+
+    upload.single("file")(req, res, async (err) => {
+      if (err) {
+        await refundOnce()
+        return res.status(400).json({ error: err.message })
+      }
+      next()
+    })
+  },
   async (req: Request, res: Response) => {
     // Prevent socket timeout during long upload and chunking
     if (req.socket) req.socket.setTimeout(0)
@@ -135,13 +157,26 @@ router.post(
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
 
       if (!file) {
+        await refundRateLimit(req)
         res.status(400).json({ error: "No audio file provided" })
+        return
+      }
+
+      // Check global storage limit (5GB)
+      const globalStorageUsed = await calculateStorageUsed()
+      if (globalStorageUsed + file.size > 5 * 1024 * 1024 * 1024) {
+        await refundRateLimit(req)
+        fs.unlinkSync(file.path)
+        res.status(403).json({
+          error: "Global storage limit (5GB) reached. Mitigating storage abuse risks.",
+        })
         return
       }
 
       // Check 500MB storage limit
       const storageUsed = await calculateStorageUsed(userId)
       if (storageUsed + file.size > 500 * 1024 * 1024) {
+        await refundRateLimit(req)
         fs.unlinkSync(file.path)
         res.status(403).json({
           error: "Storage limit exceeded (500MB). Please delete some files.",

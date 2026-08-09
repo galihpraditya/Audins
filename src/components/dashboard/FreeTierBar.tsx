@@ -20,7 +20,7 @@ function formatBytes(bytes: number) {
 export default function FreeTierBar({
   onUpgrade,
   uploadCount = 0,
-  maxUploads = 5,
+  maxUploads = 10,
   storageUsed = 0,
   storageLimit = 500 * 1024 * 1024,
   hasCustomKey = false,

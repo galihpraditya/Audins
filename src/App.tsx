@@ -125,7 +125,7 @@ export default function App() {
 
   const handleUploadFile = async (file: File) => {
     // Check if free portfolio limit is reached and user has no custom key
-    if (uploadCount >= 5 && !userApiKey?.trim()) {
+    if (uploadCount >= 10 && !userApiKey?.trim()) {
       setRateModalOpen(true)
       return
     }

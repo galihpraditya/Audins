@@ -14,7 +14,7 @@ interface IPRecord {
 
 const localUsageStore = new Map<string, IPRecord>()
 const MAX_FREE_DAILY_UPLOADS = parseInt(
-  process.env.MAX_FREE_DAILY_UPLOADS || "5",
+  process.env.MAX_FREE_DAILY_UPLOADS || "10",
   10,
 )
 
@@ -127,5 +127,35 @@ export async function checkPortfolioRateLimit(
   } catch (error) {
     console.error("Rate limit error:", error)
     next() // Fail open if storage error
+  }
+}
+
+export async function refundRateLimit(req: Request): Promise<void> {
+  try {
+    const customApiKey = req.headers["x-groq-api-key"]
+    if (
+      customApiKey &&
+      typeof customApiKey === "string" &&
+      customApiKey.trim().length > 0
+    ) {
+      return
+    }
+
+    const key = getRateLimitKey(req)
+    let record: IPRecord | null | undefined = localUsageStore.get(key)
+
+    if (isSupabaseEnabled()) {
+      record = await getSupabaseRateLimit(key)
+    }
+
+    if (record && record.count > 0) {
+      record.count -= 1
+      localUsageStore.set(key, record)
+      if (isSupabaseEnabled()) {
+        await saveSupabaseRateLimit(key, record)
+      }
+    }
+  } catch (error) {
+    console.error("Failed to refund rate limit:", error)
   }
 }
