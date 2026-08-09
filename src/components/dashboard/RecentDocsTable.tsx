@@ -19,7 +19,7 @@ export default function RecentDocsTable({
   onRenameDocument,
   onDuplicateDocument,
 }: RecentDocsTableProps) {
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
   const { showToast } = useToast()
 
   const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(
