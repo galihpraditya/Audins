@@ -110,7 +110,7 @@ export default function MobileNav({
           <FreeTierBar
             onUpgrade={() => {
               setOpen(false)
-              setModal(true)
+              onOpenSettings()
             }}
             uploadCount={uploadCount}
             storageUsed={storageUsed}

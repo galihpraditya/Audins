@@ -4,34 +4,25 @@ interface SettingsModalProps {
   onClose: () => void
   userApiKey: string
   onSaveApiKey: (key: string) => void
-  selectedModel: string
-  onSaveModel: (model: string) => void
   uploadCount: number
   maxUploads?: number
 }
 
-type TabType = "api" | "transcription" | "portfolio"
+type TabType = "api" | "portfolio"
 
 export default function SettingsModal({
   onClose,
   userApiKey,
   onSaveApiKey,
-  selectedModel,
-  onSaveModel,
   uploadCount,
-  maxUploads = 5,
+  maxUploads = 10,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>("api")
   const [apiKeyInput, setApiKeyInput] = useState(userApiKey)
-  const [modelInput, setModelInput] = useState(selectedModel)
-  const [language, setLanguage] = useState("auto")
-  const [autoScroll, setAutoScroll] = useState(true)
-  const [speakerDiarization, setSpeakerDiarization] = useState(true)
   const [saveMessage, setSaveMessage] = useState("")
 
   const handleSave = () => {
     onSaveApiKey(apiKeyInput.trim())
-    onSaveModel(modelInput)
     setSaveMessage("Settings saved successfully!")
     setTimeout(() => setSaveMessage(""), 2500)
   }
@@ -75,7 +66,7 @@ export default function SettingsModal({
                 Preferences & Settings
               </h2>
               <p className="text-xs text-fg-tertiary">
-                Configure API keys, AI models, and portfolio options
+                Configure API keys and view portfolio information
               </p>
             </div>
           </div>
@@ -99,8 +90,7 @@ export default function SettingsModal({
         {/* Navigation Tabs */}
         <div className="flex border-b border-border bg-surface-2 px-4 gap-1">
           {[
-            { id: "api", label: "API & AI Model" },
-            { id: "transcription", label: "Transcription" },
+            { id: "api", label: "API Configuration" },
             { id: "portfolio", label: "Portfolio Info" },
           ].map((tab) => (
             <button
@@ -137,7 +127,7 @@ export default function SettingsModal({
                         uploads left today
                       </span>
                       ). If the limit is reached, enter your custom Groq API Key
-                      below to bypass the limit.
+                      below to bypass the limit entirely.
                     </p>
                   </div>
                 </div>
@@ -148,97 +138,23 @@ export default function SettingsModal({
                 <label className="block text-xs font-mono font-medium mb-1.5 text-fg-secondary">
                   CUSTOM GROQ API KEY
                 </label>
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="gsk_..."
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono bg-surface-2 border border-border text-fg outline-none focus:border-indigo-500 transition-all"
-                />
-                <p className="text-xs text-fg-tertiary mt-1.5">
-                  Stored securely in your browser's{" "}
-                  <code className="text-indigo-400">localStorage</code>. Never
-                  sent to third-party servers.
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="gsk_..."
+                    className="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono bg-surface-2 border border-border text-fg outline-none focus:border-indigo-500 transition-all"
+                  />
+                  {apiKeyInput.length > 0 && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                  )}
+                </div>
+                <p className="text-xs text-fg-tertiary mt-2">
+                  Your key is stored securely in your browser's{" "}
+                  <code className="text-indigo-400 bg-indigo-400/10 px-1 py-0.5 rounded">localStorage</code>. 
+                  It is only used to authenticate directly with the AI engine and is never stored on our servers.
                 </p>
-              </div>
-
-              {/* Model Selection */}
-              <div>
-                <label className="block text-xs font-mono font-medium mb-1.5 text-fg-secondary">
-                  AI INTELLIGENCE MODEL
-                </label>
-                <select
-                  value={modelInput}
-                  onChange={(e) => setModelInput(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono bg-surface-2 border border-border text-fg outline-none focus:border-indigo-500 transition-all cursor-pointer"
-                >
-                  <option value="llama-3.3-70b-versatile">
-                    Llama 3.3 70B Versatile (Recommended)
-                  </option>
-                  <option value="whisper-large-v3">
-                    Whisper Large v3 (Audio Transcription)
-                  </option>
-                  <option value="mixtral-8x7b-32768">
-                    Mixtral 8x7b 32k (Fast Analysis)
-                  </option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "transcription" && (
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-mono font-medium mb-1.5 text-fg-secondary">
-                  DEFAULT AUDIO LANGUAGE
-                </label>
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl text-sm font-mono bg-surface-2 border border-border text-fg outline-none focus:border-indigo-500 transition-all cursor-pointer"
-                >
-                  <option value="auto">🌐 Auto-Detect Language</option>
-                  <option value="id">🇮🇩 Indonesian (Bahasa Indonesia)</option>
-                  <option value="en">🇺🇸 English</option>
-                  <option value="es">🇪🇸 Spanish</option>
-                </select>
-              </div>
-
-              {/* Toggles */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border border-border">
-                  <div>
-                    <p className="text-sm font-medium text-fg">
-                      Speaker Diarization
-                    </p>
-                    <p className="text-xs text-fg-tertiary">
-                      Distinguish and label different speakers automatically
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={speakerDiarization}
-                    onChange={(e) => setSpeakerDiarization(e.target.checked)}
-                    className="w-4 h-4 accent-indigo-500 cursor-pointer"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-2 border border-border">
-                  <div>
-                    <p className="text-sm font-medium text-fg">
-                      Auto-Scroll Transcript
-                    </p>
-                    <p className="text-xs text-fg-tertiary">
-                      Keep transcript line in view as audio plays
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={autoScroll}
-                    onChange={(e) => setAutoScroll(e.target.checked)}
-                    className="w-4 h-4 accent-indigo-500 cursor-pointer"
-                  />
-                </div>
               </div>
             </div>
           )}

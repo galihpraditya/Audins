@@ -3,13 +3,29 @@ import { useState } from "react"
 interface RateLimitModalProps {
   onClose: () => void
   onSaveApiKey?: (key: string) => void
+  resetTime?: string
 }
 
 export default function RateLimitModal({
   onClose,
   onSaveApiKey,
+  resetTime,
 }: RateLimitModalProps) {
   const [apiKey, setApiKey] = useState("")
+
+  let resetText = "Tomorrow"
+  if (resetTime) {
+    const resetDate = new Date(resetTime)
+    const now = new Date()
+    const diffMs = resetDate.getTime() - now.getTime()
+    if (diffMs > 0) {
+      const hours = Math.floor(diffMs / (1000 * 60 * 60))
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+      resetText = `${hours.toString().padStart(2, "0")}h ${minutes.toString().padStart(2, "0")}m`
+    } else {
+      resetText = "Soon"
+    }
+  }
 
   const handleSubmit = () => {
     if (apiKey.trim()) {
@@ -101,8 +117,8 @@ export default function RateLimitModal({
               <path strokeLinecap="round" d="M7 4v3.25l2 1.5" />
             </svg>
             <p className="text-xs font-mono text-fg-tertiary">
-              Resets in <span className="text-fg-secondary">08h 42m</span> ·
-              Midnight UTC
+              Resets in <span className="text-fg-secondary">{resetText}</span>
+              {resetText !== "Soon" && " · Midnight UTC"}
             </p>
           </div>
 

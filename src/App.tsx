@@ -34,19 +34,10 @@ export default function App() {
   const [storageUsed, setStorageUsed] = useState<number>(0)
   const [storageLimit, setStorageLimit] = useState<number>(500 * 1024 * 1024)
 
-  // API Key & Model state with localStorage persistence
+  // API Key state with localStorage persistence
   const [userApiKey, setUserApiKey] = useState<string>(() => {
-    return localStorage.getItem("audin_user_api_key") || ""
+    return localStorage.getItem("audin_api_key") || ""
   })
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return (
-      localStorage.getItem("audin_selected_model") || "llama-3.3-70b-versatile"
-    )
-  })
-
-  useEffect(() => {
-    localStorage.setItem("audin_user_api_key", userApiKey)
-  }, [userApiKey])
 
   // API key validation
   const [apiKeyStatus, setApiKeyStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle")
@@ -75,9 +66,10 @@ export default function App() {
     return () => controller.abort()
   }, [userApiKey])
 
+  // Persist API Key
   useEffect(() => {
-    localStorage.setItem("audin_selected_model", selectedModel)
-  }, [selectedModel])
+    localStorage.setItem("audin_api_key", userApiKey)
+  }, [userApiKey])
 
   // Prevent default browser behavior for drag & drop globally to avoid unintended downloads
   useEffect(() => {
@@ -92,6 +84,8 @@ export default function App() {
     }
   }, [])
 
+  const [resetTime, setResetTime] = useState<string>("")
+
   // Fetch initial documents and rate limit from backend
   useEffect(() => {
     fetchDocumentsFromApi().then((docs) => {
@@ -104,6 +98,7 @@ export default function App() {
       if (status && status.maxLimit && typeof status.remaining === "number") {
         const used = status.maxLimit - status.remaining
         setUploadCount(used)
+        if (status.resetTime) setResetTime(status.resetTime)
         if (status.storageUsed !== undefined) {
           setStorageUsed(status.storageUsed)
           setStorageLimit(status.storageLimit || 500 * 1024 * 1024)
@@ -510,6 +505,7 @@ export default function App() {
             setUserApiKey(key)
             setRateModalOpen(false)
           }}
+          resetTime={resetTime}
         />
       )}
 
@@ -518,9 +514,10 @@ export default function App() {
         <SettingsModal
           onClose={() => setSettingsModalOpen(false)}
           userApiKey={userApiKey}
-          onSaveApiKey={setUserApiKey}
-          selectedModel={selectedModel}
-          onSaveModel={setSelectedModel}
+          onSaveApiKey={(key) => {
+            setUserApiKey(key)
+            setSettingsModalOpen(false)
+          }}
           uploadCount={uploadCount}
         />
       )}

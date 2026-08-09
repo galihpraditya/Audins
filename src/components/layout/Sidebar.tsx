@@ -158,7 +158,7 @@ export default function Sidebar({
       <div className="flex flex-col gap-2 mt-auto p-3 border-t border-border">
         {!isCollapsed && (
           <FreeTierBar
-            onUpgrade={() => setModal(true)}
+            onUpgrade={onOpenSettings}
             uploadCount={uploadCount}
             storageUsed={storageUsed}
             storageLimit={storageLimit}
