@@ -1,6 +1,6 @@
 # Audins - Audio Insight
 
-Audins is a web application designed to transcribe and summarize audio and video recordings. Powered by the Groq API using Whisper and Llama 3 models, it converts lectures, meetings, and interviews into structured summaries and searchable transcripts.
+Audins is a web application designed to transcribe and summarize audio and video recordings. Powered by the Groq API using Whisper and GPT-OSS models, it converts lectures, meetings, and interviews into structured summaries and searchable transcripts.
 
 Live Demo: [audins.vercel.app](https://audins.vercel.app)
 
@@ -20,7 +20,7 @@ Live Demo: [audins.vercel.app](https://audins.vercel.app)
 
 * **Audio & Video Transcription:** Generates text transcripts from uploaded media files.
 * **Interactive Audio Player:** Click on any transcribed word to jump to its corresponding timestamp in the audio file.
-* **AI Summarization:** Automatically structures transcripts into sections, summaries, and action items using Llama 3.3.
+* **AI Summarization:** Automatically structures transcripts into sections, summaries, and action items using GPT-OSS 120B.
 * **Custom AI Guidelines:** Refine summaries by giving instructions such as translating the output or focusing on specific topics.
 * **PDF Export:** Downloads summaries as formatted PDF files with custom styles.
 * **Flexible API Options:** Works with the default limits or lets you use your own Groq API key.
@@ -33,7 +33,7 @@ To handle API limitations and edge cases, the backend implements the following p
 | :--- | :--- | :--- |
 | **Audio Chunking** | Automatically splits files >24MB into 10-minute segments using FFmpeg. | Bypasses the Whisper API 25MB file size limit. |
 | **Format Conversion** | Converts audio formats like `.aac` to `.mp3` using FFmpeg. | Ensures compatibility with the Groq API. |
-| **Model Fallback** | Automatically falls back to `llama-3.1-8b-instant` if Llama 3.3 70B hits rate limits. | Prevents request failures due to API limits. |
+| **Model Fallback** | Automatically falls back to `openai/gpt-oss-20b` if GPT-OSS 120B hits rate limits. | Prevents request failures due to API limits. |
 | **Context Management** | Condenses transcripts exceeding 20,000 characters. | Prevents exceeding the LLM token window. |
 
 ---
@@ -54,7 +54,7 @@ To handle API limitations and edge cases, the backend implements the following p
 * **Backend:** Node.js, Express, TypeScript, Multer
 * **Database & Metadata:** Supabase (PostgreSQL)
 * **Cloud Storage:** Cloudflare R2 (S3-Compatible Object Storage)
-* **AI Processing:** Groq API using Whisper and Llama 3.3 models
+* **AI Processing:** Groq API using Whisper and GPT-OSS 120B models
 
 ### Developer Experience (DX)
 * **Local FFmpeg:** No manual system installation is required; FFmpeg and FFprobe are bundled locally via npm packages.

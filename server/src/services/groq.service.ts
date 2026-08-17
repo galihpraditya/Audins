@@ -221,7 +221,7 @@ export async function summarizeTranscriptWithGroq(
   transcriptText: string,
   fileName: string,
   customApiKey?: string,
-  model = "llama-3.3-70b-versatile",
+  model = "openai/gpt-oss-120b",
   userCustomPrompt?: string,
 ): Promise<AISummary> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
@@ -232,7 +232,7 @@ export async function summarizeTranscriptWithGroq(
     )
   }
 
-  // To fit Groq Free Tier's 12,000 TPM (Tokens Per Minute) limit for Llama 3.3 70B,
+  // To fit Groq Free Tier's 12,000 TPM (Tokens Per Minute) limit for GPT-OSS 120B,
   // we sample/condense the transcript if it exceeds ~20,000 characters (~6,500 tokens).
   let processedText = transcriptText
   if (transcriptText.length > 20000) {
@@ -275,16 +275,16 @@ Output valid JSON only.`
     })
   } catch (error: unknown) {
     const err = error as any // Keep simple cast for properties or narrow if needed
-    // Fallback to llama-3.1-8b-instant if 70B model fails due to TPM limit or request size
+    // Fallback to openai/gpt-oss-20b if 120B model fails due to TPM limit or request size
     if (
       err?.message?.includes("TPM") ||
       err?.message?.includes("too large") ||
       err?.status === 429
     ) {
       console.warn(
-        `Primary model ${usedModel} hit TPM limit. Falling back to llama-3.1-8b-instant...`,
+        `Primary model ${usedModel} hit TPM limit. Falling back to openai/gpt-oss-20b...`,
       )
-      usedModel = "llama-3.1-8b-instant"
+      usedModel = "openai/gpt-oss-20b"
       try {
         completion = await groq.chat.completions.create({
           messages: [{ role: "user", content: prompt }],
@@ -292,13 +292,13 @@ Output valid JSON only.`
           response_format: { type: "json_object" },
         })
       } catch (fallbackError) {
-        console.error("Groq Llama Fallback Summarization error:", fallbackError)
+        console.error("Groq GPT-OSS Fallback Summarization error:", fallbackError)
         throw new Error(
           `Failed to summarize transcript: ${(fallbackError as Error).message}`,
         )
       }
     } else {
-      console.error("Groq Llama Summarization error:", error)
+      console.error("Groq GPT-OSS Summarization error:", error)
       throw new Error(
         `Failed to summarize transcript: ${(error as Error).message}`,
       )

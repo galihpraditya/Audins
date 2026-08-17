@@ -123,7 +123,7 @@ const INITIAL_DOCS: FullDocument[] = [
           ],
         },
       ],
-      modelUsed: "llama-3.3-70b-versatile",
+      modelUsed: "openai/gpt-oss-120b",
       createdAt: new Date("2026-07-28").toISOString(),
     },
   },
