@@ -11,6 +11,8 @@ export interface DocumentItem {
   createdAt: string
   userId?: string
   sizeBytes?: number
+  /** Non-fatal processing notes, e.g. partially failed transcription chunks. */
+  warnings?: string[]
 }
 
 export interface TranscriptEntry {
@@ -37,6 +39,12 @@ export interface FullDocument extends DocumentItem {
   summary?: AISummary
 }
 
+export interface TranscriptionResult {
+  entries: TranscriptEntry[]
+  failedChunks: number
+  totalChunks: number
+}
+
 export interface RateLimitResponse {
   remaining: number
   maxLimit: number
@@ -44,4 +52,9 @@ export interface RateLimitResponse {
   ip: string
   storageUsed: number
   storageLimit: number
+}
+
+export interface RateLimitRecord {
+  count: number
+  resetTime: Date
 }

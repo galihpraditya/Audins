@@ -1,4 +1,7 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useLanguage } from "../../context/LanguageContext"
+import Modal from "../ui/Modal"
+import { ShieldWarning, LockKey, Clock, X, ArrowRight } from "@phosphor-icons/react"
 
 interface RateLimitModalProps {
   onClose: () => void
@@ -11,19 +14,26 @@ export default function RateLimitModal({
   onSaveApiKey,
   resetTime,
 }: RateLimitModalProps) {
+  const { t } = useLanguage()
   const [apiKey, setApiKey] = useState("")
+  // Ticking "now" so the countdown actually updates (was frozen at render).
+  const [now, setNow] = useState(() => Date.now())
 
-  let resetText = "Tomorrow"
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  let resetText = t("quota_resets_tomorrow")
   if (resetTime) {
     const resetDate = new Date(resetTime)
-    const now = new Date()
-    const diffMs = resetDate.getTime() - now.getTime()
+    const diffMs = resetDate.getTime() - now
     if (diffMs > 0) {
       const hours = Math.floor(diffMs / (1000 * 60 * 60))
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
       resetText = `${hours.toString().padStart(2, "0")}h ${minutes.toString().padStart(2, "0")}m`
     } else {
-      resetText = "Soon"
+      resetText = t("quota_resets_soon")
     }
   }
 
@@ -35,113 +45,100 @@ export default function RateLimitModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
+    <Modal
+      onClose={onClose}
+      labelledBy="modal-title"
+      panelClassName="w-full max-w-md rounded-2xl bg-surface border border-border shadow-raised animate-scale-in" 
     >
-      <div className="w-full max-w-md rounded-2xl overflow-hidden bg-surface border border-border shadow-2xl animate-scale-in">
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-purple-500" />
-        <div className="p-6 sm:p-7">
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 bg-primary-dim border border-indigo-500/20">
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-5 h-5 text-primary-hover"
-            >
-              <path
-                fillRule="evenodd"
-                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-
-          <h2
-            id="modal-title"
-            className="text-lg font-semibold mb-2 font-display text-fg tracking-tight"
-          >
-            Free Tier Limit Reached
-          </h2>
-          <p className="text-sm leading-relaxed mb-5 text-fg-secondary">
-            You've reached the free processing limit for today. Wait until
-            tomorrow, or enter your own Groq API Key to continue immediately.
-          </p>
-
-          <div className="mb-2">
-            <label className="block text-xs font-mono font-medium mb-2 text-fg-tertiary">
-              GROQ API KEY
-            </label>
-            <div className="relative">
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your API Key (e.g., gsk_...)"
-                className="w-full px-4 py-2.5 rounded-xl text-sm font-mono bg-surface-2 border border-border text-fg outline-none focus:border-indigo-500 transition-all duration-150"
-              />
-              {apiKey.length > 0 && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-400" />
-              )}
+        <div className="p-6 sm:p-8 space-y-6">
+          {/* Header row with Icon & Close */}
+          <div className="flex items-start justify-between">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-warning-dim border border-warning/25 text-warning">
+              <ShieldWarning size={28} weight="duotone" />
             </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors min-h-[36px]"
+              aria-label={t("btn_close")}
+            >
+              <X size={16} weight="bold" />
+            </button>
           </div>
 
-          <p className="text-xs mb-5 text-fg-tertiary flex items-center gap-1.5">
-            <svg
-              viewBox="0 0 12 12"
-              fill="currentColor"
-              className="w-3 h-3 opacity-60"
+          <div>
+            <h2
+              id="modal-title"
+              className="text-base sm:text-lg font-bold font-display text-fg tracking-tight"
             >
-              <path
-                fillRule="evenodd"
-                d="M8.5 1.5a2.5 2.5 0 00-5 0V3H2a1 1 0 00-1 1v6a1 1 0 001 1h8a1 1 0 001-1V4a1 1 0 00-1-1H8.5V1.5zM7 1.5V3H5V1.5a1 1 0 012 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Your key is only used locally and never stored on our servers.
-          </p>
-
-          <div className="flex items-center gap-3 mb-5 px-3 py-2.5 rounded-xl bg-surface-2 border border-border">
-            <svg
-              viewBox="0 0 14 14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="w-3.5 h-3.5 flex-shrink-0 text-fg-tertiary"
-            >
-              <circle cx="7" cy="7" r="5.5" />
-              <path strokeLinecap="round" d="M7 4v3.25l2 1.5" />
-            </svg>
-            <p className="text-xs font-mono text-fg-tertiary">
-              Resets in <span className="text-fg-secondary">{resetText}</span>
-              {resetText !== "Soon" && " · Midnight UTC"}
+              {t("limit_reached_title")}
+            </h2>
+            <p className="text-xs sm:text-sm text-fg-secondary mt-1.5 leading-relaxed">
+              {t("limit_reached_desc")}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* API Key Input Field */}
+          <div className="space-y-2">
+            <label htmlFor="ratelimit-api-key" className="block text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary">
+              {t("personal_api_key_label")}
+            </label>
+            <div className="relative">
+              <input
+                id="ratelimit-api-key"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="gsk_..."
+                className="w-full px-4 py-3 rounded-xl text-xs font-mono bg-surface-2 border border-border text-fg outline-none focus:border-primary  transition-all"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+              />
+              {apiKey.length > 0 && (
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-success" />
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-fg-tertiary pt-0.5">
+              <LockKey size={13} weight="duotone" className="text-fg-tertiary" />
+              <span>{t("key_storage_hint")}</span>
+            </div>
+          </div>
+
+          {/* Reset Timer Pill â€” ticks every 30s */}
+          <div
+            className="flex items-center gap-2.5 p-3 rounded-2xl bg-surface-2/80 border border-border text-xs font-mono text-fg-tertiary"
+            role="timer"
+          >
+            <Clock size={16} weight="duotone" className="text-fg-tertiary flex-shrink-0" />
+            <p>
+              {t("resets_in")}{" "}
+              <span className="font-bold text-fg">{resetText}</span>
+              {resetTime && diffPositive(resetTime, now) && ` ${t("midnight_utc")}`}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-2">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-border text-fg-secondary hover:border-muted hover:text-fg transition-all duration-150"
+              className="flex-1 py-2.5 rounded-2xl text-xs font-medium text-fg-secondary hover:text-fg bg-surface-2 hover:bg-surface-3 border border-border transition-all min-h-[40px]"
             >
-              Cancel
+              {t("btn_close")}
             </button>
             <button
               onClick={handleSubmit}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
-                apiKey.length > 0
-                  ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md"
-                  : "bg-primary-dim text-primary-hover border border-indigo-500/25 hover:bg-indigo-500/20"
-              }`}
+              disabled={!apiKey.trim()}
+              title={!apiKey.trim() ? t("personal_api_key_label") : undefined}
+              className="flex-1 py-2.5 rounded-2xl text-xs font-semibold text-primary-contrast bg-primary hover:bg-primary-hover transition-all flex items-center justify-center gap-1.5 min-h-[40px] disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Continue with Key
+              <span>{t("btn_continue")}</span>
+              <ArrowRight size={14} weight="bold" />
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
+}
+
+function diffPositive(resetTime: string, now: number): boolean {
+  return new Date(resetTime).getTime() - now > 0
 }

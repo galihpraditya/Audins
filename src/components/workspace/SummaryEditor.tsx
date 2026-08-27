@@ -1,11 +1,69 @@
-import { useState, useEffect } from "react"
-import ReactMarkdown from "react-markdown"
+import { useState, useEffect, Suspense, lazy } from "react"
 import { DocumentItem, AISummary } from "../../types"
 import { useToast } from "../ui/ToastContext"
+import Alert from "../ui/Alert"
+import { useLanguage } from "../../context/LanguageContext"
+import {
+  Copy,
+  Printer,
+  Sparkle,
+  PencilSimple,
+  Check,
+  Brain,
+  X,
+  WarningCircle,
+} from "@phosphor-icons/react"
+
+// ~50KB gzipped of unified/micromark deps lives behind this boundary — only
+// fetched when a completed summary actually needs rendering.
+const LazyReactMarkdown = lazy(() => import("react-markdown"))
+
+// Module-level constant so React doesn't remount the markdown tree each render.
+const markdownComponents = {
+  p: ({ node, ...props }: any) => (
+    <p className="mb-3 last:mb-0 leading-relaxed" {...props} />
+  ),
+  ul: ({ node, ...props }: any) => (
+    <ul
+      className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 [&>li]:pl-5 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-primary [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden"
+      {...props}
+    />
+  ),
+  li: ({ node, ...props }: any) => <li {...props} />,
+  ol: ({ node, ...props }: any) => (
+    <ol
+      className="list-decimal pl-5 space-y-2 mb-3 last:mb-0 font-mono text-fg-secondary"
+      {...props}
+    />
+  ),
+  h3: ({ node, ...props }: any) => (
+    <h3 className="text-sm font-bold font-display text-fg mt-4 mb-2" {...props} />
+  ),
+  h4: ({ node, ...props }: any) => (
+    <h4 className="text-xs font-bold text-fg mt-3 mb-1.5" {...props} />
+  ),
+  strong: ({ node, ...props }: any) => (
+    <strong className="font-semibold text-fg" {...props} />
+  ),
+  code: ({ node, ...props }: any) => (
+    <code
+      className="bg-surface-3 text-fg-secondary px-1.5 py-0.5 rounded text-xs font-mono"
+      {...props}
+    />
+  ),
+}
+
+function MarkdownBlock({ children }: { children: string }) {
+  return (
+    <Suspense fallback={<p className="text-xs sm:text-sm text-fg-secondary whitespace-pre-wrap">{children}</p>}>
+      <LazyReactMarkdown components={markdownComponents}>{children}</LazyReactMarkdown>
+    </Suspense>
+  )
+}
 
 interface SummaryEditorProps {
   document: DocumentItem
-  onUpdateSummary?: (id: number | string, summary: any) => void
+  onUpdateSummary?: (id: number | string, summary: AISummary) => void
   onReSummarize?: (id: string | number, customPrompt?: string) => void
   onCancelUpload?: (id: number | string) => void
 }
@@ -16,6 +74,7 @@ export default function SummaryEditor({
   onReSummarize,
   onCancelUpload,
 }: SummaryEditorProps) {
+  const { t } = useLanguage()
   const { showToast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [editableSummary, setEditableSummary] = useState<AISummary | undefined>(
@@ -23,6 +82,7 @@ export default function SummaryEditor({
   )
   const [showReSummarizeModal, setShowReSummarizeModal] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
+  const [copiedSectionIndex, setCopiedSectionIndex] = useState<number | null>(null)
 
   useEffect(() => {
     setEditableSummary(document.summary)
@@ -62,7 +122,6 @@ export default function SummaryEditor({
     const lines = markdown.split("\n")
     let title = baseSummary.title
     const sections: { heading: string; content: string[] }[] = []
-
     let currentSection: { heading: string; content: string[] } | null = null
 
     for (const line of lines) {
@@ -79,10 +138,8 @@ export default function SummaryEditor({
       } else {
         const trimmed = line.trim()
         if (currentSection) {
-          // Push exactly what user wrote, including empty lines for markdown spacing
           currentSection.content.push(trimmed)
         } else if (trimmed && !currentSection) {
-          // If they typed text before any heading, create a default section
           currentSection = { heading: "Overview", content: [trimmed] }
         }
       }
@@ -101,15 +158,13 @@ export default function SummaryEditor({
 
   const handleToggleEdit = () => {
     if (isEditing) {
-      // Save changes
       if (onUpdateSummary && editableSummary) {
         const parsed = markdownToSummary(editMarkdown, editableSummary)
         setEditableSummary(parsed)
         onUpdateSummary(document.id, parsed)
-        showToast("Summary updated successfully", "success")
+        showToast(t("toast_summary_saved"), "success")
       }
     } else {
-      // Enter edit mode
       if (editableSummary) {
         setEditMarkdown(summaryToMarkdown(editableSummary))
       }
@@ -117,9 +172,9 @@ export default function SummaryEditor({
     setIsEditing(!isEditing)
   }
 
-  const handleCopy = () => {
+  const handleCopyAll = () => {
     if (!editableSummary) {
-      showToast("Nothing to copy", "error")
+      showToast(t("toast_nothing_to_copy"), "error")
       return
     }
     let text = `# ${editableSummary.title}\n\n`
@@ -128,7 +183,15 @@ export default function SummaryEditor({
       text += s.content.join("\n") + "\n\n"
     })
     navigator.clipboard.writeText(text.trim())
-    showToast("Summary copied to clipboard", "success")
+    showToast(t("btn_copy_all"), "success")
+  }
+
+  const handleCopySection = (heading: string, content: string[], idx: number) => {
+    const text = `## ${heading}\n${content.join("\n")}`
+    navigator.clipboard.writeText(text)
+    setCopiedSectionIndex(idx)
+    showToast(t("btn_copy_section"), "success")
+    setTimeout(() => setCopiedSectionIndex(null), 2000)
   }
 
   const handleExportPDF = () => {
@@ -148,54 +211,38 @@ export default function SummaryEditor({
     }
   }
 
+  const promptPresets = [
+    t("preset_indonesian"),
+    t("preset_action_items"),
+    t("preset_study_notes"),
+    t("preset_executive"),
+  ]
+
   const isProcessing = document.status === "Processing"
 
   return (
     <div className="flex-1 overflow-y-auto bg-background printable-area">
-      <div className="max-w-2xl mx-auto px-5 sm:px-10 py-6 sm:py-8">
-        {/* Editor Toolbar */}
-        <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border no-print relative flex-wrap sm:flex-nowrap">
+      <div className="max-w-3xl mx-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6">
+        {/* Top Studio Toolbar */}
+        <div className="flex items-center justify-between gap-3 pb-4 border-b border-border no-print flex-wrap">
+          {/* Action Buttons Left */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={handleCopy}
-              className="text-xs px-3 py-1.5 rounded bg-surface hover:bg-surface-2 text-fg-secondary hover:text-fg font-medium border border-border transition-colors flex items-center gap-1.5"
-              title="Copy summary to clipboard"
+              onClick={handleCopyAll}
+              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5"
+              title={t("btn_copy_all")}
             >
-              <svg
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="w-3.5 h-3.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-                />
-              </svg>
-              Copy
+              <Copy size={15} weight="duotone" />
+              <span>{t("btn_copy_all")}</span>
             </button>
 
             <button
               onClick={handleExportPDF}
-              className="text-xs px-3 py-1.5 rounded bg-surface hover:bg-surface-2 text-fg-secondary hover:text-fg font-medium border border-border transition-colors flex items-center gap-1.5"
-              title="Export summary as PDF or print"
+              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5"
+              title={t("btn_export_pdf")}
             >
-              <svg
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="w-3.5 h-3.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-                />
-              </svg>
-              Export PDF
+              <Printer size={15} weight="duotone" />
+              <span>{t("btn_export_pdf")}</span>
             </button>
 
             {onReSummarize && (
@@ -203,56 +250,74 @@ export default function SummaryEditor({
                 <button
                   onClick={() => setShowReSummarizeModal(!showReSummarizeModal)}
                   disabled={isProcessing}
-                  className={`text-xs px-3 py-1.5 rounded font-medium border transition-colors flex items-center gap-1.5 ${
+                  className={`text-xs px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 ${
                     showReSummarizeModal
-                      ? "bg-indigo-500/20 text-primary-hover border-indigo-500/40"
-                      : "bg-surface hover:bg-surface-2 text-fg-secondary hover:text-fg border-border"
-                  } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
-                  title="Ask AI to summarize again with custom guidelines"
+                      ? "bg-primary-dim text-primary-hover border-primary/40"
+                      : "bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border-border"
+                  } ${isProcessing ? "opacity-40 cursor-not-allowed" : ""}`}
+                  title={t("btn_re_summarize")}
                 >
-                  <svg
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="w-3.5 h-3.5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19.5 10a9.5 9.5 0 11-19 0 9.5 9.5 0 0119 0zM10 6v8m-4-4h8"
-                    />
-                  </svg>
-                  Re-summarize AI
+                  <Sparkle size={15} weight="duotone" className="text-fg-tertiary" />
+                  <span>{t("btn_re_summarize")}</span>
                 </button>
 
+                {/* Re-Summarize Popup Panel */}
                 {showReSummarizeModal && (
-                  <div className="absolute left-0 mt-2 w-72 bg-surface border border-border rounded-xl shadow-xl z-50 p-4 animate-scale-in">
-                    <h3 className="text-sm font-semibold text-fg mb-1">
-                      Custom AI Guidelines
-                    </h3>
-                    <p className="text-xs text-fg-tertiary mb-3">
-                      Focus on specific topics or change language.
+                  <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-surface border border-border rounded-xl shadow-raised z-50 p-5 animate-scale-in">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-surface-2 flex items-center justify-center text-fg-tertiary">
+                          <Brain size={16} weight="duotone" />
+                        </div>
+                        <h4 className="text-sm font-bold font-display text-fg">
+                          {t("re_summarize_title")}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => setShowReSummarizeModal(false)}
+                        className="text-fg-tertiary hover:text-fg p-1 rounded-lg"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <p className="text-xs text-fg-secondary mb-3 leading-relaxed">
+                      {t("re_summarize_desc")}
                     </p>
+
+                    {/* Quick Presets */}
+                    <div className="space-y-1 mb-3">
+                      {promptPresets.map((preset) => (
+                        <button
+                          key={preset}
+                          onClick={() => setCustomPrompt(preset)}
+                          className="w-full text-left p-2 rounded-xl text-[11px] font-sans bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors truncate"
+                        >
+                          → {preset}
+                        </button>
+                      ))}
+                    </div>
+
                     <textarea
                       autoFocus
-                      className="w-full bg-surface-2 border border-border rounded-lg p-2 text-xs text-fg focus:outline-none focus:border-primary resize-none h-20 mb-3"
-                      placeholder="e.g. Focus only on engineering timeline... or Write in Indonesian..."
+                      className="w-full bg-surface-2 border border-border rounded-xl p-3 text-xs text-fg placeholder:text-fg-tertiary focus:outline-none focus:border-primary resize-none h-20 mb-4 font-sans"
+                      placeholder={t("re_summarize_placeholder")}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                     />
+
                     <div className="flex justify-end gap-2">
                       <button
-                        className="px-3 py-1.5 text-xs font-medium text-fg-secondary hover:text-fg bg-surface hover:bg-surface-2 rounded-lg border border-border transition-colors"
+                        className="px-3.5 py-1.5 text-xs font-medium text-fg-secondary hover:text-fg bg-surface-2 rounded-xl transition-colors"
                         onClick={() => setShowReSummarizeModal(false)}
                       >
-                        Cancel
+                        {t("btn_cancel")}
                       </button>
                       <button
-                        className="px-3 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary-hover rounded-lg shadow-sm transition-colors"
+                        className="px-4 py-1.5 text-xs font-semibold text-primary-contrast bg-primary hover:bg-primary-hover rounded-xl transition-opacity"
                         onClick={handleConfirmReSummarize}
                       >
-                        Confirm
+                        {t("btn_run_analysis")}
                       </button>
                     </div>
                   </div>
@@ -261,266 +326,189 @@ export default function SummaryEditor({
             )}
           </div>
 
-          <div className="hidden sm:block flex-grow" />
-
+          {/* Edit Button Right */}
           <button
             onClick={handleToggleEdit}
-            className={`text-xs px-4 py-2 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 ${
+            className={`text-xs px-4 py-2 rounded-xl font-semibold transition-all flex items-center gap-2 ${
               isEditing
-                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                : "bg-primary hover:bg-primary-hover text-white"
+                ? "bg-success hover:opacity-90 text-success-contrast"
+                : "bg-primary hover:bg-primary-hover text-primary-contrast"
             }`}
           >
             {isEditing ? (
               <>
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-3.5 h-3.5"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                Save Edits
+                <Check size={16} weight="bold" />
+                <span>{t("btn_save_markdown")}</span>
               </>
             ) : (
               <>
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="w-3.5 h-3.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
-                  />
-                </svg>
-                Edit Summary
+                <PencilSimple size={16} weight="duotone" />
+                <span>{t("btn_edit_summary")}</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Paper / Editor Area */}
+        {/* Paper / Report Content Area */}
         <article className="relative">
           {isEditing ? (
-            <div className="mb-10">
-              <div className="mb-4 text-xs text-fg-tertiary bg-surface-2 p-3 rounded-lg border border-border">
-                <p className="font-semibold mb-1">Markdown Editor Enabled</p>
-                <p>
-                  Use{" "}
-                  <code className="bg-background px-1 py-0.5 rounded">#</code>{" "}
-                  for Title and{" "}
-                  <code className="bg-background px-1 py-0.5 rounded">##</code>{" "}
-                  for Section Headings. Use regular text for content.
-                </p>
+            <div className="space-y-4">
+              <div className="text-xs text-fg-secondary bg-surface-2 p-3.5 rounded-2xl border border-border flex items-center gap-2">
+                <Sparkle size={16} weight="duotone" className="text-fg-tertiary flex-shrink-0" />
+                <span>{t("markdown_hint")}</span>
               </div>
               <textarea
                 value={editMarkdown}
                 onChange={(e) => setEditMarkdown(e.target.value)}
-                className="w-full min-h-[500px] p-4 sm:p-6 bg-surface-2 border border-indigo-500/30 rounded-xl text-sm text-fg leading-relaxed focus:outline-none focus:border-primary resize-y font-sans shadow-inner"
-                placeholder="# Summary Title&#10;&#10;## Section 1&#10;Your content goes here..."
+                className="w-full min-h-[500px] p-6 bg-surface-2/90 border border-primary/40 rounded-2xl text-sm text-fg leading-relaxed focus:outline-none focus:border-primary resize-y font-sans"
+                placeholder="# Summary Title&#10;&#10;## Section 1&#10;Your structured notes..."
               />
             </div>
           ) : (
-            <div className="print-container">
+            <div className="print-container space-y-8">
               {/* Fixed Print Header */}
               <div className="print-header hidden print:flex justify-between items-end pb-4 border-b-2 border-black/10">
                 <div>
-                  <h2 className="text-xl font-bold font-display text-black">
-                    Audins AI Workspace
+                  <h2 className="text-2xl font-bold font-display text-black">
+                    Audins
                   </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Executive Summary Report
+                  <p className="text-xs text-gray-600 font-mono mt-0.5">
+                    Summary Report
                   </p>
                 </div>
-                <div className="text-right text-sm text-gray-600">
-                  <p>
-                    <span className="font-semibold text-black">Document:</span>{" "}
-                    {document.name}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-black">Date:</span>{" "}
-                    {document.date}
-                  </p>
+                <div className="text-right text-xs text-gray-600 font-mono">
+                  <p><span className="font-semibold text-black">Document:</span> {document.name}</p>
+                  <p><span className="font-semibold text-black">Date:</span> {document.date}</p>
                 </div>
               </div>
 
               {/* Fixed Print Footer */}
               <div className="print-footer hidden print:flex justify-between items-center pt-4 border-t-2 border-black/10 text-xs text-gray-500 font-mono">
-                <p>Generated by Audins AI Intelligence</p>
+                <p>Generated by Audins</p>
               </div>
 
-              {/* Table wrapper for print to prevent content overlapping fixed headers */}
-              <table className="w-full block print:table">
-                <thead className="hidden print:table-header-group">
-                  <tr><td><div className="h-[32mm]" /></td></tr>
-                </thead>
-                <tfoot className="hidden print:table-footer-group">
-                  <tr><td><div className="h-[25mm]" /></td></tr>
-                </tfoot>
-                <tbody className="block print:table-row-group">
-                  <tr className="block print:table-row">
-                    <td className="block print:table-cell">
-                      <div className="mb-8 mt-4 print:mt-0">
-                        <h1 className="text-2xl sm:text-3xl font-display font-semibold text-fg tracking-tight">
-                          {editableSummary?.title || "Executive Summary"}
-                        </h1>
-                      </div>
+              {/* Header Title Section */}
+              <div className="space-y-2 no-print">
+                <p className="text-xs font-mono text-fg-tertiary">{document.date}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold font-display text-fg tracking-tight leading-tight">
+                  {editableSummary?.title || t("summary_fallback_title")}
+                </h1>
+              </div>
 
-                      <div className="mb-10 text-sm border-b border-border-subtle pb-6 flex items-center justify-between flex-wrap gap-4 no-print">
-                        <p className="text-fg-secondary">
-                          Executive Summary · Generated by Audins AI (
-                          {editableSummary?.modelUsed || "Groq Llama 3.3 70B"}) ·{" "}
-                          {document.date}
-                        </p>
-                      </div>
+              {/* Partial transcription warning (backend pipeline notes) */}
+              {!isProcessing && document.status !== "Failed" && document.warnings && document.warnings.length > 0 && (
+                <div className="no-print" role="status">
+                  <Alert variant="warning" title={t("partial_transcript_warning", { warning: "" }).trim().replace(/\.$/, "")}>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {document.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </Alert>
+                </div>
+              )}
 
+              {/* Status or Content */}
               {document.status === "Processing" ? (
-                <div className="p-8 rounded-2xl bg-surface border border-indigo-500/20 text-center space-y-4 no-print flex flex-col items-center">
-                  <div className="w-8 h-8 border-4 border-indigo-500/20 border-t-primary rounded-full animate-spin mx-auto mb-2"></div>
+                <div className="p-10 rounded-xl bg-surface-2/60 border border-border text-center space-y-4 no-print flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center text-primary">
+                    <Brain size={26} weight="duotone" className="animate-spin" style={{ animationDuration: '4s' }} />
+                  </div>
+
                   {document.uploadProgress !== undefined && document.uploadProgress < 100 ? (
                     <div className="w-full max-w-sm mx-auto space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-fg">
-                          Uploading audio... {document.uploadProgress}%
+                        <p className="text-xs font-mono text-fg-secondary" role="status">
+                          {t("ingest_audio", { progress: String(document.uploadProgress) })}
                         </p>
                         {onCancelUpload && (
                           <button
                             onClick={() => onCancelUpload(document.id)}
-                            className="px-2.5 py-1 text-xs font-medium text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors flex items-center gap-1"
-                            title="Cancel upload"
+                            className="px-2.5 py-1.5 text-xs text-danger hover:opacity-80 transition-opacity min-h-[32px]"
                           >
-                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3">
-                              <path strokeLinecap="round" d="M4 4l8 8M12 4l-8 8" />
-                            </svg>
-                            Cancel
+                            {t("btn_cancel")}
                           </button>
                         )}
                       </div>
-                      <div className="h-1.5 bg-indigo-950 rounded-full overflow-hidden w-full">
-                        <div 
-                          className="h-full bg-primary transition-all duration-300" 
-                          style={{ width: `${document.uploadProgress}%` }} 
+                      <div
+                        className="h-1.5 bg-surface-3 rounded-full overflow-hidden w-full"
+                        role="progressbar"
+                        aria-valuenow={document.uploadProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${document.uploadProgress}%` }}
                         />
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-fg">
-                        AI is processing your audio...
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-fg" role="status">
+                        {t("status_processing_title")}
                       </p>
                       <p className="text-xs text-fg-tertiary">
-                        You can safely leave this page or minimize the app. It runs in the background.
+                        {t("status_processing_desc")}
                       </p>
                     </div>
                   )}
                 </div>
               ) : document.status === "Failed" ? (
-                <div className="p-6 rounded-2xl bg-red-500/10 border border-red-500/20 text-center space-y-2 no-print">
-                  <p className="text-sm font-medium text-red-500">
-                    Processing failed
-                  </p>
-                  <p className="text-xs text-red-500/70">
-                    There was an error generating the transcript or summary.
+                <div className="p-8 rounded-xl bg-danger-dim border-l-[3px] border-danger border-y border-r border-y-border border-r-border text-center space-y-2 no-print" role="alert">
+                  <p className="text-sm font-bold text-danger">{t("status_failed_title")}</p>
+                  <p className="text-xs text-danger/80">
+                    {t("status_failed_desc")}
                   </p>
                 </div>
               ) : (
-                <>
-                  {editableSummary?.sections &&
-                  editableSummary.sections.length > 0 ? (
-                    <div className="space-y-10 mb-10">
-                      {editableSummary.sections.map((section, idx) => (
-                        <section key={idx} className="print-break-inside-avoid">
-                          <h2 className="text-xs font-mono font-semibold uppercase tracking-wider mb-3 text-fg-tertiary">
+                /* Continuous document — Notion-like flowing sections */
+                <div className="divide-y divide-border-subtle">
+                  {editableSummary?.sections && editableSummary.sections.length > 0 ? (
+                    editableSummary.sections.map((section, idx) => (
+                      <section
+                        key={idx}
+                        className="py-7 first:pt-0 last:pb-0 space-y-3 relative group print:py-4 print:border-none print-break-inside-avoid"
+                      >
+                        {/* Section Header — clean, no card chrome */}
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-sm font-bold font-display text-fg tracking-tight leading-snug">
                             {section.heading}
                           </h2>
-                          <div className="text-sm text-fg-secondary leading-relaxed">
-                            <ReactMarkdown
-                              components={{
-                                p: ({ node, ...props }) => (
-                                  <p className="mb-3 last:mb-0" {...props} />
-                                ),
-                                ul: ({ node, ...props }) => (
-                                  <ul
-                                    className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 [&>li]:pl-4 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-indigo-500/50 [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden"
-                                    {...props}
-                                  />
-                                ),
-                                li: ({ node, ...props }) => (
-                                  <li {...props} />
-                                ),
-                                ol: ({ node, ...props }) => (
-                                  <ol
-                                    className="list-decimal pl-5 space-y-2 mb-3 last:mb-0"
-                                    {...props}
-                                  />
-                                ),
-                                h3: ({ node, ...props }) => (
-                                  <h3
-                                    className="text-sm font-semibold text-fg mt-4 mb-2"
-                                    {...props}
-                                  />
-                                ),
-                                h4: ({ node, ...props }) => (
-                                  <h4
-                                    className="text-xs font-semibold text-fg mt-3 mb-2"
-                                    {...props}
-                                  />
-                                ),
-                                strong: ({ node, ...props }) => (
-                                  <strong
-                                    className="font-semibold text-fg"
-                                    {...props}
-                                  />
-                                ),
-                              }}
-                            >
-                              {section.content.join("\n")}
-                            </ReactMarkdown>
-                          </div>
-                        </section>
-                      ))}
-                    </div>
+
+                          <button
+                            onClick={() => handleCopySection(section.heading, section.content, idx)}
+                            className="ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-md text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors text-xs flex items-center gap-1 no-print flex-shrink-0"
+                            title={t("btn_copy_section")}
+                            aria-label={t("btn_copy_section")}
+                          >
+                            {copiedSectionIndex === idx ? (
+                              <Check size={14} className="text-success" weight="bold" />
+                            ) : (
+                              <Copy size={14} weight="duotone" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Markdown Content */}
+                        <div className="text-sm text-fg-secondary leading-7">
+                          <MarkdownBlock>
+                            {section.content.join("\n")}
+                          </MarkdownBlock>
+                        </div>
+                      </section>
+                    ))
                   ) : (
-                    <div className="py-10 text-center no-print">
-                      <p className="text-sm text-fg-tertiary">
-                        No summary sections available. You may need to
-                        re-summarize.
+                    <div className="py-12 text-center no-print">
+                      <p className="text-xs text-fg-tertiary">
+                        {t("summary_empty_sections")}
                       </p>
                     </div>
                   )}
-                </>
+                </div>
               )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           )}
-
-          <div className="pt-4 border-t border-border no-print">
-            <p className="text-xs text-fg-tertiary">
-              File duration: {document.duration}.{" "}
-              <button
-                className="underline underline-offset-2 text-primary hover:text-primary-hover transition-colors"
-                onClick={() =>
-                  showToast(
-                    "Transcript synchronized with raw transcript panel.",
-                    "info",
-                  )
-                }
-              >
-                Review raw transcript →
-              </button>
-            </p>
-          </div>
         </article>
       </div>
     </div>

@@ -1,4 +1,20 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, PointerEvent, MouseEvent } from "react"
+import { useLanguage } from "../../context/LanguageContext"
+import { useToast } from "../ui/ToastContext"
+import { extractWaveformPeaks } from "../../utils/audioWaveform"
+import {
+  Play,
+  Pause,
+  ArrowCounterClockwise,
+  ArrowClockwise,
+  DownloadSimple,
+  SpeakerHigh,
+  SpeakerSimpleX,
+  Gauge,
+  Waveform,
+  Spinner,
+  WarningCircle,
+} from "@phosphor-icons/react"
 
 interface AudioPlayerProps {
   audioUrl?: string
@@ -6,6 +22,15 @@ interface AudioPlayerProps {
   setCurrentTime: (time: number) => void
   durationSeconds?: number
   onDownload?: () => void
+  /**
+   * Controlled play state. When provided (by Workspace), a second compact
+   * instance elsewhere in the tree can drive the SAME playback without
+   * mounting a second <audio> element.
+   */
+  isPlaying?: boolean
+  onPlayingChange?: (playing: boolean) => void
+  /** Renders a single-row transport with NO <audio> element. */
+  compact?: boolean
 }
 
 export default function AudioPlayer({
@@ -14,13 +39,82 @@ export default function AudioPlayer({
   setCurrentTime,
   durationSeconds: initialDurationSec = 0,
   onDownload,
+  isPlaying: controlledPlaying,
+  onPlayingChange,
+  compact = false,
 }: AudioPlayerProps) {
-  const [playing, setPlaying] = useState(false)
+  const { t } = useLanguage()
+  const { showToast } = useToast()
+  const [internalPlaying, setInternalPlaying] = useState(false)
+  const playing = controlledPlaying ?? internalPlaying
+  const [audioError, setAudioError] = useState<string | null>(null)
+
+  const isAudioMissingOrExpired = !audioUrl || audioUrl === "Expired"
+
+  const setPlaying = (value: boolean) => {
+    if (value && (isAudioMissingOrExpired || audioError)) {
+      showToast(t("toast_audio_not_found"), "error")
+      return
+    }
+    if (onPlayingChange) onPlayingChange(value)
+    else setInternalPlaying(value)
+  }
+  const togglePlay = () => {
+    if (isAudioMissingOrExpired || audioError) {
+      showToast(t("toast_audio_not_found"), "error")
+      return
+    }
+    setPlaying(!playing)
+  }
   const [duration, setDuration] = useState<number>(initialDurationSec)
   const [isDragging, setIsDragging] = useState(false)
   const [scrubTime, setScrubTime] = useState<number>(0)
+  const [playbackRate, setPlaybackRate] = useState<number>(1)
+  const [volume, setVolume] = useState<number>(1)
+  const [isMuted, setIsMuted] = useState<boolean>(false)
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
+  const [hoverPos, setHoverPos] = useState<number>(0)
+  const [waveformPeaks, setWaveformPeaks] = useState<number[]>([])
+  const [waveformLoading, setWaveformLoading] = useState<boolean>(false)
+
   const audioRef = useRef<HTMLAudioElement>(null)
   const scrubberRef = useRef<HTMLDivElement>(null)
+
+  // Reset audio error on audioUrl change
+  useEffect(() => {
+    if (audioUrl && audioUrl !== "Expired") {
+      setAudioError(null)
+    }
+  }, [audioUrl])
+
+  // Extract real audio waveform using Web Audio API
+  useEffect(() => {
+    let isCancelled = false
+    if (!audioUrl || audioUrl === "Expired") {
+      setWaveformPeaks([])
+      setWaveformLoading(false)
+      return
+    }
+
+    setWaveformLoading(true)
+    extractWaveformPeaks(audioUrl, 64)
+      .then((peaks) => {
+        if (!isCancelled) {
+          setWaveformPeaks(peaks)
+          setWaveformLoading(false)
+        }
+      })
+      .catch((err) => {
+        console.warn("Waveform extraction error:", err)
+        if (!isCancelled) {
+          setWaveformLoading(false)
+        }
+      })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [audioUrl])
 
   useEffect(() => {
     if (initialDurationSec > 0) {
@@ -29,7 +123,6 @@ export default function AudioPlayer({
   }, [initialDurationSec])
 
   // Sync external currentTime prop changes to the actual audio element
-  // Only trigger if the difference is more than 1.5 seconds and we aren't dragging
   useEffect(() => {
     if (
       audioRef.current &&
@@ -42,19 +135,36 @@ export default function AudioPlayer({
 
   // Play / Pause effect
   useEffect(() => {
-    if (audioRef.current && audioUrl) {
+    if (audioRef.current && audioUrl && !isAudioMissingOrExpired) {
       if (playing) {
         audioRef.current.play().catch((err) => {
           console.warn("Audio play prevented:", err)
           setPlaying(false)
+          setAudioError(t("audio_not_found_desc"))
+          showToast(t("toast_audio_not_found"), "error")
         })
       } else {
         audioRef.current.pause()
       }
     }
-  }, [playing, audioUrl])
+  }, [playing, audioUrl, isAudioMissingOrExpired])
+
+  // Playback rate sync
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate
+    }
+  }, [playbackRate])
+
+  // Volume & Mute sync
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : volume
+    }
+  }, [volume, isMuted])
 
   const handleLoadedMetadata = () => {
+    setAudioError(null)
     if (
       audioRef.current &&
       audioRef.current.duration &&
@@ -77,7 +187,7 @@ export default function AudioPlayer({
     const ratio = x / rect.width
     const targetTime = Math.floor(ratio * duration)
     setScrubTime(targetTime)
-    
+
     if (commit) {
       setCurrentTime(targetTime)
       if (audioRef.current) {
@@ -86,23 +196,32 @@ export default function AudioPlayer({
     }
   }
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!duration || duration <= 0 || !scrubberRef.current) return
     setIsDragging(true)
     scrubberRef.current.setPointerCapture(e.pointerId)
     updateScrubTime(e.clientX)
   }
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!isDragging || !scrubberRef.current) return
     updateScrubTime(e.clientX)
   }
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
     if (!isDragging || !scrubberRef.current) return
     setIsDragging(false)
     scrubberRef.current.releasePointerCapture(e.pointerId)
     updateScrubTime(e.clientX, true)
+  }
+
+  const handleScrubberHover = (e: MouseEvent<HTMLDivElement>) => {
+    if (!scrubberRef.current || !duration) return
+    const rect = scrubberRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+    const ratio = x / rect.width
+    setHoverTime(Math.floor(ratio * duration))
+    setHoverPos(x)
   }
 
   const formatTime = (secs: number) => {
@@ -114,181 +233,318 @@ export default function AudioPlayer({
     if (h > 0) {
       return `${h}:${remM.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
     }
-    return `${remM}:${s.toString().padStart(2, "0")}`
+    return `${remM.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
   const displayTime = isDragging ? scrubTime : currentTime
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (displayTime / duration) * 100)) : 0
 
-  const progressPercent =
-    duration > 0
-      ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
-      : 0
+  const speedOptions = [0.75, 1, 1.25, 1.5, 2]
+
+  // Compact single-row transport (mobile summary tab). Shares playback state
+  // with the full instance via controlled isPlaying; owns NO audio element.
+  if (compact) {
+    return (
+      <div className="flex-shrink-0 px-4 py-2.5 border-b border-border bg-surface flex items-center gap-3 select-none">
+        <button
+          disabled={!audioUrl || isAudioMissingOrExpired || !!audioError}
+          onClick={togglePlay}
+          className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors text-primary-contrast bg-primary hover:bg-primary-hover disabled:opacity-40 cursor-pointer"
+          aria-label={playing ? "Pause audio" : "Play audio"}
+        >
+          {playing ? (
+            <Pause size={15} weight="fill" />
+          ) : (
+            <Play size={15} weight="fill" className="ml-0.5" />
+          )}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between text-[10px] font-mono text-fg-tertiary mb-1">
+            <span className="font-semibold text-fg-secondary">{formatTime(displayTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+          <div
+            className="h-1.5 rounded-full overflow-hidden bg-surface-3 cursor-pointer"
+            onClick={(e) => {
+              if (!duration) return
+              const rect = e.currentTarget.getBoundingClientRect()
+              const target = Math.floor(((e.clientX - rect.left) / rect.width) * duration)
+              setCurrentTime(target)
+              if (audioRef.current) audioRef.current.currentTime = target
+            }}
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {onDownload && (
+          <button
+            onClick={onDownload}
+            className="p-2 text-fg-tertiary hover:text-fg hover:bg-surface-2 rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+            title={t("a11y_download_audio")}
+            aria-label={t("a11y_download_audio")}
+          >
+            <DownloadSimple size={14} weight="duotone" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const handleAudioError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+    console.warn("Audio element playback error:", e)
+    setPlaying(false)
+    setAudioError(t("audio_not_found_desc"))
+    showToast(t("toast_audio_not_found"), "error")
+  }
 
   return (
-    <div className="flex-shrink-0 p-4 sm:p-5 border-b border-border bg-surface">
-      {audioUrl && (
+    <div className="flex-shrink-0 p-4 sm:p-5 border-b border-border bg-surface relative select-none">
+      {audioUrl && !compact && (
         <audio
           ref={audioRef}
           src={audioUrl}
+          preload="metadata"
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => setPlaying(false)}
-          controlsList="nodownload"
+          onError={handleAudioError}
         />
       )}
 
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-        <p className="text-xs font-mono font-medium uppercase tracking-widest text-fg-tertiary">
-          Audio Player {audioUrl ? "• Ready" : "• No File Selected"}
-        </p>
-      </div>
+      {/* Header bar: Status & Playback Rate selector */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center ${audioError || isAudioMissingOrExpired ? "bg-danger" : "bg-primary"}`}>
+            {playing && <span className="w-1.5 h-1.5 rounded-full bg-primary-contrast animate-ping" />}
+          </div>
+          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary flex items-center gap-1.5">
+            <Waveform size={14} weight="duotone" className={audioError || isAudioMissingOrExpired ? "text-danger" : "text-primary"} />
+            {audioUrl && !isAudioMissingOrExpired ? t("audio_player") : t("no_audio")}
+          </span>
+        </div>
 
-      {/* Waveform visualizer */}
-      <div className="flex items-end gap-0.5 h-8 sm:h-10 mb-3 sm:mb-4 overflow-hidden rounded-lg px-1 bg-surface-2 border border-border">
-        {Array.from({ length: 60 }).map((_, i) => {
-          const heights = [
-            20, 45, 65, 38, 80, 55, 30, 70, 42, 90, 35, 62, 48, 75, 28, 58, 82,
-            40, 67, 22, 50, 88, 33, 72, 44, 95, 36, 60, 25, 78,
-          ]
-          const h = heights[i % heights.length]
-          const played = (i / 60) * 100 < progressPercent
-          return (
-            <div
-              key={i}
-              className={`flex-1 rounded-sm transition-all duration-150 ${
-                played ? "bg-primary opacity-90" : "bg-muted opacity-30"
+        {/* Speed Selector */}
+        <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="Playback speed">
+          <Gauge size={13} className="text-fg-tertiary ml-1" />
+          {speedOptions.map((spd) => (
+            <button
+              key={spd}
+              onClick={() => setPlaybackRate(spd)}
+              aria-pressed={playbackRate === spd}
+              className={`px-2 py-1 rounded-md text-[10px] font-mono font-semibold transition-colors cursor-pointer ${
+                playbackRate === spd
+                  ? "bg-primary text-primary-contrast shadow-sm"
+                  : "text-fg-tertiary hover:text-fg"
               }`}
-              style={{ height: `${h}%` }}
-            />
-          )
-        })}
+            >
+              {spd}x
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Scrubber bar */}
+      {/* Audio Error Alert Banner */}
+      {(audioError || isAudioMissingOrExpired) && (
+        <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
+          <WarningCircle size={17} weight="fill" className="flex-shrink-0" />
+          <span className="font-medium">
+            {audioError || t("audio_not_found_desc")}
+          </span>
+        </div>
+      )}
+
+      {/* Authentic Waveform Visualization */}
+      <div
+        className="flex items-end gap-[2px] sm:gap-1 h-12 sm:h-14 mb-3.5 px-3 py-2 rounded-xl bg-surface-2 border border-border overflow-hidden relative cursor-pointer group hover:border-border-hover transition-colors"
+        onClick={(e) => {
+          if (!duration) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+          const target = Math.floor(ratio * duration)
+          setCurrentTime(target)
+          if (audioRef.current) audioRef.current.currentTime = target
+        }}
+      >
+        {waveformLoading && waveformPeaks.length === 0 ? (
+          <div className="w-full h-full flex items-center justify-center gap-2 text-xs font-mono text-fg-tertiary">
+            <Spinner size={14} className="animate-spin text-primary" />
+            <span>Memproses gelombang suara...</span>
+          </div>
+        ) : (
+          (waveformPeaks.length > 0 ? waveformPeaks : Array(64).fill(25)).map((peakHeight, i, arr) => {
+            const barProgress = (i / arr.length) * 100
+            const isPlayed = barProgress <= progressPercent
+
+            return (
+              <div
+                key={i}
+                className={`flex-1 rounded-full transition-colors duration-100 ${
+                  isPlayed
+                    ? "bg-primary group-hover:opacity-90"
+                    : "bg-surface-3 group-hover:bg-muted"
+                }`}
+                style={{
+                  height: `${peakHeight}%`,
+                }}
+              />
+            )
+          })
+        )}
+      </div>
+
+      {/* Interactive Scrubber Bar with Hover Tooltip */}
       <div
         ref={scrubberRef}
-        className="relative mb-2 cursor-pointer group touch-none"
+        className="relative mb-2.5 cursor-pointer group touch-none py-1"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onMouseMove={handleScrubberHover}
+        onMouseLeave={() => setHoverTime(null)}
         role="slider"
-        aria-valuenow={progressPercent}
+        aria-valuenow={displayTime}
         aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label="Audio scrubber"
+        aria-valuemax={Math.max(0, Math.floor(duration))}
+        aria-valuetext={`${formatTime(displayTime)} / ${formatTime(duration)}`}
+        aria-label={t("a11y_scrubber")}
         tabIndex={0}
+        onKeyDown={(e) => {
+          if (!duration || !audioUrl) return
+          let target: number | null = null
+          if (e.key === "ArrowRight") target = Math.min(duration, currentTime + 5)
+          else if (e.key === "ArrowLeft") target = Math.max(0, currentTime - 5)
+          else if (e.key === "Home") target = 0
+          else if (e.key === "End") target = duration
+          if (target !== null) {
+            e.preventDefault()
+            setCurrentTime(Math.floor(target))
+            if (audioRef.current) audioRef.current.currentTime = target
+          }
+        }}
       >
-        <div className="h-1.5 rounded-full overflow-hidden bg-surface-2 border border-border-subtle">
+        {/* Hover Time Tooltip */}
+        {hoverTime !== null && (
           <div
-            className="h-full rounded-full transition-all duration-75"
-            style={{
-              width: `${progressPercent}%`,
-              background: "linear-gradient(90deg, #6366f1, #7c3aed)",
-            }}
+            className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded-md bg-surface-3 border border-border text-[10px] font-mono text-fg shadow-raised pointer-events-none z-30"
+            style={{ left: `${hoverPos}px` }}
+          >
+            {formatTime(hoverTime)}
+          </div>
+        )}
+
+        <div className="h-1.5 rounded-full overflow-hidden bg-surface-2 border border-border">
+          <div
+            className="h-full rounded-full transition-all duration-75 bg-primary"
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border-2 border-indigo-400 bg-background transition-transform group-hover:scale-125 shadow-md"
+          className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-surface border-2 border-primary shadow-card transition-transform group-hover:scale-110"
           style={{ left: `calc(${progressPercent}% - 7px)` }}
         />
       </div>
 
-      <div className="flex justify-between items-center text-xs font-mono mb-3 text-fg-tertiary">
-        <span>{formatTime(displayTime)}</span>
-        <div className="flex items-center gap-2">
+      {/* Time Display & Volume row */}
+      <div className="flex justify-between items-center text-xs font-mono text-fg-tertiary mb-3">
+        <span className="font-semibold text-fg-secondary">{formatTime(displayTime)}</span>
+
+        <div className="flex items-center gap-3">
+          {/* Mute/Volume control */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className="p-1.5 text-fg-tertiary hover:text-fg transition-colors"
+              title={isMuted ? t("a11y_unmute") : t("a11y_mute")}
+              aria-label={isMuted ? t("a11y_unmute") : t("a11y_mute")}
+            >
+              {isMuted || volume === 0 ? (
+                <SpeakerSimpleX size={15} weight="duotone" className="text-danger" />
+              ) : (
+                <SpeakerHigh size={15} weight="duotone" />
+              )}
+            </button>
+            <label htmlFor="volume-slider" className="sr-only">{t("a11y_volume")}</label>
+            <input
+              id="volume-slider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => {
+                setVolume(parseFloat(e.target.value))
+                if (isMuted) setIsMuted(false)
+              }}
+              className="w-14 h-1 bg-surface-2 accent-primary rounded-lg cursor-pointer"
+              title={t("a11y_volume")}
+            />
+          </div>
+
           {onDownload && (
             <button
               onClick={onDownload}
-              className="p-1 hover:text-fg hover:bg-surface-2 rounded transition-colors"
-              title="Download Audio"
-              aria-label="Download Audio"
+              className="p-2 text-fg-tertiary hover:text-fg hover:bg-surface-2 rounded-lg transition-all"
+              title={t("a11y_download_audio")}
+              aria-label={t("a11y_download_audio")}
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="w-4 h-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-                />
-              </svg>
+              <DownloadSimple size={15} weight="duotone" />
             </button>
           )}
-          <span>{formatTime(duration)}</span>
+
+          <span className="text-fg-tertiary">{formatTime(duration)}</span>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-center gap-4">
-        {/* Rewind 10s */}
+      {/* Main Playback Control Bar */}
+      <div className="flex items-center justify-center gap-4 pt-1">
+        {/* Skip -10s */}
         <button
-          className="p-1.5 rounded-lg text-fg-tertiary hover:text-fg-secondary hover:bg-surface-2 transition-colors disabled:opacity-40"
           disabled={!audioUrl}
           onClick={() => {
             const t = Math.max(0, currentTime - 10)
             setCurrentTime(t)
             if (audioRef.current) audioRef.current.currentTime = t
           }}
-          aria-label="Skip backward 10 seconds"
-          title="Rewind 10s"
+          className="p-2.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40"
+          aria-label={t("a11y_skip_backward")}
+          title={t("a11y_skip_backward")}
         >
-          <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-            <path d="M8.445 14.832A1 1 0 0010 14v-2.798l5.445 3.63A1 1 0 0017 14V6a1 1 0 00-1.555-.832L10 8.798V6a1 1 0 00-1.555-.832l-6 4a1 1 0 000 1.664l6 4z" />
-          </svg>
+          <ArrowCounterClockwise size={18} weight="bold" />
         </button>
 
         {/* Play / Pause */}
         <button
           disabled={!audioUrl}
-          onClick={() => setPlaying(!playing)}
-          className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 shadow-lg hover:scale-105 disabled:opacity-50 text-white"
-          style={{ background: "linear-gradient(135deg, #6366f1, #7c3aed)" }}
+          onClick={togglePlay}
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:bg-primary cursor-pointer"
           aria-label={playing ? "Pause audio" : "Play audio"}
         >
           {playing ? (
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Pause size={20} weight="fill" />
           ) : (
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-5 h-5 ml-0.5"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Play size={20} weight="fill" className="ml-0.5" />
           )}
         </button>
 
-        {/* Forward 10s */}
+        {/* Skip +10s */}
         <button
-          className="p-1.5 rounded-lg text-fg-tertiary hover:text-fg-secondary hover:bg-surface-2 transition-colors disabled:opacity-40"
           disabled={!audioUrl}
           onClick={() => {
             const t = Math.min(duration, currentTime + 10)
             setCurrentTime(t)
             if (audioRef.current) audioRef.current.currentTime = t
           }}
-          aria-label="Skip forward 10 seconds"
-          title="Forward 10s"
+          className="p-2.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40"
+          aria-label={t("a11y_skip_forward")}
+          title={t("a11y_skip_forward")}
         >
-          <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-            <path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798l-5.445-3.63z" />
-          </svg>
+          <ArrowClockwise size={18} weight="bold" />
         </button>
       </div>
     </div>

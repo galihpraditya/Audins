@@ -1,109 +1,135 @@
 import { useState, useEffect } from "react"
-import { Screen, DocumentItem } from "../../types"
+import { NavLink, useNavigate } from "react-router-dom"
 import Logo from "./Logo"
 import FreeTierBar from "../dashboard/FreeTierBar"
+import { useLanguage } from "../../context/LanguageContext"
+import {
+  SquaresFour,
+  FolderSimpleStar,
+  GearSix,
+  CaretLeft,
+  CaretRight,
+} from "@phosphor-icons/react"
 
 interface SidebarProps {
-  screen: Screen
-  setScreen: (s: Screen) => void
-  setModal: (v: boolean) => void
-  onOpenSettings: () => void
   uploadCount: number
   maxUploads?: number
   storageUsed?: number
   storageLimit?: number
   hasCustomKey?: boolean
   apiKeyStatus?: "idle" | "validating" | "valid" | "invalid"
-  documents: DocumentItem[]
-  activeDocument?: DocumentItem | null
-  onSelectDocument?: (doc: DocumentItem) => void
-  onDeleteDocument?: (id: number | string) => void
-  onRenameDocument?: (id: number | string, newName: string) => void
-  onDuplicateDocument?: (doc: DocumentItem) => void
 }
 
 export function NavItems({
-  screen,
-  setScreen,
   onNavigate,
   isCollapsed = false,
 }: {
-  screen: Screen
-  setScreen: (s: Screen) => void
   onNavigate?: () => void
   isCollapsed?: boolean
 }) {
+  const { t } = useLanguage()
+
   const items = [
     {
-      id: "dashboard" as Screen,
-      label: "Dashboard",
-      icon: (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="w-4 h-4 flex-shrink-0"
-        >
-          <rect x="1" y="1" width="6" height="6" rx="1.5" />
-          <rect x="9" y="1" width="6" height="6" rx="1.5" />
-          <rect x="1" y="9" width="6" height="6" rx="1.5" />
-          <rect x="9" y="9" width="6" height="6" rx="1.5" />
-        </svg>
+      to: "/",
+      label: t("nav_dashboard"),
+      icon: (isActive: boolean) => (
+        <SquaresFour size={20} weight={isActive ? "fill" : "duotone"} />
       ),
     },
     {
-      id: "workspace" as Screen,
-      label: "Workspace / Files",
-      icon: (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="w-4 h-4 flex-shrink-0"
-        >
-          <path d="M2 3.5A1.5 1.5 0 013.5 2h5.379a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0113.5 6.62V12.5A1.5 1.5 0 0112 14H3.5A1.5 1.5 0 012 12.5v-9z" />
-          <path d="M9 2v3.5A1.5 1.5 0 0010.5 7H14" />
-        </svg>
+      to: "/workspace",
+      label: t("nav_workspace"),
+      icon: (isActive: boolean) => (
+        <FolderSimpleStar size={20} weight={isActive ? "fill" : "duotone"} />
       ),
     },
   ]
 
   return (
-    <>
-      {items.map((item) => {
-        const isActive = screen === item.id
-        return (
-          <button
-            key={item.id}
-            onClick={() => {
-              setScreen(item.id)
-              onNavigate?.()
-            }}
-            title={isCollapsed ? item.label : undefined}
-            className={`w-full flex items-center ${
-              isCollapsed ? "justify-center" : "gap-3 px-3"
-            } py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+    <div className="space-y-1.5">
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.to === "/"}
+          onClick={() => onNavigate?.()}
+          title={isCollapsed ? item.label : undefined}
+          className={({ isActive }) =>
+            `w-full flex items-center ${
+              isCollapsed ? "justify-center px-0" : "gap-3 px-3.5"
+            } py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative group ${
               isActive
-                ? "bg-primary-dim text-primary-hover border border-indigo-500/20 shadow-sm"
-                : "text-fg-secondary hover:text-fg hover:bg-surface-2"
+                ? "bg-primary-dim text-primary font-semibold"
+                : "text-fg-secondary hover:text-fg hover:bg-surface-2 border border-transparent"
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {isActive && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
+              )}
+              <span
+                className={`transition-colors duration-150 ${
+                  isActive ? "text-primary" : "text-fg-tertiary group-hover:text-fg"
+                }`}
+              >
+                {item.icon(isActive)}
+              </span>
+              {!isCollapsed && <span className="truncate">{item.label}</span>}
+            </>
+          )}
+        </NavLink>
+      ))}
+    </div>
+  )
+}
+
+export function SettingsNavItem({
+  onNavigate,
+  isCollapsed = false,
+}: {
+  onNavigate?: () => void
+  isCollapsed?: boolean
+}) {
+  const { t } = useLanguage()
+
+  return (
+    <NavLink
+      to="/settings"
+      onClick={() => onNavigate?.()}
+      title={isCollapsed ? t("nav_settings") : undefined}
+      className={({ isActive }) =>
+        `w-full flex items-center ${
+          isCollapsed ? "justify-center px-0" : "gap-3 px-3.5"
+        } py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative group ${
+          isActive
+            ? "bg-primary-dim text-primary font-semibold"
+            : "text-fg-secondary hover:text-fg hover:bg-surface-2 border border-transparent"
+        }`
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
+          )}
+          <span
+            className={`transition-colors duration-150 ${
+              isActive ? "text-primary" : "text-fg-tertiary group-hover:text-fg"
             }`}
           >
-            {item.icon}
-            {!isCollapsed && <span>{item.label}</span>}
-          </button>
-        )
-      })}
-    </>
+            <GearSix size={20} weight={isActive ? "fill" : "duotone"} />
+          </span>
+          {!isCollapsed && <span className="truncate">{t("nav_settings")}</span>}
+        </>
+      )}
+    </NavLink>
   )
 }
 
 export default function Sidebar({
-  screen,
-  setScreen,
-  setModal,
-  onOpenSettings,
   uploadCount,
   maxUploads,
   storageUsed,
@@ -111,56 +137,72 @@ export default function Sidebar({
   hasCustomKey,
   apiKeyStatus,
 }: SidebarProps) {
+  const navigate = useNavigate()
+  const { t } = useLanguage()
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem("audin_sidebar_collapsed") === "true"
+    try {
+      return localStorage.getItem("audin_sidebar_collapsed") === "true"
+    } catch {
+      return false
+    }
   })
 
   useEffect(() => {
-    localStorage.setItem("audin_sidebar_collapsed", isCollapsed.toString())
+    try {
+      localStorage.setItem("audin_sidebar_collapsed", isCollapsed.toString())
+    } catch {
+      /* non-fatal */
+    }
   }, [isCollapsed])
 
   return (
     <aside
-      className={`hidden md:flex flex-shrink-0 flex-col border-r border-border bg-surface transition-all duration-300 print:hidden ${
-        isCollapsed ? "w-20" : "w-56"
+      className={`hidden md:flex flex-shrink-0 flex-col border-r border-border bg-surface transition-colors duration-200 print:hidden z-20 ${
+        isCollapsed ? "w-20" : "w-64"
       }`}
     >
-      {/* Logo */}
-      <div className={`py-5 border-b border-border relative group flex ${isCollapsed ? 'px-2 justify-center' : 'px-5 items-center justify-between'}`}>
+      {/* Logo & Header */}
+      <div
+        className={`border-b border-border relative group flex ${
+          isCollapsed
+            ? "justify-center items-center px-2 py-5"
+            : "items-center justify-between px-4 py-4.5"
+        }`}
+      >
         <Logo isCollapsed={isCollapsed} />
-        
+
         {/* Toggle Collapse Button */}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          className={`
-            flex items-center justify-center p-1.5 rounded-lg text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150
-            ${isCollapsed ? "absolute inset-0 m-auto w-8 h-8 opacity-0 group-hover:opacity-100 bg-surface/80 backdrop-blur-sm" : ""}
-          `}
-          aria-label="Toggle Sidebar"
+          onClick={(e) => {
+            e.currentTarget.blur()
+            setIsCollapsed(!isCollapsed)
+          }}
+          title={isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")}
+          aria-label={isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")}
+          className={
+            isCollapsed
+              ? "absolute inset-0 m-auto w-9 h-9 rounded-xl flex items-center justify-center bg-surface-2 border border-border text-fg shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 cursor-pointer"
+              : "w-7 h-7 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 border border-transparent hover:border-border transition-colors cursor-pointer"
+          }
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
+          {isCollapsed ? (
+            <CaretRight size={15} weight="bold" />
+          ) : (
+            <CaretLeft size={15} weight="bold" />
+          )}
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        <NavItems screen={screen} setScreen={setScreen} isCollapsed={isCollapsed} />
+      {/* Main Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <NavItems isCollapsed={isCollapsed} />
       </nav>
 
-      {/* Bottom section */}
-      <div className="flex flex-col gap-2 mt-auto p-3 border-t border-border">
-        {!isCollapsed && (
+      {/* Bottom Area: Quota / Daily Limit & Settings */}
+      <div className="flex flex-col gap-2.5 mt-auto p-3 border-t border-border">
+        {!isCollapsed ? (
           <FreeTierBar
-            onUpgrade={onOpenSettings}
+            onUpgrade={() => navigate("/settings")}
             uploadCount={uploadCount}
             maxUploads={maxUploads}
             storageUsed={storageUsed}
@@ -168,33 +210,10 @@ export default function Sidebar({
             hasCustomKey={hasCustomKey}
             apiKeyStatus={apiKeyStatus}
           />
-        )}
+        ) : null}
 
-        {/* Settings button */}
-        <button
-          onClick={onOpenSettings}
-          title={isCollapsed ? "Settings" : undefined}
-          className={`w-full flex items-center ${
-            isCollapsed ? "justify-center" : "gap-3 px-3"
-          } py-2.5 rounded-xl text-sm font-medium text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-all duration-150`}
-          aria-label="Settings"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="w-4 h-4 flex-shrink-0"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
-            />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-          {!isCollapsed && <span>Settings</span>}
-        </button>
+        {/* Settings Navigation Item Placed Below Daily Limit */}
+        <SettingsNavItem isCollapsed={isCollapsed} />
       </div>
     </aside>
   )

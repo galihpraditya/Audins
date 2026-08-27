@@ -1,4 +1,14 @@
-import React, { createContext, useContext, useState, ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  ReactNode,
+} from "react"
+import { CheckCircle, WarningOctagon, Info, X } from "@phosphor-icons/react"
+import { useLanguage } from "../../context/LanguageContext"
 
 export type ToastType = "success" | "error" | "info"
 
@@ -23,86 +33,84 @@ export function useToast() {
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage()
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  // Monotonic counter avoids the Date.now() id collisions that made two
+  // toasts share a React key and disappear together.
+  const idCounterRef = useRef(0)
 
-  const showToast = (message: string, type: ToastType = "info") => {
-    const id = Date.now()
-    setToasts((prev) => [...prev, { id, message, type }])
+  const dismiss = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
+  }, [])
 
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-    }, 4000)
-  }
+  const showToast = useCallback(
+    (message: string, type: ToastType = "info") => {
+      const id = ++idCounterRef.current
+      setToasts((prev) => [...prev.slice(-4), { id, message, type }])
+
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((toastItem) => toastItem.id !== id))
+      }, 4500)
+    },
+    [],
+  )
+
+  // Stable value: adding a toast no longer re-renders every consumer subtree.
+  const value = useMemo(() => ({ showToast }), [showToast])
 
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none">
+      {/* Live region so screen readers announce status changes. */}
+      <div
+        className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none max-w-sm w-full px-4 sm:px-0"
+        aria-live="polite"
+        aria-label={t("toast_region_label")}
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border animate-fade-in transition-all ${
+            role={toast.type === "error" ? "alert" : "status"}
+            className={`pointer-events-auto relative flex items-center justify-between gap-3 p-4 pl-5 rounded-xl border border-border bg-surface shadow-raised animate-fade-in overflow-hidden ${
               toast.type === "error"
-                ? "bg-red-500/10 border-red-500/20 text-red-500 backdrop-blur-md"
+                ? "border-l-danger"
                 : toast.type === "success"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 backdrop-blur-md"
-                  : "bg-surface/90 border-border text-fg shadow-md backdrop-blur-md"
+                  ? "border-l-success"
+                  : "border-l-primary"
             }`}
           >
-            {toast.type === "error" && (
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-5 h-5 flex-shrink-0"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-            {toast.type === "success" && (
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-5 h-5 flex-shrink-0"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-            {toast.type === "info" && (
-              <svg
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className="w-5 h-5 flex-shrink-0 text-primary"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-            <p className="text-sm font-medium">{toast.message}</p>
+            {/* Left accent rail */}
+            <span
+              aria-hidden="true"
+              className={`absolute left-0 top-0 bottom-0 w-[3px] ${
+                toast.type === "error"
+                  ? "bg-danger"
+                  : toast.type === "success"
+                    ? "bg-success"
+                    : "bg-primary"
+              }`}
+            />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-shrink-0">
+                {toast.type === "error" && (
+                  <WarningOctagon size={18} weight="fill" className="text-danger" />
+                )}
+                {toast.type === "success" && (
+                  <CheckCircle size={18} weight="fill" className="text-success" />
+                )}
+                {toast.type === "info" && (
+                  <Info size={18} weight="duotone" className="text-primary" />
+                )}
+              </div>
+              <p className="text-xs sm:text-sm font-medium leading-snug text-fg">{toast.message}</p>
+            </div>
 
             <button
-              onClick={() =>
-                setToasts((prev) => prev.filter((t) => t.id !== toast.id))
-              }
-              className="ml-2 text-fg-tertiary hover:text-fg transition-colors"
+              onClick={() => dismiss(toast.id)}
+              className="text-fg-tertiary hover:text-fg transition-colors p-1.5 rounded-lg flex-shrink-0"
+              aria-label={t("toast_dismiss")}
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <X size={14} weight="bold" />
             </button>
           </div>
         ))}

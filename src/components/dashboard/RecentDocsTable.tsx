@@ -1,34 +1,107 @@
-import { useState, MouseEvent } from "react"
+﻿import { useState, useMemo, useEffect, MouseEvent } from "react"
+import { useNavigate } from "react-router-dom"
 import { DocumentItem } from "../../types"
 import StatusBadge from "./StatusBadge"
+import DocCard, { DocCardSkeleton } from "./DocCard"
+import EmptyState, { EmptyStateSkeleton } from "../ui/EmptyState"
+import Modal from "../ui/Modal"
 import { useToast } from "../ui/ToastContext"
-import { API_BASE_URL } from "../../services/api"
+import { useLanguage } from "../../context/LanguageContext"
+import { downloadAudioFile } from "../../services/download"
+import {
+  DotsThreeVertical,
+  PencilSimple,
+  DownloadSimple,
+  Copy,
+  Trash,
+  FileAudio,
+  MagnifyingGlass,
+  GridFour,
+  Rows,
+  ArrowRight,
+} from "@phosphor-icons/react"
 
 interface RecentDocsTableProps {
   documents: DocumentItem[]
-  onOpenDocument: (doc: DocumentItem) => void
-  onDeleteDocument: (id: number) => void
-  onRenameDocument: (id: number, newName: string) => void
+  isLoading?: boolean
+  onDeleteDocument: (id: number | string) => void
+  onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
 }
 
 export default function RecentDocsTable({
   documents,
-  onOpenDocument,
+  isLoading = false,
   onDeleteDocument,
   onRenameDocument,
   onDuplicateDocument,
 }: RecentDocsTableProps) {
-  const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
+  const navigate = useNavigate()
+  const { t } = useLanguage()
   const { showToast } = useToast()
+  const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
+  const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
+    try {
+      return (localStorage.getItem("audin_dashboard_view") as "grid" | "table") || "grid"
+    } catch {
+      return "grid"
+    }
+  })
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "Completed" | "Processing">("all")
 
-  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(
-    null,
-  )
-  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(
-    null,
-  )
+  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(null)
+  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(null)
   const [renameValue, setRenameValue] = useState("")
+
+  // Close any open dropdown when clicking elsewhere or pressing Escape.
+  useEffect(() => {
+    if (openMenuId === null) return
+    const close = () => setOpenMenuId(null)
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenMenuId(null)
+    document.addEventListener("click", close)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("click", close)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [openMenuId])
+
+  const toggleViewMode = (mode: "grid" | "table") => {
+    setViewMode(mode)
+    try {
+      localStorage.setItem("audin_dashboard_view", mode)
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  const filteredDocs = useMemo(
+    () =>
+      documents.filter((doc) => {
+        const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesStatus = statusFilter === "all" || doc.status === statusFilter
+        return matchesSearch && matchesStatus
+      }),
+    [documents, searchQuery, statusFilter],
+  )
+
+  // The persisted view mode may be "table" while the toggle itself is hidden
+  // on phones â€” force the mobile-friendly grid there.
+  const isMobileViewport =
+    typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+  const effectiveViewMode = isMobileViewport ? "grid" : viewMode
+
+  const handleOpenDoc = (doc: DocumentItem) => {
+    navigate(`/workspace/${doc.id}`)
+  }
+
+  const handleCardKeyDown = (e: React.KeyboardEvent, doc: DocumentItem) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      handleOpenDoc(doc)
+    }
+  }
 
   const handleActionClick = async (
     e: MouseEvent,
@@ -38,388 +111,386 @@ export default function RecentDocsTable({
     e.stopPropagation()
     setOpenMenuId(null)
 
-    if (action === "Rename") {
+    if (action === "rename") {
       setRenameValue(doc.name)
       setRenameModalDoc(doc)
-    } else if (action === "Duplicate") {
+    } else if (action === "duplicate") {
       onDuplicateDocument(doc)
-      showToast(`Duplicated "${doc.name}"`, "success")
-    } else if (action === "Download") {
-      if (!doc.audioUrl) {
-        showToast("Audio file not found", "error")
-        return
-      }
-
-      // Ensure filename ends with correct format extension
-      let filename = doc.name.trim()
-      const extRegex = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
-      if (!extRegex.test(filename)) {
-        const urlExtMatch = doc.audioUrl.match(extRegex)
-        const ext = urlExtMatch ? urlExtMatch[0] : ".mp3"
-        filename = `${filename}${ext}`
-      }
-
-      showToast(`Downloading "${filename}"...`, "info")
-
+    } else if (action === "download") {
+      showToast(t("toast_downloading", { name: doc.name }), "info")
       try {
-        // Use backend proxy to avoid CORS issues with cloud storage
-        const proxyUrl = `${API_BASE_URL}/documents/${doc.id}/download`
-        const res = await fetch(proxyUrl, {
-          headers: { "X-User-Session": localStorage.getItem("audin_session_id") || "" },
-        })
-        if (!res.ok) throw new Error("Download failed")
-        const blob = await res.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        setTimeout(() => window.URL.revokeObjectURL(url), 1000)
-        showToast(`Downloaded "${filename}" successfully`, "success")
+        await downloadAudioFile(doc)
+        showToast(t("toast_download_done", { name: doc.name }), "success")
       } catch (err) {
         console.error("Download failed:", err)
-        showToast("Download failed. Please try again.", "error")
+        if ((err as Error).message === "Audio file not found") {
+          showToast(t("toast_audio_not_found"), "error")
+        } else {
+          showToast(t("toast_download_failed"), "error")
+        }
       }
-    } else if (action === "Delete") {
+    } else if (action === "delete") {
       setDeleteModalDoc(doc)
     }
   }
 
+  /** Kebab dropdown rendered into DocCard's action slot. */
+  const renderKebab = (doc: DocumentItem) => (
+    <div className="relative">
+      <button
+        className="w-9 h-9 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpenMenuId(openMenuId === doc.id ? null : doc.id)
+        }}
+        aria-label={t("a11y_more_options")}
+        title={t("a11y_more_options")}
+        aria-expanded={openMenuId === doc.id}
+        aria-haspopup="menu"
+      >
+        <DotsThreeVertical size={17} weight="bold" />
+      </button>
+
+      {openMenuId === doc.id && (
+        <div
+          className="absolute right-0 mt-1.5 w-44 rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {menuActions.map((act) => (
+            <button
+              key={act.id}
+              role="menuitem"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors"
+              onClick={(e) => handleActionClick(e, act.id, doc)}
+            >
+              {act.icon}
+              <span>{act.text}</span>
+            </button>
+          ))}
+          <div className="my-1 mx-2 h-px bg-border" />
+          <button
+            role="menuitem"
+            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-danger hover:bg-danger-dim transition-colors"
+            onClick={(e) => handleActionClick(e, "delete", doc)}
+          >
+            <Trash size={15} weight="duotone" />
+            <span>{t("action_delete")}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   const confirmDelete = () => {
     if (deleteModalDoc) {
-      onDeleteDocument(deleteModalDoc.id as number)
-      showToast(`Deleted "${deleteModalDoc.name}"`, "success")
+      onDeleteDocument(deleteModalDoc.id)
       setDeleteModalDoc(null)
     }
   }
 
   const confirmRename = () => {
     if (renameModalDoc && renameValue.trim()) {
-      onRenameDocument(renameModalDoc.id as number, renameValue.trim())
-      showToast(`Renamed to "${renameValue.trim()}"`, "success")
+      onRenameDocument(renameModalDoc.id, renameValue.trim())
       setRenameModalDoc(null)
     }
   }
 
+  const menuActions = [
+    { id: "rename", text: t("action_rename"), icon: <PencilSimple size={15} weight="duotone" /> },
+    { id: "download", text: t("action_download"), icon: <DownloadSimple size={15} weight="duotone" /> },
+    { id: "duplicate", text: t("action_duplicate"), icon: <Copy size={15} weight="duotone" /> },
+  ] as const
+  const isSearchingOrFiltering = searchQuery.trim().length > 0 || statusFilter !== "all"
+  const displayedDocs = isSearchingOrFiltering ? filteredDocs : filteredDocs.slice(0, 6)
+
   return (
-    <div onClick={() => setOpenMenuId(null)}>
-      {/* Modals */}
+    <div className="space-y-4">
+      {/* Delete confirmation modal */}
       {deleteModalDoc && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scale-in">
-            <h3 className="text-lg font-semibold text-fg mb-2">
-              Delete Document
-            </h3>
-            <p className="text-sm text-fg-secondary mb-6">
-              Are you sure you want to delete "{deleteModalDoc.name}"? This
-              action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteModalDoc(null)}
-                className="px-4 py-2 text-sm font-medium text-fg-secondary bg-surface-2 hover:bg-surface border border-border rounded-xl transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-sm transition-all"
-              >
-                Delete
-              </button>
-            </div>
+        <Modal onClose={() => setDeleteModalDoc(null)} labelledBy="delete-modal-title" panelClassName="bg-surface border border-danger/25 w-full max-w-sm rounded-xl p-6 shadow-raised animate-scale-in">
+          <div className="w-12 h-12 rounded-full bg-danger-dim flex items-center justify-center mb-4 text-danger">
+            <Trash size={24} weight="duotone" />
           </div>
-        </div>
-      )}
-
-      {renameModalDoc && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scale-in">
-            <h3 className="text-lg font-semibold text-fg mb-4">
-              Rename Document
-            </h3>
-            <input
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              className="w-full bg-surface-2 border border-border rounded-xl px-4 py-2 text-sm text-fg mb-6 outline-none focus:border-primary"
-              autoFocus
-              onKeyDown={(e) => e.key === "Enter" && confirmRename()}
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setRenameModalDoc(null)}
-                className="px-4 py-2 text-sm font-medium text-fg-secondary bg-surface-2 hover:bg-surface border border-border rounded-xl transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmRename}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover rounded-xl shadow-sm transition-all"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm sm:text-base font-semibold font-display text-fg">
-          Recent Documents ({documents.length})
-        </h2>
-        <p className="text-xs text-fg-tertiary">
-          Click any file to open workspace
-        </p>
-      </div>
-
-      {documents.length === 0 ? (
-        <div className="rounded-2xl p-8 text-center border border-border bg-surface">
-          <p className="text-sm text-fg-tertiary">
-            No documents found. Upload an audio file above to get started!
+          <h3 id="delete-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+            {t("modal_delete_title")}
+          </h3>
+          <p className="text-xs text-fg-secondary mb-6 leading-relaxed">
+            {t("modal_delete_desc")}{" "}
+            <span className="font-semibold text-fg">"{deleteModalDoc.name}"</span>? {t("modal_delete_subdesc")}
           </p>
+          <div className="flex gap-2.5 justify-end">
+            <button
+              onClick={() => setDeleteModalDoc(null)}
+              autoFocus
+              className="px-4 py-2.5 text-xs font-semibold text-fg-secondary hover:text-fg bg-surface-2 hover:bg-surface-3 border border-border rounded-xl transition-colors min-h-[36px] cursor-pointer"
+            >
+              {t("btn_cancel")}
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="px-4 py-2.5 text-xs font-semibold text-danger-contrast bg-danger hover:bg-danger/90 rounded-xl transition-colors min-h-[36px] cursor-pointer"
+            >
+              {t("btn_delete")}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Rename modal */}
+      {renameModalDoc && (
+        <Modal onClose={() => setRenameModalDoc(null)} labelledBy="rename-modal-title" panelClassName="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-raised animate-scale-in">
+          <div className="w-12 h-12 rounded-lg bg-primary-dim flex items-center justify-center mb-4 text-primary">
+            <PencilSimple size={24} weight="duotone" />
+          </div>
+          <h3 id="rename-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+            {t("modal_rename_title")}
+          </h3>
+          <p className="text-xs text-fg-secondary mb-4">
+            {t("modal_rename_desc")}
+          </p>
+          <input
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmRename()
+              if (e.key === "Escape") setRenameModalDoc(null)
+            }}
+            autoFocus
+            className="w-full px-3.5 py-2.5 text-xs bg-surface-2 border border-border rounded-xl text-fg outline-none focus:border-primary/50 mb-4"
+            placeholder="Recording Name..."
+          />
+          <div className="flex gap-2.5 justify-end">
+            <button
+              onClick={() => setRenameModalDoc(null)}
+              className="px-4 py-2.5 text-xs font-semibold text-fg-secondary hover:text-fg bg-surface-2 hover:bg-surface-3 border border-border rounded-xl transition-colors min-h-[36px] cursor-pointer"
+            >
+              {t("btn_cancel")}
+            </button>
+            <button
+              onClick={confirmRename}
+              disabled={!renameValue.trim()}
+              className="px-4 py-2.5 text-xs font-semibold text-primary-contrast bg-primary hover:bg-primary-hover disabled:opacity-40 rounded-xl transition-colors min-h-[36px] cursor-pointer"
+            >
+              {t("btn_save")}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Header controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-bold font-display text-fg tracking-tight">
+            {t("recent_documents")}
+          </h2>
         </div>
-      ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden sm:block rounded-2xl overflow-visible border border-border bg-surface">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-surface">
-                  {[
-                    "FILE NAME",
-                    "UPLOAD DATE",
-                    "DURATION",
-                    "STATUS",
-                    "ACTIONS",
-                  ].map((col, i) => (
-                    <th
-                      key={col}
-                      className="text-left px-5 py-3 text-xs font-mono font-medium text-fg-tertiary tracking-wider"
-                      style={{
-                        width: i === 0 ? "auto" : i === 4 ? "70px" : "130px",
-                      }}
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc, i) => (
-                  <tr
-                    key={doc.id}
-                    onClick={() => onOpenDocument(doc)}
-                    className={`group transition-all duration-150 bg-surface-2 hover:bg-indigo-500/10 cursor-pointer ${
-                      i < documents.length - 1
-                        ? "border-b border-border-subtle"
-                        : ""
-                    }`}
-                  >
-                    {/* File name with music/audio icon */}
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary-dim border border-indigo-500/20 group-hover:border-indigo-500/40 group-hover:scale-105 transition-all">
-                          {/* Music Audio Note Icon */}
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className="w-4 h-4 text-primary"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3"
-                            />
-                          </svg>
-                        </div>
-                        <span className="font-medium truncate max-w-xs text-fg group-hover:text-primary-hover transition-colors">
-                          {doc.name}
-                        </span>
-                      </div>
-                    </td>
 
-                    {/* Date */}
-                    <td className="px-5 py-3.5 whitespace-nowrap text-xs font-mono text-fg-secondary">
-                      {doc.date}
-                    </td>
-
-                    {/* Duration */}
-                    <td className="px-5 py-3.5 whitespace-nowrap text-xs font-mono text-fg-secondary">
-                      {doc.duration}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} />
-                    </td>
-
-                    {/* Actions Kebab Menu */}
-                    <td className="px-5 py-3.5">
-                      <div className="relative">
-                        <button
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface border border-transparent hover:border-border transition-all"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setOpenMenuId(openMenuId === doc.id ? null : doc.id)
-                          }}
-                          aria-label="More options"
-                          title="More options"
-                        >
-                          <svg
-                            viewBox="0 0 16 16"
-                            fill="currentColor"
-                            className="w-3.5 h-3.5"
-                          >
-                            <circle cx="8" cy="3" r="1.25" />
-                            <circle cx="8" cy="8" r="1.25" />
-                            <circle cx="8" cy="13" r="1.25" />
-                          </svg>
-                        </button>
-
-                        {openMenuId === doc.id && (
-                          <div
-                            className="absolute right-0 z-50 rounded-xl overflow-hidden bg-surface border border-border shadow-2xl animate-scale-in min-w-[156px] top-[calc(100%+4px)]"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {[
-                              {
-                                label: "Rename",
-                                iconPath:
-                                  "M11.5 2.5a2.121 2.121 0 013 3L5 15H2v-3L11.5 2.5z",
-                              },
-                              {
-                                label: "Download",
-                                iconPath:
-                                  "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
-                              },
-                              {
-                                label: "Duplicate",
-                                iconPath:
-                                  "M8 2H4a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V8m-6 0V2m0 0l4 4",
-                              },
-                            ].map((item) => (
-                              <button
-                                key={item.label}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors"
-                                onClick={(e) =>
-                                  handleActionClick(e, item.label, doc)
-                                }
-                              >
-                                <svg
-                                  viewBox="0 0 20 20"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  className="w-3.5 h-3.5 flex-shrink-0"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d={item.iconPath}
-                                  />
-                                </svg>
-                                {item.label}
-                              </button>
-                            ))}
-                            <div className="my-1 mx-2 h-px bg-border" />
-                            <button
-                              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                              onClick={(e) =>
-                                handleActionClick(e, "Delete", doc)
-                              }
-                            >
-                              <svg
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                className="w-3.5 h-3.5 flex-shrink-0"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Search, Filter, View Mode Toggle */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative flex-1 sm:w-64">
+            <MagnifyingGlass
+              size={15}
+              className="text-fg-tertiary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            />
+            <label htmlFor="search-documents" className="sr-only">
+              {t("search_documents")}
+            </label>
+            <input
+              id="search-documents"
+              type="text"
+              placeholder={t("search_documents")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3.5 py-1.5 rounded-lg text-xs bg-surface-2 border border-border text-fg placeholder:text-fg-tertiary outline-none focus:border-primary/50 transition-colors"
+            />
           </div>
 
-          {/* Mobile card stack (entire card clickable) */}
-          <div className="sm:hidden space-y-2.5">
-            {documents.map((doc) => (
-              <div
-                key={doc.id}
-                onClick={() => onOpenDocument(doc)}
-                className="rounded-2xl p-4 bg-surface border border-border hover:border-indigo-500/40 hover:bg-surface-2 transition-all cursor-pointer group"
+          <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label={t("col_status")}>
+            {(["all", "Completed", "Processing"] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setStatusFilter(filter)}
+                aria-pressed={statusFilter === filter}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${statusFilter === filter
+                    ? "bg-surface text-primary shadow-card"
+                    : "text-fg-tertiary hover:text-fg"
+                  }`}
               >
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 bg-primary-dim border border-indigo-500/20 group-hover:scale-105 transition-transform">
-                    {/* Music Audio Note Icon */}
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="w-4 h-4 text-primary"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 .895-2 3-2 3 .895 3 2zM9 10l12-3"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium leading-snug truncate text-fg group-hover:text-primary-hover transition-colors">
-                      {doc.name}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-                      <span className="text-xs font-mono text-fg-tertiary">
-                        {doc.date}
-                      </span>
-                      <span className="text-xs font-mono text-fg-tertiary">
-                        ·
-                      </span>
-                      <span className="text-xs font-mono text-fg-tertiary">
-                        {doc.duration}
-                      </span>
-                      <StatusBadge status={doc.status} />
-                    </div>
-                  </div>
-                  <div className="text-fg-tertiary group-hover:text-primary-hover transition-colors pt-1">
-                    <svg
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="w-4 h-4"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 12l4-4-4-4"
-                      />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+                {filter === "all" ? t("filter_all") : filter === "Completed" ? t("filter_completed") : t("filter_processing")}
+              </button>
             ))}
           </div>
-        </>
+
+          {/* Grid / Table Toggle — hidden on small viewports */}
+          <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="View mode">
+            <button
+              onClick={() => toggleViewMode("grid")}
+              aria-pressed={effectiveViewMode === "grid"}
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${effectiveViewMode === "grid"
+                  ? "bg-surface text-primary shadow-card"
+                  : "text-fg-tertiary hover:text-fg"
+                }`}
+              title={t("a11y_grid_view")}
+              aria-label={t("a11y_grid_view")}
+            >
+              <GridFour size={15} weight="duotone" />
+            </button>
+            <button
+              onClick={() => toggleViewMode("table")}
+              aria-pressed={effectiveViewMode === "table"}
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${effectiveViewMode === "table"
+                  ? "bg-surface text-primary shadow-card"
+                  : "text-fg-tertiary hover:text-fg"
+                }`}
+              title={t("a11y_table_view")}
+              aria-label={t("a11y_table_view")}
+            >
+              <Rows size={15} weight="duotone" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      {isLoading && displayedDocs.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[...Array(6)].map((_, i) => (
+            <DocCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : !isLoading && displayedDocs.length === 0 ? (
+        <EmptyState
+          title={t("no_documents")}
+          description={
+            searchQuery
+              ? t("search_no_match", { query: searchQuery })
+              : t("no_documents_desc")
+          }
+        />
+      ) : effectiveViewMode === "grid" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {displayedDocs.map((doc) => (
+            <DocCard
+              key={doc.id}
+              doc={doc}
+              openLabel={t("btn_open")}
+              onOpen={() => handleOpenDoc(doc)}
+              actions={renderKebab(doc)}
+            />
+          ))}
+        </div>
+      ) : (
+        /* Data Table View — horizontally scrollable on narrow screens */
+        <div className="rounded-xl overflow-x-auto border border-border bg-surface">
+          <table className="w-full text-sm border-collapse min-w-[640px]">
+            <thead>
+              <tr className="border-b border-border bg-surface-2/60">
+                {[t("col_document"), t("col_date"), t("col_duration"), t("col_status"), t("col_actions")].map((col, i) => (
+                  <th
+                    key={col}
+                    className="text-left px-5 py-3.5 text-[11px] font-mono font-semibold text-fg-tertiary tracking-wider uppercase"
+                    style={{ width: i === 0 ? "auto" : i === 4 ? "80px" : "140px" }}
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {displayedDocs.map((doc) => (
+                <tr
+                  key={doc.id}
+                  tabIndex={0}
+                  aria-label={doc.name}
+                  onClick={() => handleOpenDoc(doc)}
+                  onKeyDown={(e) => handleCardKeyDown(e, doc)}
+                  className="group transition-all duration-150 hover:bg-surface-3/50 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-invert"
+                >
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-fg-tertiary group-hover:text-primary transition-colors flex-shrink-0">
+                        <FileAudio size={16} weight="duotone" />
+                      </div>
+                      <span className="font-semibold text-fg group-hover:text-primary transition-colors truncate max-w-sm">
+                        {doc.name}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 whitespace-nowrap text-xs font-mono text-fg-secondary">
+                    {doc.date}
+                  </td>
+                  <td className="px-5 py-3.5 whitespace-nowrap text-xs font-mono text-fg-secondary">
+                    {doc.duration}
+                  </td>
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} size="sm" />
+                  </td>
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    <div className="relative">
+                      <button
+                        className="w-9 h-9 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-3 transition-colors cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuId(openMenuId === doc.id ? null : doc.id)
+                        }}
+                        aria-label={t("a11y_more_options")}
+                        title={t("a11y_more_options")}
+                        aria-expanded={openMenuId === doc.id}
+                        aria-haspopup="menu"
+                      >
+                        <DotsThreeVertical size={16} weight="bold" />
+                      </button>
+
+                      {openMenuId === doc.id && (
+                        <div
+                          className="absolute right-0 top-[calc(100%+4px)] z-50 rounded-xl bg-surface border border-border shadow-raised py-1.5 min-w-[150px] animate-scale-in"
+                          role="menu"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {menuActions.map((act) => (
+                            <button
+                              key={act.id}
+                              role="menuitem"
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+                              onClick={(e) => handleActionClick(e, act.id, doc)}
+                            >
+                              {act.icon}
+                              <span>{act.text}</span>
+                            </button>
+                          ))}
+                          <div className="my-1 mx-2 h-px bg-border" />
+                          <button
+                            role="menuitem"
+                            className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-danger hover:bg-danger-dim transition-colors cursor-pointer"
+                            onClick={(e) => handleActionClick(e, "delete", doc)}
+                          >
+                            <Trash size={14} weight="duotone" />
+                            <span>{t("action_delete")}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Show All Link Button on Dashboard */}
+      {filteredDocs.length > 6 && !isSearchingOrFiltering && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => navigate("/workspace")}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-primary/40 text-fg hover:text-primary transition-all shadow-sm group cursor-pointer"
+          >
+            <span>{t("btn_show_all_documents")}</span>
+            <ArrowRight size={14} weight="bold" className="group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
       )}
     </div>
   )

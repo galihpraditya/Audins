@@ -4,10 +4,18 @@ import path from "node:path"
 import ffmpeg from "fluent-ffmpeg"
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg"
 import ffprobeInstaller from "@ffprobe-installer/ffprobe"
-import { TranscriptEntry, AISummary } from "../types/index.js"
+import {
+  TranscriptEntry,
+  TranscriptionResult,
+  AISummary,
+} from "../types/index.js"
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 ffmpeg.setFfprobePath(ffprobeInstaller.path)
+
+// How many chunk slice+transcribe tasks run concurrently. Bounds FFmpeg CPU
+// usage while still overlapping disk work with Groq HTTP round-trips.
+const CHUNK_CONCURRENCY = 3
 
 function getAudioDuration(filePath: string): Promise<number> {
   return new Promise((resolve) => {
@@ -31,8 +39,13 @@ function sliceAudioChunk(
     ffmpeg()
       .input(inputPath)
       .inputOptions([`-ss ${startTime}`])
-      .setDuration(duration)
-      .noVideo()
+      .outputOptions([
+        `-t ${duration}`,
+        "-vn",
+        "-sn",
+        "-dn",
+        "-map_metadata -1",
+      ])
       .audioCodec("libmp3lame")
       .audioBitrate("48k")
       .audioChannels(1)
@@ -70,7 +83,6 @@ async function transcribeSingleFile(
   const segments = verboseTranscription.segments || []
   if (segments.length > 0) {
     return segments.map((seg: GroqTranscriptionSegment) => {
-      // Add timeOffset to segment start/end times
       const actualStart = seg.start + timeOffset
 
       const startMin = Math.floor(actualStart / 60)
@@ -94,6 +106,31 @@ async function transcribeSingleFile(
   ]
 }
 
+async function transcribeSingleFileWithRetry(
+  groq: Groq,
+  filePath: string,
+  timeOffset = 0,
+  maxRetries = 2,
+): Promise<TranscriptEntry[]> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await transcribeSingleFile(groq, filePath, timeOffset)
+    } catch (err) {
+      lastError = err
+      if (attempt < maxRetries) {
+        const delayMs = (attempt + 1) * 1500
+        console.warn(
+          `Transcribe attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`,
+          err,
+        )
+        await new Promise((r) => setTimeout(r, delayMs))
+      }
+    }
+  }
+  throw lastError
+}
+
 function convertAudioToMp3(
   inputPath: string,
   outputPath: string,
@@ -112,7 +149,7 @@ function convertAudioToMp3(
 export async function transcribeAudioWithGroq(
   filePath: string,
   customApiKey?: string,
-): Promise<TranscriptEntry[]> {
+): Promise<TranscriptionResult> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
 
   if (!apiKey || apiKey.includes("demo_placeholder")) {
@@ -140,78 +177,102 @@ export async function transcribeAudioWithGroq(
 
   try {
     const groq = new Groq({ apiKey })
-    const stats = fs.statSync(targetFilePath)
+    const stats = await fs.promises.stat(targetFilePath)
     const fileSizeInMB = stats.size / (1024 * 1024)
 
     // If file is <= 24MB, transcribe directly in one request
     if (fileSizeInMB <= 24) {
-      return await transcribeSingleFile(groq, targetFilePath)
+      const entries = await transcribeSingleFileWithRetry(groq, targetFilePath)
+      return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
-    // File > 24MB: Auto-chunking using FFmpeg
+    // File > 24MB: Auto-chunking using FFmpeg with 30-minute chunks
     console.log(
-      `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio...`,
+      `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio (30-minute segments)...`,
     )
     const totalDuration = await getAudioDuration(targetFilePath)
 
-    // 10 minutes (600s) per chunk
-    const chunkDurationSec = 600
+    // 30 minutes (1800s) per chunk for maximum efficiency and minimum API overhead
+    const chunkDurationSec = 1800
     const numChunks =
       totalDuration > 0
         ? Math.ceil(totalDuration / chunkDurationSec)
-        : Math.ceil(fileSizeInMB / 15)
+        : Math.ceil(fileSizeInMB / 20)
+
+    if (totalDuration <= 0) {
+      console.warn(
+        "ffprobe could not determine audio duration — chunk count estimated from file size.",
+      )
+    }
 
     const chunksDir = path.join(path.dirname(targetFilePath), "chunks")
     if (!fs.existsSync(chunksDir)) {
       fs.mkdirSync(chunksDir, { recursive: true })
     }
 
-    const allEntries: TranscriptEntry[] = []
     const ext = ".mp3" // ALWAYS use .mp3 for chunks to minimize size and ensure Groq compatibility
     const baseName = path.basename(targetFilePath, path.extname(targetFilePath))
 
-    for (let i = 0; i < numChunks; i++) {
-      const startTime = i * chunkDurationSec
-      const chunkPath = path.join(chunksDir, `${baseName}_chunk_${i}${ext}`)
+    const resultsByIndex: TranscriptEntry[][] = new Array(numChunks)
+    let nextChunk = 0
+    let failedChunks = 0
 
-      try {
-        console.log(
-          `Processing chunk ${i + 1}/${numChunks} starting at ${startTime}s...`,
+    const runWorker = async (): Promise<void> => {
+      while (true) {
+        const index = nextChunk++
+        if (index >= numChunks) return
+
+        const startTime = index * chunkDurationSec
+        const chunkPath = path.join(
+          chunksDir,
+          `${baseName}_chunk_${index}${ext}`,
         )
-        await sliceAudioChunk(
-          targetFilePath,
-          chunkPath,
-          startTime,
-          chunkDurationSec,
-        )
-        const chunkEntries = await transcribeSingleFile(
-          groq,
-          chunkPath,
-          startTime,
-        )
-        allEntries.push(...chunkEntries)
-      } catch (chunkErr) {
-        console.warn(`Chunk ${i + 1} processing warning:`, chunkErr)
-      } finally {
-        if (fs.existsSync(chunkPath)) {
-          try {
-            fs.unlinkSync(chunkPath)
-          } catch {}
+
+        try {
+          await sliceAudioChunk(
+            targetFilePath,
+            chunkPath,
+            startTime,
+            chunkDurationSec,
+          )
+          resultsByIndex[index] = await transcribeSingleFileWithRetry(
+            groq,
+            chunkPath,
+            startTime,
+          )
+          console.log(`Transcribed chunk ${index + 1}/${numChunks}`)
+        } catch (chunkErr) {
+          // Track failures explicitly so partial transcripts can be surfaced
+          // to the user instead of silently passing as complete.
+          failedChunks += 1
+          console.warn(`Chunk ${index + 1} processing warning:`, chunkErr)
+        } finally {
+          if (fs.existsSync(chunkPath)) {
+            try {
+              await fs.promises.unlink(chunkPath)
+            } catch {}
+          }
         }
       }
-      // Allow event loop to run & GC to flush memory between chunks
-      await new Promise((r) => setTimeout(r, 200))
     }
 
-    if (allEntries.length === 0) {
+    const workers = Array.from(
+      { length: Math.min(CHUNK_CONCURRENCY, numChunks) },
+      () => runWorker(),
+    )
+    await Promise.all(workers)
+
+    const allEntries = resultsByIndex.filter(Boolean).flat()
+
+    if (allEntries.length === 0 && failedChunks > 0) {
       throw new Error("Failed to process any audio chunks.")
     }
 
-    return allEntries
+    return { entries: allEntries, failedChunks, totalChunks: numChunks }
   } finally {
     if (tempConvertedFile && fs.existsSync(tempConvertedFile)) {
       try {
-        fs.unlinkSync(tempConvertedFile)
+        await fs.promises.unlink(tempConvertedFile)
       } catch {}
     }
   }
@@ -274,7 +335,7 @@ Output valid JSON only.`
       response_format: { type: "json_object" },
     })
   } catch (error: unknown) {
-    const err = error as any // Keep simple cast for properties or narrow if needed
+    const err = error as any
     // Fallback to openai/gpt-oss-20b if 120B model fails due to TPM limit or request size
     if (
       err?.message?.includes("TPM") ||
@@ -306,7 +367,16 @@ Output valid JSON only.`
   }
 
   const content = completion.choices[0]?.message?.content || "{}"
-  const parsed = JSON.parse(content)
+
+  // Model output is untrusted JSON — parse defensively.
+  let parsed: any
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    throw new Error(
+      "The AI returned an unreadable summary format. Please try re-summarizing.",
+    )
+  }
 
   return {
     title: parsed.title || `Summary: ${fileName}`,

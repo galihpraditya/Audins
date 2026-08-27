@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import fs from "node:fs"
+import { Readable } from "node:stream"
 import { FullDocument } from "../types/index.js"
 
 const supabaseKey =
@@ -39,47 +40,57 @@ export async function uploadAudioToSupabase(
   fileName: string,
   mimeType: string,
 ): Promise<string | null> {
-  if (!supabase || !isSupabaseEnabled()) {
-    return null
-  }
+  if (!supabase || !isSupabaseEnabled()) return null
 
+  const bucketName = "audin-audio"
+
+  // Stream the file instead of buffering up to 500MB fully in memory.
   try {
-    const fileBuffer = fs.readFileSync(filePath)
-    const bucketName = "audin-audio"
+    const webStream = Readable.toWeb(
+      fs.createReadStream(filePath),
+    ) as unknown as ReadableStream<Uint8Array>
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from(bucketName)
-      .upload(fileName, fileBuffer, {
-        contentType: mimeType,
-        upsert: true,
-      })
+      .upload(fileName, webStream, { contentType: mimeType, upsert: true })
 
     if (error) throw error
-
-    const { data: urlData } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(fileName)
-
-    return urlData.publicUrl
-  } catch (error) {
-    console.error("Error uploading file to Supabase storage:", error)
-    throw new Error(
-      `Supabase Storage upload failed: ${(error as Error).message}`,
+  } catch (streamError) {
+    console.warn(
+      "Streaming upload to Supabase failed, retrying with buffered body:",
+      streamError,
     )
+
+    const stats = await fs.promises.stat(filePath)
+    const maxBufferedBytes = 100 * 1024 * 1024
+    if (stats.size > maxBufferedBytes) {
+      throw new Error(
+        `Supabase Storage streaming upload failed and file (${Math.round(
+          stats.size / (1024 * 1024),
+        )}MB) is too large for buffered fallback.`,
+      )
+    }
+
+    const buffer = await fs.promises.readFile(filePath)
+    const { error } = await supabase.storage.from(bucketName).upload(fileName, buffer, {
+      contentType: mimeType,
+      upsert: true,
+    })
+    if (error) {
+      console.error("Error uploading file to Supabase storage:", error)
+      throw new Error(`Supabase Storage upload failed: ${(error as Error).message}`)
+    }
   }
+
+  const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(fileName)
+  return urlData.publicUrl
 }
 
-export async function deleteAudioFromSupabase(
-  fileName: string,
-): Promise<boolean> {
-  if (!supabase || !isSupabaseEnabled()) {
-    return false
-  }
+export async function deleteAudioFromSupabase(fileName: string): Promise<boolean> {
+  if (!supabase || !isSupabaseEnabled()) return false
 
   try {
-    const bucketName = "audin-audio"
-    const { error } = await supabase.storage.from(bucketName).remove([fileName])
-
+    const { error } = await supabase.storage.from("audin-audio").remove([fileName])
     if (error) throw error
     return true
   } catch (error) {
@@ -95,12 +106,14 @@ export async function getSupabaseAllDocuments(
 ): Promise<FullDocument[] | null> {
   if (!supabase || !isSupabaseEnabled()) return null
   try {
-    let query = supabase.from("documents").select("content")
+    let query = supabase
+      .from("documents")
+      .select("content")
+      .not("id", "like", "rate_limit_%")
     if (userId) {
       query = query.contains("content", { userId })
     }
     const { data, error } = await query
-
     if (error) throw error
     return (data || []).map((row: any) => row.content as FullDocument)
   } catch (error) {
@@ -109,9 +122,48 @@ export async function getSupabaseAllDocuments(
   }
 }
 
-export async function getSupabaseDocumentById(
-  id: string,
-): Promise<FullDocument | null> {
+/** Fetches only sizeBytes values instead of full transcript payloads. */
+export async function getSupabaseStorageSums(userId?: string): Promise<number | null> {
+  if (!supabase || !isSupabaseEnabled()) return null
+  try {
+    let query = supabase.from("documents").select("content->>sizeBytes")
+    if (userId) {
+      query = query.contains("content", { userId })
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []).reduce((acc: number, row: any) => {
+      const size = Number(row.sizeBytes)
+      return acc + (Number.isFinite(size) && size > 0 ? size : 0)
+    }, 0)
+  } catch (error) {
+    console.error("Failed to compute storage sums from Supabase:", error)
+    return null
+  }
+}
+
+/** Lightweight id+audioUrl listing used for blob refcounting before deletes. */
+export async function getSupabaseAudioRefs(): Promise<
+  Array<{ id: string; audioUrl?: string }> | null
+> {
+  if (!supabase || !isSupabaseEnabled()) return null
+  try {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, content->>audioUrl")
+      .not("id", "like", "rate_limit_%")
+    if (error) throw error
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      audioUrl: row.audioUrl ?? undefined,
+    }))
+  } catch (error) {
+    console.error("Failed to fetch audio refs from Supabase:", error)
+    return null
+  }
+}
+
+export async function getSupabaseDocumentById(id: string): Promise<FullDocument | null> {
   if (!supabase || !isSupabaseEnabled()) return null
   try {
     const { data, error } = await supabase
@@ -124,23 +176,17 @@ export async function getSupabaseDocumentById(
       if (error.code === "PGRST116") return null // Not found
       throw error
     }
-    return data ? data.content as FullDocument : null
+    return data ? (data.content as FullDocument) : null
   } catch (error) {
     console.error(`Failed to fetch document ${id} from Supabase:`, error)
     return null
   }
 }
 
-export async function saveSupabaseDocument(
-  doc: FullDocument,
-): Promise<FullDocument | null> {
+export async function saveSupabaseDocument(doc: FullDocument): Promise<FullDocument | null> {
   if (!supabase || !isSupabaseEnabled()) return null
   try {
-    const { error } = await supabase.from("documents").upsert({
-      id: doc.id,
-      content: doc,
-    })
-
+    const { error } = await supabase.from("documents").upsert({ id: doc.id, content: doc })
     if (error) throw error
     return doc
   } catch (error) {
@@ -153,61 +199,10 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
   if (!supabase || !isSupabaseEnabled()) return false
   try {
     const { error } = await supabase.from("documents").delete().eq("id", id)
-
     if (error) throw error
     return true
   } catch (error) {
     console.error(`Failed to delete document ${id} from Supabase:`, error)
     return false
-  }
-}
-
-// --- Rate Limit API ---
-
-export async function getSupabaseRateLimit(
-  key: string,
-): Promise<{ count: number; resetTime: Date } | null> {
-  if (!supabase || !isSupabaseEnabled()) return null
-  try {
-    const id = `rate_limit_${key}`
-    const { data, error } = await supabase
-      .from("documents")
-      .select("content")
-      .eq("id", id)
-      .single()
-
-    if (error) {
-      if (error.code === "PGRST116") return null
-      throw error
-    }
-    if (data && data.content) {
-      return {
-        count: data.content.count,
-        resetTime: new Date(data.content.resetTime),
-      }
-    }
-    return null
-  } catch (error) {
-    console.error(`Failed to fetch rate limit for ${key} from Supabase:`, error)
-    return null
-  }
-}
-
-export async function saveSupabaseRateLimit(
-  key: string,
-  record: { count: number; resetTime: Date },
-): Promise<void> {
-  if (!supabase || !isSupabaseEnabled()) return
-  try {
-    const id = `rate_limit_${key}`
-    await supabase.from("documents").upsert({
-      id,
-      content: {
-        count: record.count,
-        resetTime: record.resetTime.toISOString(),
-      },
-    })
-  } catch (error) {
-    console.error(`Failed to save rate limit for ${key} to Supabase:`, error)
   }
 }

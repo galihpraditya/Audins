@@ -2,7 +2,10 @@ import { Router, Request, Response } from "express"
 import multer from "multer"
 import path from "node:path"
 import fs from "node:fs"
+import { Readable } from "node:stream"
+import { pipeline } from "node:stream/promises"
 import { v4 as uuidv4 } from "uuid"
+import { BASE_URL, MAX_FILE_BYTES, MAX_GLOBAL_STORAGE_BYTES, UPLOADS_DIR, signMediaToken } from "../config.js"
 import { uploadAudioToR2, isR2Enabled } from "../services/r2.service.js"
 import {
   uploadAudioToSupabase,
@@ -30,9 +33,17 @@ import { FullDocument, TranscriptEntry } from "../types/index.js"
 
 const router = Router()
 
+// Number of in-flight background AI pipelines. Used by the graceful shutdown
+// handler to wait for jobs before exiting.
+let activeBackgroundJobs = 0
+
+export function getActiveBackgroundJobCount(): number {
+  return activeBackgroundJobs
+}
+
 // Configure Multer audio upload storage
 const storage = multer.diskStorage({
-  destination: "uploads/",
+  destination: UPLOADS_DIR,
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
     cb(null, `${Date.now()}-${uuidv4().substring(0, 8)}${ext}`)
@@ -41,7 +52,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB auto-chunking limit
+  limits: { fileSize: MAX_FILE_BYTES },
   fileFilter: (req, file, cb) => {
     const allowedExtensions = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
     const allowedMimeTypes = /^(audio\/|video\/mp4|video\/webm)/i
@@ -60,6 +71,11 @@ const upload = multer({
     }
   },
 })
+
+// Ensure the uploads dir exists before Multer writes to it.
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+}
 
 // GET /api/v1 - API Index & Documentation
 router.get("/", (req: Request, res: Response) => {
@@ -82,17 +98,6 @@ router.get("/settings/rate-limit", async (req: Request, res: Response) => {
   res.json(status)
 })
 
-// GET /api/v1/documents - List all audio documents
-router.get("/documents", async (req: Request, res: Response) => {
-  try {
-    const userId = getHeaderKey(req.headers["x-user-session"])
-    const docs = await getAllDocuments(userId)
-    res.json(docs)
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch documents" })
-  }
-})
-
 // Helper to extract string param or header safely
 function getHeaderKey(
   header: string | string[] | undefined,
@@ -106,19 +111,65 @@ function getParamId(param: string | string[]): string {
   return param
 }
 
+/**
+ * Resolves the session user or responds 401 and returns null.
+ */
+function requireUser(req: Request, res: Response): string | null {
+  const userId = getHeaderKey(req.headers["x-user-session"])
+  if (!userId) {
+    res.status(401).json({ error: "Missing x-user-session header" })
+    return null
+  }
+  return userId
+}
+
+/**
+ * Fetches a document and enforces ownership. Responds 404 (without revealing
+ * whether the id exists for another user) and returns null on any failure.
+ */
+async function requireOwnedDocument(
+  req: Request,
+  res: Response,
+): Promise<FullDocument | null> {
+  const userId = requireUser(req, res)
+  if (!userId) return null
+
+  const docId = getParamId(req.params.id)
+  let doc: FullDocument | undefined
+  try {
+    doc = await getDocumentById(docId)
+  } catch (error) {
+    console.error(`Failed to fetch document ${docId}:`, error)
+    res.status(500).json({ error: "Failed to fetch document" })
+    return null
+  }
+
+  if (!doc || doc.userId !== userId) {
+    res.status(404).json({ error: "Document not found" })
+    return null
+  }
+  return doc
+}
+
+// GET /api/v1/documents - List documents owned by the session user
+router.get("/documents", async (req: Request, res: Response) => {
+  try {
+    const userId = requireUser(req, res)
+    if (!userId) return
+
+    const docs = await getAllDocuments(userId)
+    res.json(docs)
+  } catch (error) {
+    console.error("Failed to list documents:", error)
+    res.status(500).json({ error: "Failed to fetch documents" })
+  }
+})
+
 // GET /api/v1/documents/:id - Get single document details
 router.get("/documents/:id", async (req: Request, res: Response) => {
-  try {
-    const docId = getParamId(req.params.id)
-    const doc = await getDocumentById(docId)
-    if (!doc) {
-      res.status(404).json({ error: "Document not found" })
-      return
-    }
-    res.json(doc)
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch document" })
-  }
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+  res.json(doc)
 })
 
 // POST /api/v1/audio/upload - Upload file and process with Groq AI
@@ -133,10 +184,13 @@ router.post(
         await refundRateLimit(req)
       }
     }
-    
-    req.on("aborted", async () => {
-      console.log("Client aborted upload. Refunding rate limit.")
-      await refundOnce()
+
+    // 'close' without 'end' indicates an aborted request ('aborted' is deprecated).
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        console.log("Client aborted upload. Refunding rate limit.")
+        void refundOnce()
+      }
     })
 
     upload.single("file")(req, res, async (err) => {
@@ -148,12 +202,16 @@ router.post(
     })
   },
   async (req: Request, res: Response) => {
-    // Prevent socket timeout during long upload and chunking
-    if (req.socket) req.socket.setTimeout(0)
+    // Generous but bounded socket timeout for long uploads/cloud copies.
+    if (req.socket) req.socket.setTimeout(15 * 60 * 1000)
 
     try {
       const file = req.file
-      const userId = getHeaderKey(req.headers["x-user-session"])
+      const userId = requireUser(req, res)
+      if (!userId) {
+        if (file) await fs.promises.unlink(file.path).catch(() => {})
+        return
+      }
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
 
       if (!file) {
@@ -164,21 +222,22 @@ router.post(
 
       // Check global storage limit (5GB)
       const globalStorageUsed = await calculateStorageUsed()
-      if (globalStorageUsed + file.size > 5 * 1024 * 1024 * 1024) {
+      if (globalStorageUsed + file.size > MAX_GLOBAL_STORAGE_BYTES) {
         await refundRateLimit(req)
-        fs.unlinkSync(file.path)
-        res.status(403).json({
-          error: "Global storage limit (5GB) reached. Mitigating storage abuse risks.",
+        await fs.promises.unlink(file.path).catch(() => {})
+        res.status(507).json({
+          error:
+            "Global storage limit (5GB) reached. Mitigating storage abuse risks.",
         })
         return
       }
 
-      // Check 500MB storage limit
+      // Check per-user storage limit (500MB)
       const storageUsed = await calculateStorageUsed(userId)
-      if (storageUsed + file.size > 500 * 1024 * 1024) {
+      if (storageUsed + file.size > MAX_FILE_BYTES) {
         await refundRateLimit(req)
-        fs.unlinkSync(file.path)
-        res.status(403).json({
+        await fs.promises.unlink(file.path).catch(() => {})
+        res.status(507).json({
           error: "Storage limit exceeded (500MB). Please delete some files.",
         })
         return
@@ -191,8 +250,14 @@ router.post(
         ? parseInt(req.body.durationSec, 10)
         : 0
 
-      // Default local file serving URL
-      let serverAudioUrl = `http://localhost:3001/uploads/${path.basename(file.path)}`
+      // Signed local media URL fallback (used only when no cloud storage is
+      // configured). The token makes bare filename knowledge useless; expiry
+      // matches the 7-day media retention window plus a grace day.
+      let serverAudioUrl = buildSignedLocalUrl(
+        path.basename(file.path),
+        now.getTime() + 8 * 24 * 60 * 60 * 1000,
+      )
+      let isCloudStored = false
 
       // Cloudflare R2 Upload (Priority) -> Supabase Storage -> Local Fallback
       try {
@@ -204,6 +269,7 @@ router.post(
           )
           if (r2Url) {
             serverAudioUrl = r2Url
+            isCloudStored = true
             // File is kept local for Groq Whisper in background task
           }
         } else if (isSupabaseEnabled()) {
@@ -214,6 +280,7 @@ router.post(
           )
           if (supabaseUrl) {
             serverAudioUrl = supabaseUrl
+            isCloudStored = true
             // File is kept local for Groq Whisper in background task
           }
         }
@@ -248,13 +315,21 @@ router.post(
       res.status(202).json(newDoc)
 
       // Background AI Processing Task
+      activeBackgroundJobs += 1
       ;(async () => {
         try {
           // 1. Transcribe audio with Groq Whisper
-          const transcripts = await transcribeAudioWithGroq(file.path, customApiKey)
-          const fullText = transcripts.map((t) => t.text).join(" ")
+          const result = await transcribeAudioWithGroq(file.path, customApiKey)
 
-          // 2. Generate summary with Groq Llama
+          if (result.failedChunks > 0) {
+            newDoc.warnings = [
+              `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
+            ]
+          }
+
+          const fullText = result.entries.map((t) => t.text).join(" ")
+
+          // 2. Generate summary with Groq LLM
           const summary = await summarizeTranscriptWithGroq(
             fullText,
             file.originalname,
@@ -262,7 +337,7 @@ router.post(
           )
 
           // 3. Mark completed
-          newDoc.transcripts = transcripts
+          newDoc.transcripts = result.entries
           newDoc.summary = summary
           newDoc.status = "Completed"
           await saveDocument(newDoc)
@@ -271,34 +346,34 @@ router.post(
           newDoc.status = "Failed"
           await saveDocument(newDoc)
         } finally {
-          // Cleanup local file after AI processing finishes
-          if (fs.existsSync(file.path)) {
-            fs.unlinkSync(file.path)
+          activeBackgroundJobs -= 1
+          // Only cleanup local file if it was successfully offloaded to cloud storage
+          if (isCloudStored) {
+            await fs.promises.unlink(file.path).catch(() => {})
           }
         }
       })()
     } catch (error) {
       console.error("Upload processing error:", error)
-      res
-        .status(500)
-        .json({ error: (error as Error).message || "Failed to process audio" })
+      res.status(500).json({ error: "Failed to process audio" })
     }
   },
 )
+
+function buildSignedLocalUrl(fileName: string, expiresAtMs: number): string {
+  const token = signMediaToken(fileName, expiresAtMs)
+  return `${BASE_URL}/uploads/${fileName}?v=${expiresAtMs}&t=${token}`
+}
 
 // POST /api/v1/documents/:id/summarize - Re-summarize a document
 router.post(
   "/documents/:id/summarize",
   checkPortfolioRateLimit,
   async (req: Request, res: Response) => {
-    try {
-      const docId = getParamId(req.params.id)
-      const doc = await getDocumentById(docId)
-      if (!doc) {
-        res.status(404).json({ error: "Document not found" })
-        return
-      }
+    const doc = await requireOwnedDocument(req, res)
+    if (!doc) return
 
+    try {
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
       if (!doc.transcripts || doc.transcripts.length === 0) {
         res.status(400).json({ error: "No transcript available to summarize" })
@@ -323,24 +398,24 @@ router.post(
       res.json(doc)
     } catch (error) {
       console.error("Summarize error:", error)
-      res
-        .status(500)
-        .json({ error: (error as Error).message || "Failed to summarize" })
+      res.status(500).json({ error: "Failed to summarize transcript" })
     }
   },
 )
 
 // PATCH /api/v1/documents/:id - Rename document
 router.patch("/documents/:id", async (req: Request, res: Response) => {
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+
   try {
-    const docId = getParamId(req.params.id)
     const { name } = req.body
     if (!name || typeof name !== "string") {
       res.status(400).json({ error: "New document name is required" })
       return
     }
 
-    const updated = await renameDocument(docId, name.trim())
+    const updated = await renameDocument(doc.id, name.trim())
     if (!updated) {
       res.status(404).json({ error: "Document not found" })
       return
@@ -348,23 +423,20 @@ router.patch("/documents/:id", async (req: Request, res: Response) => {
 
     res.json(updated)
   } catch (error) {
+    console.error("Rename error:", error)
     res.status(500).json({ error: "Failed to rename document" })
   }
 })
 
 // PATCH /api/v1/documents/:id/summary - Edit summary
 router.patch("/documents/:id/summary", async (req: Request, res: Response) => {
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+
   try {
-    const docId = getParamId(req.params.id)
     const { summary } = req.body
     if (!summary) {
       res.status(400).json({ error: "Summary data is required" })
-      return
-    }
-
-    const doc = await getDocumentById(docId)
-    if (!doc) {
-      res.status(404).json({ error: "Document not found" })
       return
     }
 
@@ -373,47 +445,55 @@ router.patch("/documents/:id/summary", async (req: Request, res: Response) => {
 
     res.json(doc)
   } catch (error) {
+    console.error("Summary update error:", error)
     res.status(500).json({ error: "Failed to update summary" })
   }
 })
 
 // POST /api/v1/documents/:id/duplicate - Duplicate document
 router.post("/documents/:id/duplicate", async (req: Request, res: Response) => {
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+
   try {
-    const docId = getParamId(req.params.id)
-    const copy = await duplicateDocument(docId)
+    const copy = await duplicateDocument(doc.id)
     if (!copy) {
       res.status(404).json({ error: "Document not found" })
       return
     }
     res.status(201).json(copy)
   } catch (error) {
+    console.error("Duplicate error:", error)
     res.status(500).json({ error: "Failed to duplicate document" })
   }
 })
 
 // DELETE /api/v1/documents/:id - Delete document
 router.delete("/documents/:id", async (req: Request, res: Response) => {
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+
   try {
-    const docId = getParamId(req.params.id)
-    const success = await deleteDocument(docId)
+    const success = await deleteDocument(doc.id)
     if (!success) {
       res.status(404).json({ error: "Document not found" })
       return
     }
-    res.json({ success: true, id: docId })
+    res.json({ success: true, id: doc.id })
   } catch (error) {
+    console.error("Delete error:", error)
     res.status(500).json({ error: "Failed to delete document" })
   }
 })
 
-// GET /api/v1/documents/:id/download - Secure download proxy with proper original filename and extension
+// GET /api/v1/documents/:id/download - Authenticated download proxy with
+// proper original filename and extension.
 router.get("/documents/:id/download", async (req: Request, res: Response) => {
-  try {
-    const docId = getParamId(req.params.id)
-    const doc = await getDocumentById(docId)
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
 
-    if (!doc || !doc.audioUrl) {
+  try {
+    if (!doc.audioUrl || doc.audioUrl === "Expired") {
       res.status(404).json({ error: "Document or audio file not found" })
       return
     }
@@ -433,19 +513,28 @@ router.get("/documents/:id/download", async (req: Request, res: Response) => {
       `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`,
     )
 
-    // If local upload file path
+    // If local upload file exists on disk, serve it directly.
     if (doc.audioUrl.includes("/uploads/")) {
-      const localBasename = path.basename(doc.audioUrl)
-      const localFilePath = path.join(process.cwd(), "uploads", localBasename)
+      const localBasename = path.basename(doc.audioUrl.split("?")[0])
+      const localFilePath = path.join(UPLOADS_DIR, localBasename)
       if (fs.existsSync(localFilePath)) {
         res.download(localFilePath, filename)
         return
       }
     }
 
-    // Remote storage (R2 / Supabase) -> Proxy download stream
-    const audioRes = await fetch(doc.audioUrl)
-    if (!audioRes.ok) {
+    // Remote storage (R2 / Supabase) -> Proxy download stream.
+    // Bound only the connection phase so large bodies can keep streaming.
+    const controller = new AbortController()
+    const connectTimeout = setTimeout(() => controller.abort(), 30_000)
+    let audioRes: globalThis.Response
+    try {
+      audioRes = await fetch(doc.audioUrl, { signal: controller.signal })
+    } finally {
+      clearTimeout(connectTimeout)
+    }
+
+    if (!audioRes.ok || !audioRes.body) {
       // Fallback: Redirect directly to audioUrl if proxy fetch fails
       res.redirect(doc.audioUrl)
       return
@@ -455,23 +544,20 @@ router.get("/documents/:id/download", async (req: Request, res: Response) => {
       audioRes.headers.get("content-type") || "application/octet-stream"
     res.setHeader("Content-Type", contentType)
 
-    if (audioRes.body) {
-      const reader = audioRes.body.getReader()
-      const streamData = async () => {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          res.write(Buffer.from(value))
-        }
-        res.end()
-      }
-      await streamData()
-    } else {
-      res.redirect(doc.audioUrl)
-    }
+    // Readable.fromWeb + pipeline honors backpressure (no unbounded buffering).
+    const nodeStream = Readable.fromWeb(audioRes.body as import("node:stream/web").ReadableStream)
+    nodeStream.on("error", (err) => {
+      console.error("Download stream error:", err)
+      if (!res.writableEnded) res.destroy(err)
+    })
+    await pipeline(nodeStream, res)
   } catch (error) {
     console.error("Download proxy error:", error)
-    res.status(500).json({ error: "Failed to download audio file" })
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to download audio file" })
+    } else {
+      res.destroy()
+    }
   }
 })
 

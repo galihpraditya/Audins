@@ -1,11 +1,14 @@
-import { useState, useEffect, useRef } from "react"
-import { Screen, DocumentItem } from "./types"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Routes, Route, useNavigate, Navigate } from "react-router-dom"
+import { DocumentItem } from "./types"
 import Sidebar from "./components/layout/Sidebar"
 import MobileNav from "./components/layout/MobileNav"
+import TopHeader from "./components/layout/TopHeader"
 import Dashboard from "./components/dashboard/Dashboard"
 import Workspace from "./components/workspace/Workspace"
+import SettingsPage from "./pages/Settings"
+import LiveRecorderModal from "./components/recording/LiveRecorderModal"
 import RateLimitModal from "./components/modals/RateLimitModal"
-import SettingsModal from "./components/modals/SettingsModal"
 import {
   uploadAudioToApi,
   reSummarizeApi,
@@ -14,63 +17,93 @@ import {
   renameDocumentApi,
   duplicateDocumentApi,
   updateDocumentSummaryApi,
-  fetchRateLimitApi,
-  pollDocumentStatusApi,
+  ApiError,
 } from "./services/api"
 import { useToast } from "./components/ui/ToastContext"
+import Alert from "./components/ui/Alert"
+import { useLanguage } from "./context/LanguageContext"
+import { useApiKey } from "./hooks/useApiKey"
+import { useQuota } from "./hooks/useQuota"
+import { useDocumentPolling } from "./hooks/useDocumentPolling"
+import { ArrowClockwise, WarningCircle } from "@phosphor-icons/react"
 
 export default function App() {
+  const navigate = useNavigate()
   const { showToast } = useToast()
-  const [screen, setScreen] = useState<Screen>("dashboard")
-  const [previousScreen, setPreviousScreen] = useState<Screen>("dashboard")
+  const { t, language } = useLanguage()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [rateModalOpen, setRateModalOpen] = useState<boolean>(false)
-  const [settingsModalOpen, setSettingsModalOpen] = useState<boolean>(false)
+  const [liveRecorderOpen, setLiveRecorderOpen] = useState<boolean>(false)
 
-  // Start with empty documents list (no fake/dummy documents)
+  // Document collection state
   const [documents, setDocuments] = useState<DocumentItem[]>([])
-  const [activeDocument, setActiveDocument] = useState<DocumentItem | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const uploadControllersRef = useRef<Map<string | number, AbortController>>(new Map())
-  const [uploadCount, setUploadCount] = useState<number>(0)
-  const [maxUploads, setMaxUploads] = useState<number>(10)
-  const [storageUsed, setStorageUsed] = useState<number>(0)
-  const [storageLimit, setStorageLimit] = useState<number>(500 * 1024 * 1024)
+  // Temp blob URLs (local preview before the backend returns a real audioUrl).
+  const tempBlobUrlsRef = useRef<Map<string | number, string>>(new Map())
+  // Uploads cancelled while in flight — guards the async success path from
+  // navigating/polling for a doc the user already discarded.
+  const cancelledUploadsRef = useRef<Set<string | number>>(new Set())
 
-  // API Key state with localStorage persistence
-  const [userApiKey, setUserApiKey] = useState<string>(() => {
-    return localStorage.getItem("audin_api_key") || ""
-  })
-
-  // API key validation
-  const [apiKeyStatus, setApiKeyStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle")
-
-  useEffect(() => {
-    const key = userApiKey?.trim()
-    if (!key) {
-      setApiKeyStatus("idle")
-      return
+  /** True when an error represents a quota/rate-limit condition. */
+  const isQuotaError = (err: unknown): boolean => {
+    if (err instanceof ApiError) {
+      if (err.status === 429 || err.status === 402 || err.status === 503) return true
     }
+    const message = (err as Error).message?.toLowerCase() || ""
+    return (
+      message.includes("api key") ||
+      message.includes("quota service") ||
+      message.includes("rate limit")
+    )
+  }
 
-    setApiKeyStatus("validating")
-    const controller = new AbortController()
-    
-    fetch("https://api.groq.com/openai/v1/models", {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: controller.signal,
-    })
-      .then((res) => {
-        setApiKeyStatus(res.ok ? "valid" : "invalid")
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") setApiKeyStatus("invalid")
-      })
+  const { userApiKey, saveApiKey, apiKeyStatus, hasCustomKey } = useApiKey()
+  const { quota, refreshFromServer, bumpUploadCount, rollbackUploadCount } = useQuota()
 
-    return () => controller.abort()
-  }, [userApiKey])
+  const revokeTempBlob = useCallback((id: string | number) => {
+    const url = tempBlobUrlsRef.current.get(id)
+    if (url) {
+      URL.revokeObjectURL(url)
+      tempBlobUrlsRef.current.delete(id)
+    }
+  }, [])
 
-  // Persist API Key
-  useEffect(() => {
-    localStorage.setItem("audin_api_key", userApiKey)
-  }, [userApiKey])
+  const handlePollOutcome = useCallback(
+    (
+      outcome:
+        | { type: "finished"; doc: DocumentItem }
+        | { type: "timeout"; docId: string | number },
+    ) => {
+      if (outcome.type === "finished") {
+        const updated = outcome.doc
+        setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+
+        if (updated.status === "Completed") {
+          showToast(t("toast_processing_done", { name: updated.name }), "success")
+          revokeTempBlob(updated.id)
+        } else {
+          showToast(t("toast_processing_failed", { name: updated.name }), "error")
+        }
+      } else {
+        // Give up: flip the doc to Failed so it stops spinning forever, and
+        // release the local preview blob.
+        setDocuments((prev) =>
+          prev.map((d) =>
+            d.id === outcome.docId ? { ...d, status: "Failed" as const } : d,
+          ),
+        )
+        revokeTempBlob(outcome.docId)
+        showToast(t("toast_polling_timeout"), "error")
+      }
+      // Re-sync storage info after processing settles.
+      void refreshFromServer()
+    },
+    [showToast, t, refreshFromServer, revokeTempBlob],
+  )
+
+  const { start: startPolling, stop: stopPolling } = useDocumentPolling(handlePollOutcome)
 
   // Prevent default browser behavior for drag & drop globally to avoid unintended downloads
   useEffect(() => {
@@ -85,62 +118,60 @@ export default function App() {
     }
   }, [])
 
-  const [resetTime, setResetTime] = useState<string>("")
-
   // Fetch initial documents and rate limit from backend
+  const loadInitialData = useCallback(async () => {
+    setLoadError(false)
+    setInitialLoading(true)
+    try {
+      const docs = await fetchDocumentsFromApi()
+      const sortedDocs = [...docs].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      setDocuments(sortedDocs)
+      // Resume status tracking for jobs that were still running server-side
+      // (e.g. the user refreshed mid-processing) — otherwise the badge spins
+      // forever even after the backend finishes.
+      sortedDocs.forEach((d) => {
+        if (d.status === "Processing") startPolling(d.id)
+      })
+    } catch {
+      // Surface a visible error + retry instead of an ambiguous empty state.
+      setLoadError(true)
+    } finally {
+      setInitialLoading(false)
+    }
+    await refreshFromServer()
+  }, [refreshFromServer, startPolling])
+
   useEffect(() => {
-    fetchDocumentsFromApi().then((docs) => {
-      if (docs) {
-        const sortedDocs = [...docs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        setDocuments(sortedDocs)
-      }
-    })
-    fetchRateLimitApi().then((status) => {
-      if (status && status.maxLimit && typeof status.remaining === "number") {
-        const used = status.maxLimit - status.remaining
-        setUploadCount(used)
-        setMaxUploads(status.maxLimit)
-        if (status.resetTime) setResetTime(status.resetTime)
-        if (status.storageUsed !== undefined) {
-          setStorageUsed(status.storageUsed)
-          setStorageLimit(status.storageLimit || 500 * 1024 * 1024)
-        }
-      }
-    })
+    void loadInitialData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleOpenDocument = (doc: DocumentItem) => {
-    setPreviousScreen(screen)
-    setActiveDocument(doc)
-    setScreen("workspace")
-  }
-
-  const handleBackNavigation = () => {
-    setActiveDocument(null)
-    setScreen(previousScreen)
-  }
-
   const handleUploadFile = async (file: File) => {
-    // Check if free portfolio limit is reached and user has no custom key
-    if (uploadCount >= 10 && !userApiKey?.trim()) {
+    // Check free demo quota against the server-provided max (not a hardcoded 10).
+    if (!hasCustomKey && quota.uploadCount >= quota.maxUploads) {
       setRateModalOpen(true)
       return
     }
 
-    // Check file size on frontend (max 500MB)
+    // Check file size on frontend
     if (file.size > 500 * 1024 * 1024) {
-      showToast("File is too large! Maximum file size is 500MB.", "error")
+      showToast(t("toast_upload_too_large"), "error")
       return
     }
 
     const blobUrl = URL.createObjectURL(file)
     const newId = Date.now()
-    const nowStr = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
-    const baseName = file.name.replace(/\.[^/.]+$/, "")
+    const nowStr = new Date().toLocaleDateString(
+      language === "id" ? "id-ID" : "en-US",
+      {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      },
+    )
 
     // 1. Calculate audio duration using HTML5 Audio
     let durationSec = 30
@@ -149,19 +180,21 @@ export default function App() {
     try {
       const audio = new Audio(blobUrl)
       await new Promise<void>((resolve) => {
+        const applyDuration = () => {
+          durationSec = Math.floor(audio.duration)
+          const m = Math.floor(durationSec / 60)
+          const s = durationSec % 60
+          durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
+        }
         audio.onloadedmetadata = () => {
           if (
             audio.duration &&
             !isNaN(audio.duration) &&
             audio.duration !== Infinity
           ) {
-            durationSec = Math.floor(audio.duration)
-            const m = Math.floor(durationSec / 60)
-            const s = durationSec % 60
-            durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
+            applyDuration()
             resolve()
           } else if (audio.duration === Infinity) {
-            // Fix for Infinity duration bug in Chromium with blobs
             audio.currentTime = Number.MAX_SAFE_INTEGER
             audio.ontimeupdate = () => {
               audio.ontimeupdate = null
@@ -171,10 +204,7 @@ export default function App() {
                 !isNaN(audio.duration) &&
                 audio.duration !== Infinity
               ) {
-                durationSec = Math.floor(audio.duration)
-                const m = Math.floor(durationSec / 60)
-                const s = durationSec % 60
-                durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
+                applyDuration()
               }
               resolve()
             }
@@ -202,13 +232,17 @@ export default function App() {
       uploadProgress: 0,
     }
 
+    tempBlobUrlsRef.current.set(newId, blobUrl)
     setDocuments((prev) => [newDoc, ...prev])
-    setUploadCount((prev) => prev + 1)
-    setActiveDocument(newDoc)
-    setScreen("workspace")
+    bumpUploadCount() // optimistic; rolled back on failure below
+    navigate(`/workspace/${newId}`)
 
     const controller = new AbortController()
     uploadControllersRef.current.set(newId, controller)
+
+    // Throttle XHR progress updates to ~10/s so large uploads don't cause
+    // dozens of full-array re-renders per second.
+    let lastProgressUpdate = 0
 
     // 2. Try uploading to backend API or process AI
     try {
@@ -218,92 +252,76 @@ export default function App() {
         durationStr,
         durationSec,
         (progress) => {
-          setDocuments((prev) =>
-            prev.map((d) =>
-              d.id === newId ? { ...d, uploadProgress: progress } : d,
-            ),
-          )
-          setActiveDocument((prev) =>
-            prev && prev.id === newId
-              ? { ...prev, uploadProgress: progress }
-              : prev,
-          )
+          const now = performance.now()
+          if (progress >= 100 || now - lastProgressUpdate > 100) {
+            lastProgressUpdate = now
+            setDocuments((prev) =>
+              prev.map((d) =>
+                d.id === newId ? { ...d, uploadProgress: progress } : d,
+              ),
+            )
+          }
         },
         controller.signal,
       )
-      uploadControllersRef.current.delete(newId)
 
-      if (apiResult && apiResult.id) {
-        // Backend API returned 202 Accepted (Background Processing) or 201 Completed
-        const processingDoc: DocumentItem = {
-          ...apiResult, 
-          audioUrl: apiResult.audioUrl || blobUrl,
-          uploadProgress: 100, // Finish upload bar
-        }
-
-        setDocuments((prev) =>
-          prev.map((d) => (d.id === newId ? processingDoc : d)),
-        )
-        setActiveDocument(processingDoc)
-        
-        if (processingDoc.status === "Processing") {
-           showToast("Upload Complete! AI is now processing your audio in the background. You can safely leave this page.", "info")
-           
-           // Start polling
-           const pollInterval = setInterval(async () => {
-             const updated = await pollDocumentStatusApi(processingDoc.id)
-             if (updated && updated.status !== "Processing") {
-                clearInterval(pollInterval)
-                setDocuments((prev) =>
-                  prev.map((d) => (d.id === processingDoc.id ? updated : d)),
-                )
-                setActiveDocument((prev) => 
-                  prev?.id === processingDoc.id ? updated : prev
-                )
-                
-                if (updated.status === "Completed") {
-                  showToast(`Processing finished for ${updated.name}!`, "success")
-                } else {
-                  showToast(`Processing failed for ${updated.name}.`, "error")
-                }
-                // Refresh storage info after processing completes
-                fetchRateLimitApi().then((status) => {
-                  if (status) {
-                    if (status.storageUsed !== undefined) setStorageUsed(status.storageUsed)
-                    if (status.storageLimit !== undefined) setStorageLimit(status.storageLimit)
-                  }
-                })
-             }
-           }, 3000)
-        }
-        return
-      } else {
-        throw new Error("Invalid response from backend")
-      }
-    } catch (err: any) {
-      uploadControllersRef.current.delete(newId)
-      if (err.message === "Upload cancelled") {
+      // The user cancelled while the request was in flight (the abort landed
+      // after the response resolved). Discard the result silently — the doc,
+      // blob and quota were already handled by handleCancelUpload.
+      if (cancelledUploadsRef.current.has(newId)) {
+        cancelledUploadsRef.current.delete(newId)
+        uploadControllersRef.current.delete(newId)
         return
       }
+      uploadControllersRef.current.delete(newId)
+
+      const processingDoc: DocumentItem = {
+        ...apiResult,
+        audioUrl: apiResult.audioUrl || blobUrl,
+        uploadProgress: 100,
+      }
+
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === newId ? processingDoc : d)),
+      )
+
+      // The backend owns the media now — release our local preview copy.
+      if (apiResult.audioUrl) revokeTempBlob(newId)
+
+      // If backend returned a different id than temp newId, remap the blob ref
+      if (String(apiResult.id) !== String(newId)) {
+        navigate(`/workspace/${apiResult.id}`, { replace: true })
+        const blob = tempBlobUrlsRef.current.get(newId)
+        if (blob) {
+          tempBlobUrlsRef.current.set(apiResult.id, blob)
+          tempBlobUrlsRef.current.delete(newId)
+        }
+      }
+
+      if (processingDoc.status === "Processing") {
+        showToast(t("toast_processing_started"), "info")
+        startPolling(apiResult.id)
+      }
+      return
+    } catch (err) {
+      uploadControllersRef.current.delete(newId)
+
+      if ((err as Error).message === "Upload cancelled") {
+        rollbackUploadCount()
+        revokeTempBlob(newId)
+        return
+      }
+
       console.error("Upload failed:", err)
-      const errorDoc: DocumentItem = {
-        ...newDoc,
-        status: "Failed",
-      }
-      setDocuments((prev) => prev.map((d) => (d.id === newId ? errorDoc : d)))
-      setActiveDocument(errorDoc)
+      rollbackUploadCount()
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === newId ? { ...newDoc, status: "Failed" } : d)),
+      )
 
-      // If error is related to API key, prompt user
-      if (
-        err.message?.toLowerCase().includes("api key") ||
-        (err.message?.toLowerCase().includes("rate limit") && !userApiKey?.trim())
-      ) {
+      if (!hasCustomKey && isQuotaError(err)) {
         setRateModalOpen(true)
       } else {
-        showToast(
-          `Processing failed: ${err.message || "Unknown error"}`,
-          "error",
-        )
+        showToast(`Processing failed: ${(err as Error).message || "Unknown error"}`, "error")
       }
     }
   }
@@ -312,44 +330,34 @@ export default function App() {
     id: string | number,
     customPrompt?: string,
   ) => {
-    if (!userApiKey?.trim() && uploadCount >= 5) {
+    if (!hasCustomKey && quota.uploadCount >= 5) {
       setRateModalOpen(true)
       return
     }
 
-    // Optimistic UI update to show processing
+    const previousStatus =
+      documents.find((d) => d.id === id)?.status ?? "Completed"
+
     setDocuments((prev) =>
       prev.map((d) => (d.id === id ? { ...d, status: "Processing" } : d)),
     )
-    if (activeDocument?.id === id)
-      setActiveDocument((prev) =>
-        prev ? { ...prev, status: "Processing" } : null,
-      )
-
-    setUploadCount((prev) => prev + 1)
+    bumpUploadCount()
 
     try {
       const updatedDoc = await reSummarizeApi(id, userApiKey, customPrompt)
       setDocuments((prev) => prev.map((d) => (d.id === id ? updatedDoc : d)))
-      if (activeDocument?.id === id) setActiveDocument(updatedDoc)
-    } catch (err: any) {
-      // Revert status on failure
+    } catch (err) {
+      // Restore the REAL prior status instead of hardcoding "Completed".
       setDocuments((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, status: "Completed" } : d)),
+        prev.map((d) => (d.id === id ? { ...d, status: previousStatus } : d)),
       )
-      if (activeDocument?.id === id)
-        setActiveDocument((prev) =>
-          prev ? { ...prev, status: "Completed" } : null,
-        )
+      rollbackUploadCount()
 
-      if (
-        err.message?.toLowerCase().includes("api key") ||
-        err.message?.toLowerCase().includes("rate limit")
-      ) {
+      if (!hasCustomKey && isQuotaError(err)) {
         setRateModalOpen(true)
       } else {
         showToast(
-          `Re-summarize failed: ${err.message || "Unknown error"}`,
+          t("toast_resummarize_failed", { error: (err as Error).message || "Unknown error" }),
           "error",
         )
       }
@@ -357,23 +365,16 @@ export default function App() {
   }
 
   const handleDeleteDocument = async (id: number | string) => {
+    const doc = documents.find((d) => d.id === id)
     try {
-      const success = await deleteDocumentApi(id)
-      if (success) {
-        setDocuments((prev) => prev.filter((doc) => doc.id !== id))
-        if (activeDocument?.id === id) {
-          setActiveDocument(null)
-        }
-        // Refresh storage info after deletion
-        fetchRateLimitApi().then((status) => {
-          if (status) {
-            if (status.storageUsed !== undefined) setStorageUsed(status.storageUsed)
-            if (status.storageLimit !== undefined) setStorageLimit(status.storageLimit)
-          }
-        })
-      }
-    } catch (err: any) {
-      showToast(`Failed to delete document: ${err.message}`, "error")
+      await deleteDocumentApi(id)
+      stopPolling(id)
+      revokeTempBlob(id)
+      setDocuments((prev) => prev.filter((doc) => doc.id !== id))
+      if (doc) showToast(t("toast_deleted", { name: doc.name }), "success")
+      void refreshFromServer()
+    } catch (err) {
+      showToast(t("toast_delete_failed", { error: (err as Error).message }), "error")
     }
   }
 
@@ -383,11 +384,9 @@ export default function App() {
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
       )
-      if (activeDocument?.id === id) {
-        setActiveDocument(updatedDoc)
-      }
-    } catch (err: any) {
-      showToast(`Failed to rename document: ${err.message}`, "error")
+      showToast(t("toast_renamed_to", { name: newName }), "success")
+    } catch (err) {
+      showToast(t("toast_rename_failed", { error: (err as Error).message }), "error")
     }
   }
 
@@ -395,136 +394,167 @@ export default function App() {
     try {
       const copiedDoc = await duplicateDocumentApi(doc.id)
       setDocuments((prev) => [copiedDoc, ...prev])
-    } catch (err: any) {
-      showToast(`Failed to duplicate document: ${err.message}`, "error")
+      showToast(t("toast_duplicated", { name: doc.name }), "success")
+    } catch (err) {
+      showToast(t("toast_duplicate_failed", { error: (err as Error).message }), "error")
     }
   }
 
-  const handleUpdateSummary = async (id: number | string, summary: any) => {
+  const handleUpdateSummary = async (id: number | string, summary: DocumentItem["summary"]) => {
+    if (!summary) return
     try {
       const updatedDoc = await updateDocumentSummaryApi(id, summary)
       setDocuments((prev) =>
         prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
       )
-      if (activeDocument?.id === id) {
-        setActiveDocument(updatedDoc)
-      }
-    } catch (err: any) {
-      showToast(`Failed to save summary: ${err.message}`, "error")
+    } catch (err) {
+      showToast(t("toast_summary_save_failed", { error: (err as Error).message }), "error")
     }
   }
 
-  const handleNavScreenChange = (newScreen: Screen) => {
-    setScreen(newScreen)
-  }
-
   const handleCancelUpload = (id: string | number) => {
+    cancelledUploadsRef.current.add(id)
     const controller = uploadControllersRef.current.get(id)
     if (controller) {
       controller.abort()
       uploadControllersRef.current.delete(id)
     }
+    revokeTempBlob(id)
     setDocuments((prev) => prev.filter((d) => d.id !== id))
-    setActiveDocument((prev) => (prev?.id === id ? null : prev))
-    showToast("Upload cancelled", "info")
+    showToast(t("toast_upload_cancelled"), "info")
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto">
-      {/* Mobile Top Navigation & Drawer */}
+    <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto">
+      {/* Top Header (mobile) */}
+      <div className="md:hidden">
+        <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
+      </div>
+
+      {/* Mobile Drawer */}
       <MobileNav
-        screen={screen}
-        setScreen={handleNavScreenChange}
-        setModal={setRateModalOpen}
-        onOpenSettings={() => setSettingsModalOpen(true)}
-        uploadCount={uploadCount}
-        maxUploads={maxUploads}
-        storageUsed={storageUsed}
-        storageLimit={storageLimit}
-        hasCustomKey={!!userApiKey?.trim()}
+        open={mobileNavOpen}
+        setOpen={setMobileNavOpen}
+        uploadCount={quota.uploadCount}
+        maxUploads={quota.maxUploads}
+        storageUsed={quota.storageUsed}
+        storageLimit={quota.storageLimit}
+        hasCustomKey={hasCustomKey}
         apiKeyStatus={apiKeyStatus}
       />
 
       {/* Desktop Sidebar */}
       <Sidebar
-        screen={screen}
-        setScreen={handleNavScreenChange}
-        setModal={setRateModalOpen}
-        onOpenSettings={() => setSettingsModalOpen(true)}
-        uploadCount={uploadCount}
-        maxUploads={maxUploads}
-        storageUsed={storageUsed}
-        storageLimit={storageLimit}
-        hasCustomKey={!!userApiKey?.trim()}
+        uploadCount={quota.uploadCount}
+        maxUploads={quota.maxUploads}
+        storageUsed={quota.storageUsed}
+        storageLimit={quota.storageLimit}
+        hasCustomKey={hasCustomKey}
         apiKeyStatus={apiKeyStatus}
-        documents={documents}
-        activeDocument={activeDocument}
-        onSelectDocument={(doc) => {
-          setActiveDocument(doc)
-          setScreen("workspace")
-        }}
-        onDeleteDocument={handleDeleteDocument}
-        onRenameDocument={handleRenameDocument}
-        onDuplicateDocument={handleDuplicateDocument}
       />
 
-      {/* Main Screen Router */}
+      {/* Main Content Area with React Router */}
       <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto">
-        {screen === "dashboard" ? (
-          <Dashboard
-            documents={documents}
-            onOpenDocument={handleOpenDocument}
-            onUploadFile={handleUploadFile}
-            onDeleteDocument={handleDeleteDocument}
-            onRenameDocument={handleRenameDocument}
-            onDuplicateDocument={handleDuplicateDocument}
-            setModal={setRateModalOpen}
-            uploadCount={uploadCount}
-            maxUploads={maxUploads}
-            hasCustomKey={!!userApiKey?.trim()}
-          />
-        ) : (
-          <Workspace
-            documents={documents}
-            document={activeDocument}
-            onSelectDocument={(doc) => setActiveDocument(doc)}
-            onClearSelectedDocument={() => setActiveDocument(null)}
-            onBackNavigation={handleBackNavigation}
-            setScreen={setScreen}
-            setModal={setRateModalOpen}
-            onReSummarize={handleReSummarize}
-            onDeleteDocument={handleDeleteDocument}
-            onRenameDocument={handleRenameDocument}
-            onDuplicateDocument={handleDuplicateDocument}
-            onUpdateSummary={handleUpdateSummary}
-            onCancelUpload={handleCancelUpload}
-          />
+        {loadError && (
+          <div className="px-4 sm:px-6 py-3 no-print">
+            <Alert
+              variant="danger"
+              title={t("error_load_title")}
+              action={
+                <button
+                  onClick={() => void loadInitialData()}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-danger-contrast bg-danger hover:bg-danger/90 transition-colors"
+                >
+                  <ArrowClockwise size={13} weight="bold" />
+                  {t("btn_retry")}
+                </button>
+              }
+            >
+              {t("error_load_desc")}
+            </Alert>
+          </div>
         )}
+
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <Dashboard
+                documents={documents}
+                isLoading={initialLoading}
+                onUploadFile={handleUploadFile}
+                onOpenLiveRecorder={() => setLiveRecorderOpen(true)}
+                onDeleteDocument={handleDeleteDocument}
+                onRenameDocument={handleRenameDocument}
+                onDuplicateDocument={handleDuplicateDocument}
+                setModal={setRateModalOpen}
+                uploadCount={quota.uploadCount}
+                maxUploads={quota.maxUploads}
+                hasCustomKey={hasCustomKey}
+              />
+            }
+          />
+          <Route
+            path="/workspace"
+            element={
+              <Workspace
+                documents={documents}
+                isLoading={initialLoading}
+                onReSummarize={handleReSummarize}
+                onDeleteDocument={handleDeleteDocument}
+                onRenameDocument={handleRenameDocument}
+                onDuplicateDocument={handleDuplicateDocument}
+                onUpdateSummary={handleUpdateSummary}
+                onCancelUpload={handleCancelUpload}
+              />
+            }
+          />
+          <Route
+            path="/workspace/:id"
+            element={
+              <Workspace
+                documents={documents}
+                isLoading={initialLoading}
+                onReSummarize={handleReSummarize}
+                onDeleteDocument={handleDeleteDocument}
+                onRenameDocument={handleRenameDocument}
+                onDuplicateDocument={handleDuplicateDocument}
+                onUpdateSummary={handleUpdateSummary}
+                onCancelUpload={handleCancelUpload}
+              />
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <SettingsPage
+                currentApiKey={userApiKey}
+                onSaveApiKey={saveApiKey}
+              />
+            }
+          />
+          {/* Unknown URLs previously rendered a blank screen. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
+
+      {/* Live Audio Recorder Modal */}
+      {liveRecorderOpen && (
+        <LiveRecorderModal
+          onClose={() => setLiveRecorderOpen(false)}
+          onUploadFile={handleUploadFile}
+        />
+      )}
 
       {/* Rate Limit Modal */}
       {rateModalOpen && (
         <RateLimitModal
           onClose={() => setRateModalOpen(false)}
           onSaveApiKey={(key) => {
-            setUserApiKey(key)
+            saveApiKey(key)
             setRateModalOpen(false)
           }}
-          resetTime={resetTime}
-        />
-      )}
-
-      {/* Settings Modal */}
-      {settingsModalOpen && (
-        <SettingsModal
-          onClose={() => setSettingsModalOpen(false)}
-          userApiKey={userApiKey}
-          onSaveApiKey={(key) => {
-            setUserApiKey(key)
-            setSettingsModalOpen(false)
-          }}
-          uploadCount={uploadCount}
-          maxUploads={maxUploads}
+          resetTime={quota.resetTime}
         />
       )}
     </div>

@@ -1,4 +1,8 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import {
+  S3Client,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3"
+import { Upload } from "@aws-sdk/lib-storage"
 import fs from "node:fs"
 
 const hasR2Config =
@@ -41,17 +45,20 @@ export async function uploadAudioToR2(
   }
 
   const bucketName = process.env.R2_BUCKET_NAME || ""
-  const fileStream = fs.createReadStream(filePath)
 
   try {
-    await s3.send(
-      new PutObjectCommand({
+    // lib-storage Upload performs a multipart upload over a real stream,
+    // avoiding both full-file buffering and unknown-length checksum issues.
+    const parallelUpload = new Upload({
+      client: s3,
+      params: {
         Bucket: bucketName,
         Key: fileName,
-        Body: fileStream,
+        Body: fs.createReadStream(filePath),
         ContentType: mimeType,
-      }),
-    )
+      },
+    })
+    await parallelUpload.done()
 
     const publicUrlBase =
       process.env.R2_PUBLIC_URL ||

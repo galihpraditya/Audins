@@ -1,5 +1,3 @@
-export type Screen = "dashboard" | "workspace"
-
 export type DocumentStatus = "Completed" | "Processing" | "Failed"
 
 export interface TranscriptEntry {
@@ -17,6 +15,7 @@ export interface AISummary {
   title: string
   sections: AISummarySection[]
   modelUsed?: string
+  createdAt?: string
 }
 
 export interface DocumentItem {
@@ -33,13 +32,25 @@ export interface DocumentItem {
   audioUrl?: string
   transcripts?: TranscriptEntry[]
   summary?: AISummary
+  /** Non-fatal processing notes surfaced from the backend pipeline. */
+  warnings?: string[]
 }
 
 export interface RateLimitResponse {
-  remaining: number;
-  maxLimit: number;
-  resetTime: string;
-  ip: string;
-  storageUsed: number;
-  storageLimit: number;
+  remaining: number
+  maxLimit: number
+  resetTime: string
+  ip: string
+  storageUsed: number
+  storageLimit: number
+}
+
+export type ApiKeyStatus = "idle" | "validating" | "valid" | "invalid"
+
+export type QuotaSnapshot = {
+  uploadCount: number
+  maxUploads: number
+  storageUsed: number
+  storageLimit: number
+  resetTime: string
 }

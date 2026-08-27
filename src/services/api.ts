@@ -1,55 +1,98 @@
-import { DocumentItem, AISummary } from "../types"
+import { DocumentItem, AISummary, RateLimitResponse } from "../types"
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api/v1"
-const HEALTH_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "/health")
+// In development default to the local Express backend; in production builds
+// default to same-origin ("/api/v1") so a missing env var can never silently
+// point deployed users at localhost.
+export const API_BASE_URL: string =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.DEV ? "http://localhost:3001/api/v1" : "/api/v1")
 
-function getSessionId(): string {
-  let sessionId = localStorage.getItem("audin_session_id")
-  if (!sessionId) {
-    sessionId = crypto.randomUUID
-      ? crypto.randomUUID()
-      : "sess-" + Math.random().toString(36).substring(2, 15)
-    localStorage.setItem("audin_session_id", sessionId)
-  }
-  return sessionId
-}
-
-export async function checkBackendHealth(): Promise<boolean> {
-  try {
-    const res = await fetch(HEALTH_URL)
-    return res.ok
-  } catch {
-    return false
+/** Error carrying the HTTP status so callers can react (e.g. 429 → modal). */
+export class ApiError extends Error {
+  status?: number
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
   }
 }
 
-export async function fetchDocumentsFromApi(): Promise<DocumentItem[] | null> {
+const SESSION_KEY = "audin_session_id"
+
+/**
+ * Fallback identity kept at module scope. When localStorage throws (private
+ * browsing with storage disabled, hardened webviews), a fresh id per call
+ * would make the backend treat every request as a different user — uploads
+ * would vanish and polling would 404 forever.
+ */
+let ephemeralSessionId: string | null = null
+
+function generateSessionId(): string {
   try {
-    const res = await fetch(`${API_BASE_URL}/documents`, {
-      headers: {
-        "X-User-Session": getSessionId(),
-      },
-    })
-    if (!res.ok) return null
-    return await res.json()
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID()
+    }
   } catch {
-    return null
+    /* randomUUID requires a secure context; fall through */
+  }
+  return (
+    "sess-" +
+    Math.random().toString(36).substring(2, 15) +
+    Date.now().toString(36)
+  )
+}
+
+export function getSessionId(): string {
+  try {
+    let sessionId = localStorage.getItem(SESSION_KEY)
+    if (!sessionId) {
+      sessionId = generateSessionId()
+      localStorage.setItem(SESSION_KEY, sessionId)
+    }
+    return sessionId
+  } catch {
+    if (!ephemeralSessionId) ephemeralSessionId = generateSessionId()
+    return ephemeralSessionId
   }
 }
 
-export async function fetchRateLimitApi(): Promise<any | null> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/settings/rate-limit`, {
-      headers: {
-        "X-User-Session": getSessionId(),
-      },
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    "X-User-Session": getSessionId(),
+    ...extra,
   }
+  return headers
+}
+
+/**
+ * Safely extracts an error message from a failed Response without assuming
+ * the body is JSON (500 responses may be HTML/plain text).
+ */
+async function extractErrorMessage(res: Response, fallback: string): Promise<ApiError> {
+  try {
+    const data = await res.json()
+    const message =
+      data?.error || data?.message || `${fallback} (HTTP ${res.status})`
+    return new ApiError(String(message), res.status)
+  } catch {
+    return new ApiError(`${fallback} (HTTP ${res.status})`, res.status)
+  }
+}
+
+export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
+  const res = await fetch(`${API_BASE_URL}/documents`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to load documents")
+  return (await res.json()) as DocumentItem[]
+}
+
+export async function fetchRateLimitApi(): Promise<RateLimitResponse> {
+  const res = await fetch(`${API_BASE_URL}/settings/rate-limit`, {
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to load quota info")
+  return (await res.json()) as RateLimitResponse
 }
 
 export function uploadAudioToApi(
@@ -59,8 +102,8 @@ export function uploadAudioToApi(
   durationSec?: number,
   onProgress?: (progress: number) => void,
   signal?: AbortSignal,
-): Promise<any | null> {
-  return new Promise((resolve, reject) => {
+): Promise<DocumentItem> {
+  return new Promise<DocumentItem>((resolve, reject) => {
     const formData = new FormData()
     formData.append("file", file)
     if (duration) formData.append("duration", duration)
@@ -98,16 +141,16 @@ export function uploadAudioToApi(
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          resolve(JSON.parse(xhr.responseText))
-        } catch (e) {
-          resolve(null)
+          resolve(JSON.parse(xhr.responseText) as DocumentItem)
+        } catch {
+          reject(new Error("Invalid response from backend"))
         }
       } else {
         try {
           const err = JSON.parse(xhr.responseText)
-          reject(new Error(err.error || err.message || "Upload failed"))
-        } catch (e) {
-          reject(new Error(`Upload failed with status ${xhr.status}`))
+          reject(new ApiError(err.error || err.message || "Upload failed", xhr.status))
+        } catch {
+          reject(new ApiError(`Upload failed with status ${xhr.status}`, xhr.status))
         }
       }
     }
@@ -124,15 +167,20 @@ export function uploadAudioToApi(
   })
 }
 
-export async function pollDocumentStatusApi(id: string | number): Promise<DocumentItem | null> {
+/**
+ * Polls a document's processing status.
+ * Returns null for transient failures (network hiccups) — callers decide
+ * when to give up based on attempt caps.
+ */
+export async function pollDocumentStatusApi(
+  id: string | number,
+): Promise<DocumentItem | null> {
   try {
     const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
-      headers: {
-        "X-User-Session": getSessionId(),
-      },
+      headers: authHeaders(),
     })
     if (!res.ok) return null
-    return await res.json()
+    return (await res.json()) as DocumentItem
   } catch {
     return null
   }
@@ -143,10 +191,9 @@ export async function reSummarizeApi(
   userApiKey?: string,
   customPrompt?: string,
 ): Promise<DocumentItem> {
-  const headers: Record<string, string> = {
+  const headers = authHeaders({
     "Content-Type": "application/json",
-    "X-User-Session": getSessionId(),
-  }
+  })
   if (userApiKey) {
     headers["X-Groq-API-Key"] = userApiKey
   }
@@ -157,20 +204,18 @@ export async function reSummarizeApi(
     body: JSON.stringify({ customPrompt }),
   })
 
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || err.message || "Summarize failed")
-  }
-
-  return await res.json()
+  if (!res.ok) throw await extractErrorMessage(res, "Summarize failed")
+  return (await res.json()) as DocumentItem
 }
 
-export async function deleteDocumentApi(id: string | number): Promise<boolean> {
+export async function deleteDocumentApi(id: string | number): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
     method: "DELETE",
-    headers: { "X-User-Session": getSessionId() },
+    headers: authHeaders(),
   })
-  return res.ok
+  if (!res.ok && res.status !== 404) {
+    throw await extractErrorMessage(res, "Failed to delete document")
+  }
 }
 
 export async function renameDocumentApi(
@@ -179,19 +224,12 @@ export async function renameDocumentApi(
 ): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-User-Session": getSessionId(),
-    },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ name: newName }),
   })
 
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || "Failed to rename document")
-  }
-
-  return await res.json()
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to rename document")
+  return (await res.json()) as DocumentItem
 }
 
 export async function duplicateDocumentApi(
@@ -199,15 +237,11 @@ export async function duplicateDocumentApi(
 ): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}/duplicate`, {
     method: "POST",
-    headers: { "X-User-Session": getSessionId() },
+    headers: authHeaders(),
   })
 
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || "Failed to duplicate document")
-  }
-
-  return await res.json()
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to duplicate document")
+  return (await res.json()) as DocumentItem
 }
 
 export async function updateDocumentSummaryApi(
@@ -216,17 +250,10 @@ export async function updateDocumentSummaryApi(
 ): Promise<DocumentItem> {
   const res = await fetch(`${API_BASE_URL}/documents/${id}/summary`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-User-Session": getSessionId(),
-    },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ summary }),
   })
 
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || "Failed to update summary")
-  }
-
-  return await res.json()
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to update summary")
+  return (await res.json()) as DocumentItem
 }

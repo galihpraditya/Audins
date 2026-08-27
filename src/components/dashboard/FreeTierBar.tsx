@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { Lightning, HardDrives, Key, Check, Warning, Spinner } from "@phosphor-icons/react"
+import { useLanguage } from "../../context/LanguageContext"
 
 interface FreeTierBarProps {
   onUpgrade: () => void
@@ -26,6 +27,8 @@ export default function FreeTierBar({
   hasCustomKey = false,
   apiKeyStatus = "idle",
 }: FreeTierBarProps) {
+  const { t } = useLanguage()
+
   const percentage = hasCustomKey
     ? 100
     : Math.round((uploadCount / maxUploads) * 100)
@@ -36,56 +39,55 @@ export default function FreeTierBar({
     Math.round((storageUsed / storageLimit) * 100),
   )
 
+  // Dynamic color for upload quota
+  const uploadBarColor = percentage >= 100 ? "bg-danger" : percentage >= 70 ? "bg-warning" : "bg-info"
+  // Dynamic color for storage quota
+  const storageBarColor = storagePercentage >= 90 ? "bg-danger" : storagePercentage >= 70 ? "bg-warning" : "bg-cyan"
+
   return (
-    <div className="w-full px-3 py-3 rounded-xl bg-surface-2 border border-border flex flex-col gap-3 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-xl pointer-events-none" />
-
-      {/* Uploads Section */}
-      <div className="relative z-10">
-        <div className="flex justify-between items-center mb-1.5 gap-2">
-          <span className="text-xs font-medium text-fg-secondary shrink-0 whitespace-nowrap">
-            Daily Uploads
-          </span>
-          <span className="text-xs text-primary font-mono font-semibold shrink-0 whitespace-nowrap">
-            {hasCustomKey ? "Unlimited" : `${uploadCount} / ${maxUploads}`}
+    <div className="w-full p-3.5 rounded-xl bg-surface-2/60 border border-border flex flex-col gap-3">
+      {/* Daily Quota */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-xs">
+          <div className="flex items-center gap-1.5 text-fg-secondary">
+            <Lightning size={14} weight="duotone" className="text-warning" />
+            <span className="font-medium">{t("daily_uploads")}</span>
+          </div>
+          <span className="font-mono font-semibold text-fg">
+            {hasCustomKey ? t("unlimited") : `${uploadCount}/${maxUploads}`}
           </span>
         </div>
 
-        <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle">
-          <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${percentage}%`,
-              background: "linear-gradient(90deg, #6366f1, #7c3aed)",
-            }}
-          />
-        </div>
+        {/* With an unlimited key a full bar would read "almost exhausted". */}
+        {!hasCustomKey && (
+          <div className="h-1.5 rounded-full overflow-hidden bg-surface-3">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${uploadBarColor}`}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+        )}
 
-        <div className="flex justify-between items-center mt-1.5 gap-1 min-h-[18px]">
-          <p className="text-[10px] text-fg-tertiary truncate">
-            {hasCustomKey
-              ? "Custom API Key"
-              : `${remaining} upload${remaining === 1 ? "" : "s"} remaining today`}
-          </p>
-
+        <div className="flex justify-between items-center text-[10px] text-fg-tertiary">
+          <span>{hasCustomKey ? t("custom_api_key") : `${remaining} ${t("uploads_left")}`}</span>
           {hasCustomKey && (
-            <div className="shrink-0">
+            <div>
               {apiKeyStatus === "validating" && (
-                <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-medium whitespace-nowrap">
-                  <span className="w-2.5 h-2.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                  Validating
+                <span className="inline-flex items-center gap-1 text-warning font-mono">
+                  <Spinner size={10} className="animate-spin" />
+                  {t("api_status_checking")}
                 </span>
               )}
               {(apiKeyStatus === "valid" || apiKeyStatus === "idle") && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium whitespace-nowrap">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Active
+                <span className="inline-flex items-center gap-1 text-success font-mono">
+                  <Check size={10} weight="bold" />
+                  {t("api_status_active")}
                 </span>
               )}
               {apiKeyStatus === "invalid" && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-medium whitespace-nowrap">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                  Invalid
+                <span className="inline-flex items-center gap-1 text-danger font-mono">
+                  <Warning size={10} weight="fill" />
+                  {t("api_status_invalid")}
                 </span>
               )}
             </div>
@@ -93,38 +95,38 @@ export default function FreeTierBar({
         </div>
       </div>
 
-      {/* Storage Limit Section */}
-      <div className="relative z-10">
-        <div className="flex justify-between items-center mb-1.5 gap-2">
-          <span className="text-xs font-medium text-fg-secondary shrink-0 whitespace-nowrap">
-            Storage
-          </span>
-          <span className="text-xs text-pink-400 font-mono shrink-0 whitespace-nowrap text-right">
+      {/* Storage */}
+      <div className="space-y-1.5 pt-2.5 border-t border-border">
+        <div className="flex justify-between items-center text-xs">
+          <div className="flex items-center gap-1.5 text-fg-secondary">
+            <HardDrives size={14} weight="duotone" className="text-cyan" />
+            <span className="font-medium">{t("storage")}</span>
+          </div>
+          <span className="font-mono font-semibold text-fg-secondary">
             {formatBytes(storageUsed)} / {formatBytes(storageLimit)}
           </span>
         </div>
 
-        <div className="h-1.5 rounded-full overflow-hidden bg-background border border-border-subtle">
+        <div className="h-1.5 rounded-full overflow-hidden bg-surface-3">
           <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${storagePercentage}%`,
-              background: "linear-gradient(90deg, #ec4899, #be185d)",
-            }}
+            className={`h-full rounded-full transition-all duration-500 ${storageBarColor}`}
+            style={{ width: `${storagePercentage}%` }}
           />
         </div>
 
-        <p className="text-[10px] mt-1.5 text-fg-tertiary">
-          Auto-deleted after 7 days
-        </p>
+        <div className="flex justify-between items-center text-[10px] text-fg-tertiary">
+          <span>{t("auto_purge_days")}</span>
+          <span className="font-mono">{storagePercentage}%</span>
+        </div>
       </div>
 
-      {/* Upgrade / Manage Button */}
+      {/* Action Button */}
       <button
         onClick={onUpgrade}
-        className="relative z-10 w-full mt-0.5 py-1.5 text-xs font-semibold rounded-lg bg-primary/10 text-primary-hover hover:bg-primary/20 transition-colors"
+        className="w-full mt-0.5 py-2 px-3 rounded-lg text-xs font-semibold bg-surface hover:bg-surface-2 text-fg border border-border hover:border-primary/40 transition-colors flex items-center justify-center gap-2 min-h-[36px]"
       >
-        {hasCustomKey ? "Manage API Key" : "Upgrade or enter API Key"}
+        <Key size={14} weight="duotone" className="text-primary" />
+        <span>{hasCustomKey ? t("settings_title") : t("btn_api_limits")}</span>
       </button>
     </div>
   )
