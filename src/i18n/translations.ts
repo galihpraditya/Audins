@@ -4,6 +4,7 @@ export const translations = {
   en: {
     // Navigation & Common
     app_name: "Audins",
+    app_tagline: "Audio Insight",
     nav_dashboard: "Dashboard",
     nav_workspace: "Workspace",
     nav_settings: "Settings",
@@ -201,6 +202,7 @@ export const translations = {
   id: {
     // Navigation & Common
     app_name: "Audins",
+    app_tagline: "Audio Insight",
     nav_dashboard: "Dasbor",
     nav_workspace: "Ruang Kerja",
     nav_settings: "Pengaturan",

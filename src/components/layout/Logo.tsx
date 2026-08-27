@@ -25,9 +25,12 @@ export default function Logo({ isCollapsed = false, className = "" }: LogoProps)
       </div>
 
       {!isCollapsed && (
-        <div className="min-w-0">
+        <div className="min-w-0 flex flex-col justify-center">
           <span className="text-base font-bold font-display tracking-tight text-fg leading-none block">
             Audins
+          </span>
+          <span className="text-[10px] font-mono font-semibold tracking-wider text-fg-tertiary uppercase block mt-1.5 leading-none">
+            Audio Insight
           </span>
         </div>
       )}

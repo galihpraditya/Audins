@@ -153,9 +153,14 @@ export default function SettingsModal({
             <div className="space-y-5 text-xs text-fg-secondary leading-relaxed">
               <div className="p-5 rounded-2xl bg-surface-2/80 border border-border space-y-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold font-display text-fg">
-                    Audins
-                  </h4>
+                  <div>
+                    <h4 className="text-sm font-bold font-display text-fg">
+                      Audins
+                    </h4>
+                    <p className="text-[10px] font-mono font-semibold tracking-wider text-fg-tertiary uppercase">
+                      Audio Insight
+                    </p>
+                  </div>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-2 text-fg-tertiary border border-border">
                     v1.0.0
                   </span>
