@@ -245,7 +245,7 @@ export default function AudioPlayer({
   // with the full instance via controlled isPlaying; owns NO audio element.
   if (compact) {
     return (
-      <div className="flex-shrink-0 px-4 py-2.5 border-b border-border bg-surface flex items-center gap-3 select-none">
+      <div className="flex-shrink-0 px-4 py-2.5 border-b border-border bg-surface flex items-center gap-3 select-none print:hidden">
         <button
           disabled={!audioUrl || isAudioMissingOrExpired || !!audioError}
           onClick={togglePlay}
@@ -303,7 +303,7 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="flex-shrink-0 p-4 sm:p-5 border-b border-border bg-surface relative select-none">
+    <div className="flex-shrink-0 p-4 sm:p-5 border-b border-border bg-surface relative select-none print:hidden">
       {audioUrl && !compact && (
         <audio
           ref={audioRef}

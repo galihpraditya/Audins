@@ -21,33 +21,33 @@ const LazyReactMarkdown = lazy(() => import("react-markdown"))
 // Module-level constant so React doesn't remount the markdown tree each render.
 const markdownComponents = {
   p: ({ node, ...props }: any) => (
-    <p className="mb-3 last:mb-0 leading-relaxed" {...props} />
+    <p className="mb-3 last:mb-0 leading-relaxed print:mb-2.5 print:text-[13px] print:leading-relaxed print:text-slate-800" {...props} />
   ),
   ul: ({ node, ...props }: any) => (
     <ul
-      className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 [&>li]:pl-5 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-primary [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden"
+      className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 print:space-y-1.5 print:mb-3 [&>li]:pl-5 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-primary [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden print:[&>li]:text-slate-800"
       {...props}
     />
   ),
-  li: ({ node, ...props }: any) => <li {...props} />,
+  li: ({ node, ...props }: any) => <li className="print:text-[13px] print:text-slate-800" {...props} />,
   ol: ({ node, ...props }: any) => (
     <ol
-      className="list-decimal pl-5 space-y-2 mb-3 last:mb-0 font-mono text-fg-secondary"
+      className="list-decimal pl-5 space-y-2 mb-3 last:mb-0 font-mono text-fg-secondary print:text-slate-800 print:space-y-1.5 print:mb-3 print:font-sans print:text-[13px]"
       {...props}
     />
   ),
   h3: ({ node, ...props }: any) => (
-    <h3 className="text-sm font-bold font-display text-fg mt-4 mb-2" {...props} />
+    <h3 className="text-sm font-bold font-display text-fg mt-4 mb-2 print:text-[15px] print:font-bold print:text-slate-950 print:mt-4 print:mb-1.5" {...props} />
   ),
   h4: ({ node, ...props }: any) => (
-    <h4 className="text-xs font-bold text-fg mt-3 mb-1.5" {...props} />
+    <h4 className="text-xs font-bold text-fg mt-3 mb-1.5 print:text-sm print:font-semibold print:text-slate-900 print:mt-3 print:mb-1" {...props} />
   ),
   strong: ({ node, ...props }: any) => (
-    <strong className="font-semibold text-fg" {...props} />
+    <strong className="font-semibold text-fg print:font-bold print:text-slate-950" {...props} />
   ),
   code: ({ node, ...props }: any) => (
     <code
-      className="bg-surface-3 text-fg-secondary px-1.5 py-0.5 rounded text-xs font-mono"
+      className="bg-surface-3 text-fg-secondary px-1.5 py-0.5 rounded text-xs font-mono print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300"
       {...props}
     />
   ),
@@ -90,7 +90,7 @@ export default function SummaryEditor({
   }, [document.id, document.summary])
 
   const getPdfTitle = () => {
-    const cleanDocName = document.name.replace(/\.[^/.]+$/, "")
+    const cleanDocName = (document?.name || "Document").replace(/\.[^/.]+$/, "")
     return `${cleanDocName}_Summary_Audins`
   }
 
@@ -102,7 +102,7 @@ export default function SummaryEditor({
     return () => {
       window.removeEventListener("beforeprint", handleBeforePrint)
     }
-  }, [document.name])
+  }, [document?.name])
 
   const [editMarkdown, setEditMarkdown] = useState("")
 
@@ -195,12 +195,25 @@ export default function SummaryEditor({
   }
 
   const handleExportPDF = () => {
-    const originalTitle = window.document.title
-    window.document.title = getPdfTitle()
-    window.print()
-    setTimeout(() => {
-      window.document.title = originalTitle
-    }, 1000)
+    if (isProcessing) {
+      showToast(t("status_processing_title"), "info")
+      return
+    }
+    if (!editableSummary || !editableSummary.sections || editableSummary.sections.length === 0) {
+      showToast(t("toast_nothing_to_copy"), "error")
+      return
+    }
+    try {
+      const originalTitle = window.document.title
+      window.document.title = getPdfTitle()
+      window.print()
+      setTimeout(() => {
+        window.document.title = originalTitle
+      }, 1000)
+    } catch (err) {
+      console.error("Export PDF error:", err)
+      window.print()
+    }
   }
 
   const handleConfirmReSummarize = () => {
@@ -221,15 +234,16 @@ export default function SummaryEditor({
   const isProcessing = document.status === "Processing"
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background printable-area">
-      <div className="max-w-3xl mx-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6">
+    <div className="flex-1 overflow-y-auto bg-background printable-area print:bg-white print:p-0 print:m-0 print:overflow-visible print:w-full">
+      <div className="max-w-3xl mx-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6 print:max-w-none print:p-0 print:m-0 print:w-full print:space-y-4 print:bg-white">
         {/* Top Studio Toolbar */}
         <div className="flex items-center justify-between gap-3 pb-4 border-b border-border no-print flex-wrap">
           {/* Action Buttons Left */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={handleCopyAll}
-              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5"
+              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5 cursor-pointer"
               title={t("btn_copy_all")}
             >
               <Copy size={15} weight="duotone" />
@@ -237,8 +251,14 @@ export default function SummaryEditor({
             </button>
 
             <button
+              type="button"
               onClick={handleExportPDF}
-              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5"
+              disabled={isProcessing}
+              className={`text-xs px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
+                isProcessing
+                  ? "opacity-40 cursor-not-allowed bg-surface-2 text-fg-tertiary border-border"
+                  : "bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border-border"
+              }`}
               title={t("btn_export_pdf")}
             >
               <Printer size={15} weight="duotone" />
@@ -365,32 +385,59 @@ export default function SummaryEditor({
               />
             </div>
           ) : (
-            <div className="print-container space-y-8">
-              {/* Fixed Print Header */}
-              <div className="print-header hidden print:flex justify-between items-end pb-4 border-b-2 border-black/10">
-                <div>
-                  <h2 className="text-2xl font-bold font-display text-black">
-                    Audins
-                  </h2>
-                  <p className="text-xs text-gray-600 font-mono mt-0.5">
-                    Summary Report
-                  </p>
+            <div className="print-container space-y-8 print:space-y-4 print:bg-white print:w-full">
+              {/* Executive Print Header */}
+              <div className="print-header hidden print:flex flex-col gap-3 pb-4 border-b-2 border-slate-900 mb-6 print-break-inside-avoid print:bg-white">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-white print-logo-box flex-shrink-0">
+                      <svg
+                        viewBox="0 0 32 32"
+                        className="w-5 h-5 text-white"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M16 4v24M10.5 8v16M5 12v8M21.5 8v16M27 12v8"
+                          stroke="currentColor"
+                          strokeWidth="3.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold font-display text-slate-950 tracking-tight leading-none">
+                        Audins
+                      </h2>
+                      <span className="text-[10px] font-mono tracking-widest text-slate-600 uppercase font-semibold block mt-1">
+                        Executive Summary Report
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs font-mono text-slate-600 space-y-0.5">
+                    <div>
+                      <span className="font-semibold text-slate-900">Document: </span>
+                      <span className="text-slate-800">{document.name}</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-900">Date: </span>
+                      <span className="text-slate-800">{document.date}</span>
+                    </div>
+                    {document.duration && (
+                      <div>
+                        <span className="font-semibold text-slate-900">Duration: </span>
+                        <span className="text-slate-800">{document.duration}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right text-xs text-gray-600 font-mono">
-                  <p><span className="font-semibold text-black">Document:</span> {document.name}</p>
-                  <p><span className="font-semibold text-black">Date:</span> {document.date}</p>
-                </div>
-              </div>
-
-              {/* Fixed Print Footer */}
-              <div className="print-footer hidden print:flex justify-between items-center pt-4 border-t-2 border-black/10 text-xs text-gray-500 font-mono">
-                <p>Generated by Audins</p>
               </div>
 
               {/* Header Title Section */}
-              <div className="space-y-2 no-print">
-                <p className="text-xs font-mono text-fg-tertiary">{document.date}</p>
-                <h1 className="text-2xl sm:text-3xl font-bold font-display text-fg tracking-tight leading-tight">
+              <div className="space-y-2 pb-2 print:space-y-0 print:pb-0 print:bg-white">
+                <p className="text-xs font-mono text-fg-tertiary no-print">{document.date}</p>
+                <h1 className="text-2xl sm:text-3xl font-bold font-display text-fg tracking-tight leading-tight print:text-2xl print:text-slate-950 print:font-extrabold print:pb-2.5 print:mb-6 print:border-b-2 print:border-slate-900">
                   {editableSummary?.title || t("summary_fallback_title")}
                 </h1>
               </div>
@@ -463,16 +510,16 @@ export default function SummaryEditor({
                 </div>
               ) : (
                 /* Continuous document — Notion-like flowing sections */
-                <div className="divide-y divide-border-subtle">
+                <div className="divide-y divide-border-subtle print:divide-y-0 print:space-y-6 print:bg-white">
                   {editableSummary?.sections && editableSummary.sections.length > 0 ? (
                     editableSummary.sections.map((section, idx) => (
                       <section
                         key={idx}
-                        className="py-7 first:pt-0 last:pb-0 space-y-3 relative group print:py-4 print:border-none print-break-inside-avoid"
+                        className="py-7 first:pt-0 last:pb-0 space-y-3 relative group print:py-0 print:space-y-2 print:border-none print-break-inside-avoid print:bg-white"
                       >
-                        {/* Section Header — clean, no card chrome */}
+                        {/* Section Header */}
                         <div className="flex items-center gap-3">
-                          <h2 className="text-sm font-bold font-display text-fg tracking-tight leading-snug">
+                          <h2 className="text-sm font-bold font-display text-fg tracking-tight leading-snug print:text-base print:font-bold print:text-slate-950 print:tracking-tight print:border-b print:border-slate-200 print:pb-1.5 print:w-full print:mt-2">
                             {section.heading}
                           </h2>
 
@@ -491,7 +538,7 @@ export default function SummaryEditor({
                         </div>
 
                         {/* Markdown Content */}
-                        <div className="text-sm text-fg-secondary leading-7">
+                        <div className="text-sm text-fg-secondary leading-7 print:text-[13.5px] print:leading-relaxed print:text-slate-800 print:pt-1">
                           <MarkdownBlock>
                             {section.content.join("\n")}
                           </MarkdownBlock>

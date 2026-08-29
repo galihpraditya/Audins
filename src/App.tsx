@@ -425,7 +425,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto">
+    <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto print:bg-white print:text-slate-950">
       {/* Top Header (mobile) */}
       <div className="md:hidden">
         <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
@@ -454,7 +454,7 @@ export default function App() {
       />
 
       {/* Main Content Area with React Router */}
-      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto">
+      <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto print:bg-white">
         {loadError && (
           <div className="px-4 sm:px-6 py-3 no-print">
             <Alert

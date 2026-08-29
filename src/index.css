@@ -189,9 +189,142 @@ html {
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .animate-fade-in { animation: fade-in 0.18s ease-out forwards; }
 
-@media print {
-  body { background: #ffffff !important; color: #000000 !important; }
-  .no-print, nav, aside, header { display: none !important; }
-  .printable-area { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
-  .print-break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
+@page {
+  size: A4 portrait;
+  margin: 0;
 }
+
+@media print {
+  :root,
+  html,
+  html.dark,
+  body,
+  #root {
+    --color-background: #ffffff !important;
+    --color-surface: #ffffff !important;
+    --color-surface-2: #ffffff !important;
+    --color-surface-3: #f8fafc !important;
+    --color-surface-glass: #ffffff !important;
+    --color-border: #cbd5e1 !important;
+    --color-border-subtle: #e2e8f0 !important;
+    --color-border-hover: #94a3b8 !important;
+    --color-fg: #09090b !important;
+    --color-fg-secondary: #1e293b !important;
+    --color-fg-tertiary: #475569 !important;
+    --color-primary: #09090b !important;
+    --color-primary-hover: #000000 !important;
+    --color-primary-dim: #f1f5f9 !important;
+    --color-primary-glow: transparent !important;
+    --app-primary-contrast: #ffffff !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #09090b !important;
+    font-size: 13px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force all background colors to transparent/white so dark themes can never paint black blocks */
+  *,
+  *::before,
+  *::after {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  #root > div,
+  main,
+  article,
+  .printable-area {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #09090b !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-container {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #09090b !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 16mm 18mm !important;
+    box-sizing: border-box !important;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  header,
+  [role="dialog"],
+  [role="alert"],
+  .modal-overlay {
+    display: none !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-header {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* High contrast overrides for printed documents */
+  .print-container {
+    color: #1e293b !important;
+  }
+
+  .print-container h1,
+  .print-container h2,
+  .print-container h3,
+  .print-container h4 {
+    color: #020617 !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .print-container p,
+  .print-container li,
+  .print-container span {
+    color: #1e293b !important;
+  }
+
+  .print-container strong {
+    color: #020617 !important;
+    font-weight: 700 !important;
+  }
+
+  .print-container hr {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Print specific elements with exact background reproduction */
+  .print-logo-box {
+    background-color: #09090b !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-number-badge {
+    background-color: #f1f5f9 !important;
+    color: #09090b !important;
+    border: 1px solid #cbd5e1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+

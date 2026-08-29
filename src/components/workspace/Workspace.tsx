@@ -390,7 +390,7 @@ export default function Workspace({
   const transcripts = document.transcripts || []
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background print:block print:overflow-visible print:h-auto">
+    <div className="flex-1 flex flex-col overflow-hidden bg-background print:block print:overflow-visible print:h-auto print:bg-white">
       {/* Studio Top Control Bar */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-surface flex-shrink-0 print:hidden z-20">
         <div className="flex items-center gap-3 min-w-0">
@@ -421,7 +421,7 @@ export default function Workspace({
       </div>
 
       {/* Split Panels / Tabs for Mobile */}
-      <div className="flex-1 flex flex-col overflow-hidden relative print:block print:overflow-visible print:h-auto">
+      <div className="flex-1 flex flex-col overflow-hidden relative print:block print:overflow-visible print:h-auto print:bg-white">
         {/* Mobile Tabs Header */}
         <div className="md:hidden flex items-center border-b border-border bg-surface print:hidden">
           <button
@@ -449,7 +449,7 @@ export default function Workspace({
         </div>
 
         {/* Desktop Split View: Left (Audio & Transcript) | Right (Summary) */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden print:block print:overflow-visible print:h-auto">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden print:block print:overflow-visible print:h-auto print:bg-white">
           {/* Left Panel: Audio Player & Raw Transcript */}
           <div
             className={`w-full md:w-5/12 flex-col border-b md:border-b-0 md:border-r border-border bg-surface md:max-h-none overflow-hidden print:hidden ${
@@ -477,11 +477,11 @@ export default function Workspace({
               playback survives switching tabs (same audio element as the
               full player — no double mount). */}
           <div
-            className={`w-full md:w-7/12 flex-col overflow-hidden bg-background print:block print:w-full print:overflow-visible print:h-auto ${
+            className={`w-full md:w-7/12 flex-col overflow-hidden bg-background print:block print:w-full print:overflow-visible print:h-auto print:bg-white ${
               activeTab === "summary" ? "flex" : "hidden md:flex"
             }`}
           >
-            <div className="md:hidden">
+            <div className="md:hidden print:hidden">
               <AudioPlayer
                 compact
                 audioUrl={document.audioUrl}
