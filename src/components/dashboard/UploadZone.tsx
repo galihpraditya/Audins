@@ -91,11 +91,10 @@ export default function UploadZone({
 
   return (
     <div
-      className={`relative rounded-xl transition-colors duration-200 mb-6 sm:mb-8 border border-dashed ${
-        dragging
+      className={`relative rounded-xl transition-colors duration-200 mb-6 sm:mb-8 border border-dashed ${dragging
           ? "border-primary bg-primary-dim"
           : "border-border bg-surface hover:border-border-hover"
-      }`}
+        }`}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -114,9 +113,8 @@ export default function UploadZone({
       <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-6 sm:px-10 text-center">
         {/* Icon */}
         <div
-          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-surface-2 border flex items-center justify-center mb-5 transition-colors duration-200 ${
-            dragging ? "border-primary/40 text-primary" : "border-border text-fg-tertiary"
-          }`}
+          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-surface-2 border flex items-center justify-center mb-5 transition-colors duration-200 ${dragging ? "border-primary/40 text-primary" : "border-border text-fg-tertiary"
+            }`}
         >
           <CloudArrowUp size={30} weight="duotone" />
         </div>
@@ -141,9 +139,9 @@ export default function UploadZone({
 
           <button
             onClick={handleRecordClick}
-            className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-danger/40 text-fg-secondary hover:text-danger transition-colors flex items-center gap-2 min-h-[38px]"
+            className="group px-4 py-2.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-danger/40 text-fg-secondary hover:text-danger transition-all duration-200 flex items-center gap-2 min-h-[38px] cursor-pointer hover:shadow-sm"
           >
-            <Microphone size={15} weight="duotone" className="text-danger" />
+            <Microphone size={15} weight="duotone" className="text-danger group-hover:scale-110 transition-transform duration-200" />
             <span>{t("btn_record_live")}</span>
           </button>
         </div>
