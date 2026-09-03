@@ -9,6 +9,8 @@ import Workspace from "./components/workspace/Workspace"
 import SettingsPage from "./pages/Settings"
 import LiveRecorderModal from "./components/recording/LiveRecorderModal"
 import RateLimitModal from "./components/modals/RateLimitModal"
+import AuthModal from "./components/modals/AuthModal"
+import { useAuth } from "./context/AuthContext"
 import {
   uploadAudioToApi,
   reSummarizeApi,
@@ -34,6 +36,13 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [rateModalOpen, setRateModalOpen] = useState<boolean>(false)
   const [liveRecorderOpen, setLiveRecorderOpen] = useState<boolean>(false)
+  const {
+    authModalOpen,
+    authModalTab,
+    closeAuthModal,
+    registerSyncListener,
+    user,
+  } = useAuth()
 
   // Document collection state
   const [documents, setDocuments] = useState<DocumentItem[]>([])
@@ -144,10 +153,15 @@ export default function App() {
     await refreshFromServer()
   }, [refreshFromServer, startPolling])
 
+  // Register loadInitialData as sync listener so cross-device triggers refresh UI
+  useEffect(() => {
+    return registerSyncListener(loadInitialData)
+  }, [registerSyncListener, loadInitialData])
+
+  // Reload when active user account changes (login/logout)
   useEffect(() => {
     void loadInitialData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user?.id, loadInitialData])
 
   const handleUploadFile = async (file: File) => {
     // Check free demo quota against the server-provided max (not a hardcoded 10).
@@ -557,6 +571,14 @@ export default function App() {
           resetTime={quota.resetTime}
         />
       )}
+
+      {/* Auth & Device Sync Modal */}
+      <AuthModal
+        open={authModalOpen}
+        initialTab={authModalTab}
+        onClose={closeAuthModal}
+      />
     </div>
   )
 }
+

@@ -39,6 +39,11 @@ function hashedIpKey(addr: string): string {
 }
 
 export function getRateLimitKey(req: Request): string {
+  const authUserId = (req as any).userId
+  if (typeof authUserId === "string" && authUserId.trim().length > 0) {
+    const sanitized = sanitizeSessionKey(authUserId.trim())
+    if (sanitized) return sanitized
+  }
   const session = req.headers["x-user-session"]
   if (typeof session === "string" && session.trim().length > 0) {
     const sanitized = sanitizeSessionKey(session.trim())

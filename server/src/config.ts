@@ -24,8 +24,18 @@ export const DB_FILE = process.env.DB_FILE
   ? path.resolve(process.env.DB_FILE)
   : path.resolve(__dirname, "../../db.json")
 
+export const USERS_FILE = process.env.USERS_FILE
+  ? path.resolve(process.env.USERS_FILE)
+  : path.resolve(__dirname, "../../users.json")
+
 export const MAX_FILE_BYTES = 500 * 1024 * 1024 // 500MB per user storage cap
 export const MAX_GLOBAL_STORAGE_BYTES = 5 * 1024 * 1024 * 1024 // 5GB global cap
+
+export const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  process.env.MEDIA_SIGNING_SECRET ||
+  process.env.GROQ_API_KEY ||
+  "audin-jwt-auth-secret"
 
 // Secret used to sign local /uploads media URLs so filenames alone are useless.
 export const MEDIA_SIGNING_SECRET =

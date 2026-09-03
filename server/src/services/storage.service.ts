@@ -15,6 +15,7 @@ import {
   saveSupabaseDocument,
   deleteSupabaseDocument,
   deleteAudioFromSupabase,
+  claimSupabaseGuestDocuments,
 } from "./supabase.service.js"
 import { isR2Enabled, deleteAudioFromR2 } from "./r2.service.js"
 
@@ -273,3 +274,33 @@ export async function duplicateDocument(
 
   return await saveDocument(newDoc)
 }
+
+/**
+ * Claims documents previously created under an anonymous guest session ID,
+ * migrating their ownership to the newly authenticated user.
+ */
+export async function claimGuestDocuments(
+  guestSessionId: string,
+  newUserId: string,
+): Promise<number> {
+  if (!guestSessionId || !newUserId || guestSessionId === newUserId) return 0
+
+  if (isSupabaseEnabled()) {
+    return await claimSupabaseGuestDocuments(guestSessionId, newUserId)
+  }
+
+  let count = 0
+  for (const doc of documentsStore.values()) {
+    if (doc.userId === guestSessionId) {
+      doc.userId = newUserId
+      count++
+    }
+  }
+
+  if (count > 0) {
+    scheduleDbWrite()
+  }
+
+  return count
+}
+

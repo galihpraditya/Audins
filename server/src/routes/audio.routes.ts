@@ -30,8 +30,10 @@ import {
   refundRateLimit,
 } from "../middleware/rateLimit.middleware.js"
 import { FullDocument, TranscriptEntry } from "../types/index.js"
+import { authenticate, AuthenticatedRequest } from "../middleware/auth.middleware.js"
 
 const router = Router()
+router.use(authenticate)
 
 // Number of in-flight background AI pipelines. Used by the graceful shutdown
 // handler to wait for jobs before exiting.
@@ -115,9 +117,10 @@ function getParamId(param: string | string[]): string {
  * Resolves the session user or responds 401 and returns null.
  */
 function requireUser(req: Request, res: Response): string | null {
-  const userId = getHeaderKey(req.headers["x-user-session"])
+  const authReq = req as AuthenticatedRequest
+  const userId = authReq.userId || getHeaderKey(req.headers["x-user-session"])
   if (!userId) {
-    res.status(401).json({ error: "Missing x-user-session header" })
+    res.status(401).json({ error: "Missing authentication or x-user-session header" })
     return null
   }
   return userId

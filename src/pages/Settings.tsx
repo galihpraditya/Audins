@@ -2,7 +2,20 @@ import { useState } from "react"
 import { useLanguage } from "../context/LanguageContext"
 import { useTheme } from "../context/ThemeContext"
 import { useToast } from "../components/ui/ToastContext"
-import { Key, LockKey, Translate, Sun, Moon, CheckCircle } from "@phosphor-icons/react"
+import { useAuth } from "../context/AuthContext"
+import {
+  Key,
+  LockKey,
+  Translate,
+  Sun,
+  Moon,
+  CheckCircle,
+  UserCircle,
+  SignOut,
+  ArrowsClockwise,
+  CloudArrowUp,
+  WarningCircle,
+} from "@phosphor-icons/react"
 
 interface SettingsPageProps {
   currentApiKey: string
@@ -13,6 +26,14 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
   const { t, language, setLanguage } = useLanguage()
   const { theme, setTheme } = useTheme()
   const { showToast } = useToast()
+  const {
+    user,
+    isAuthenticated,
+    syncStatus,
+    openAuthModal,
+    logout,
+    triggerSync,
+  } = useAuth()
 
   const [apiKeyInput, setApiKeyInput] = useState(currentApiKey)
   const [saveMessage, setSaveMessage] = useState("")
@@ -39,6 +60,116 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
             {t("settings_desc")}
           </p>
         </div>
+
+        {/* Account & Device Sync section */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-sm font-bold font-display text-fg">
+              {t("sync_title")}
+            </h2>
+            <p className="text-xs text-fg-tertiary mt-1">
+              {t("sync_desc")}
+            </p>
+          </div>
+
+          {isAuthenticated && user ? (
+            <div className="p-4 rounded-xl bg-surface border border-border space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-primary text-primary-contrast flex items-center justify-center font-bold text-sm flex-shrink-0">
+                    {(user.name || user.email || "U")[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-fg truncate">
+                      {user.name || user.email.split("@")[0]}
+                    </p>
+                    <p className="text-xs text-fg-tertiary truncate font-mono">
+                      {user.email}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                      syncStatus === "synced"
+                        ? "bg-success-dim border-success/30 text-success"
+                        : syncStatus === "syncing"
+                        ? "bg-warning-dim border-warning/30 text-warning"
+                        : "bg-surface-2 border-border text-fg-secondary"
+                    }`}
+                  >
+                    {syncStatus === "synced" ? (
+                      <CheckCircle size={14} weight="fill" />
+                    ) : syncStatus === "syncing" ? (
+                      <ArrowsClockwise size={14} weight="bold" className="animate-spin" />
+                    ) : (
+                      <WarningCircle size={14} weight="fill" />
+                    )}
+                    <span>
+                      {syncStatus === "synced"
+                        ? t("sync_status_synced")
+                        : syncStatus === "syncing"
+                        ? t("sync_status_syncing")
+                        : t("sync_status_offline")}
+                    </span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await triggerSync()
+                    showToast(t("sync_now_toast"), "success")
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 text-fg border border-border transition-colors inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <ArrowsClockwise size={14} weight="duotone" />
+                  {t("sync_btn_now")}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-danger hover:bg-danger-dim transition-colors inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <SignOut size={14} weight="duotone" />
+                  {t("auth_sign_out")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-surface-2 flex items-center justify-center text-fg-tertiary flex-shrink-0">
+                  <CloudArrowUp size={20} weight="duotone" className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-fg">
+                    {t("auth_guest")}
+                  </p>
+                  <p className="text-xs text-fg-secondary mt-0.5">
+                    {t("sync_card_login_cta")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openAuthModal("login")}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-contrast hover:bg-primary-hover transition-colors inline-flex items-center justify-center gap-2 cursor-pointer flex-shrink-0"
+              >
+                <UserCircle size={15} weight="duotone" />
+                {t("auth_sign_in")}
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Divider */}
+        <div className="h-px bg-border" aria-hidden="true" />
 
         {/* API Key section */}
         <section className="space-y-4">

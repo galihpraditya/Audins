@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/react"
 import { ToastProvider } from "./components/ui/ToastContext"
 import { ThemeProvider } from "./context/ThemeContext"
 import { LanguageProvider } from "./context/LanguageContext"
+import { AuthProvider } from "./context/AuthContext"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -16,8 +17,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <ThemeProvider>
           <LanguageProvider>
             <ToastProvider>
-              <App />
-              <Analytics />
+              <AuthProvider>
+                <App />
+                <Analytics />
+              </AuthProvider>
             </ToastProvider>
           </LanguageProvider>
         </ThemeProvider>

@@ -54,3 +54,31 @@ export type QuotaSnapshot = {
   storageLimit: number
   resetTime: string
 }
+
+export interface User {
+  id: string
+  email: string
+  name?: string
+  createdAt?: string
+}
+
+export interface AuthResponse {
+  user: User
+  token: string
+  provider: "supabase" | "local"
+  claimedCount?: number
+}
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+export interface RegisterCredentials {
+  email: string
+  password: string
+  name?: string
+}
+
+export type SyncStatus = "synced" | "syncing" | "offline" | "guest"
+

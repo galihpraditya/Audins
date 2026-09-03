@@ -1,5 +1,5 @@
 import { DocumentItem } from "../types"
-import { API_BASE_URL, getSessionId, ApiError } from "./api"
+import { API_BASE_URL, authHeaders, ApiError } from "./api"
 
 export function resolveAudioFilename(doc: DocumentItem): string {
   const filename = doc.name.trim()
@@ -18,7 +18,7 @@ export async function downloadAudioFile(doc: DocumentItem): Promise<void> {
   }
 
   const res = await fetch(`${API_BASE_URL}/documents/${doc.id}/download`, {
-    headers: { "X-User-Session": getSessionId() },
+    headers: authHeaders(),
   })
   if (!res.ok) throw new ApiError("Download failed", res.status)
 

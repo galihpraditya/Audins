@@ -33,6 +33,10 @@ export function isSupabaseEnabled(): boolean {
   return !!supabase && !!hasSupabaseConfig
 }
 
+export function getSupabaseClient(): SupabaseClient | null {
+  return supabase
+}
+
 // --- Storage API ---
 
 export async function uploadAudioToSupabase(
@@ -206,3 +210,33 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
     return false
   }
 }
+
+export async function claimSupabaseGuestDocuments(
+  guestSessionId: string,
+  newUserId: string,
+): Promise<number> {
+  if (!supabase || !isSupabaseEnabled()) return 0
+  try {
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, content")
+      .contains("content", { userId: guestSessionId })
+
+    if (error || !data) return 0
+
+    let migrated = 0
+    for (const row of data) {
+      const doc = row.content as FullDocument
+      doc.userId = newUserId
+      const { error: upsertErr } = await supabase
+        .from("documents")
+        .upsert({ id: doc.id, content: doc })
+      if (!upsertErr) migrated++
+    }
+    return migrated
+  } catch (error) {
+    console.error("Failed to claim guest documents in Supabase:", error)
+    return 0
+  }
+}
+

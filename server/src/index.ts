@@ -3,6 +3,7 @@ import cors from "cors"
 import dotenv from "dotenv"
 import path from "node:path"
 import audioRoutes, { getActiveBackgroundJobCount } from "./routes/audio.routes.js"
+import authRoutes from "./routes/auth.routes.js"
 import {
   PORT,
   UPLOADS_DIR,
@@ -100,6 +101,7 @@ app.get("/health", (req, res) => {
 })
 
 // Register REST API routes
+app.use("/api/v1/auth", authRoutes)
 app.use("/api/v1", audioRoutes)
 
 // Fallback 404 Handler

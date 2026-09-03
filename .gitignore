@@ -12,4 +12,6 @@ logs/
 .claude-replay.*
 .tmp-*
 db.json
+users.json
+*.tmp
 .agents/

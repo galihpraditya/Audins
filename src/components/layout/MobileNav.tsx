@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { X } from "@phosphor-icons/react"
 import Logo from "./Logo"
-import { NavItems, SettingsNavItem } from "./Sidebar"
+import { NavItems, SettingsNavItem, UserSidebarItem } from "./Sidebar"
 import FreeTierBar from "../dashboard/FreeTierBar"
 
 interface MobileNavProps {
@@ -92,6 +92,7 @@ export default function MobileNav({
             hasCustomKey={hasCustomKey}
             apiKeyStatus={apiKeyStatus}
           />
+          <UserSidebarItem onNavigate={() => setOpen(false)} />
           <SettingsNavItem onNavigate={() => setOpen(false)} />
         </div>
       </aside>

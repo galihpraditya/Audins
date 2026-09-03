@@ -58,3 +58,17 @@ export interface RateLimitRecord {
   count: number
   resetTime: Date
 }
+
+export interface User {
+  id: string
+  email: string
+  name?: string
+  createdAt: string
+}
+
+export interface AuthResponse {
+  user: User
+  token: string
+  provider: "supabase" | "local"
+}
+

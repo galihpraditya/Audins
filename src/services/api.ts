@@ -1,4 +1,12 @@
-import { DocumentItem, AISummary, RateLimitResponse } from "../types"
+import {
+  DocumentItem,
+  AISummary,
+  RateLimitResponse,
+  User,
+  AuthResponse,
+  LoginCredentials,
+  RegisterCredentials,
+} from "../types"
 
 // In development default to the local Express backend; in production builds
 // default to same-origin ("/api/v1") so a missing env var can never silently
@@ -18,6 +26,58 @@ export class ApiError extends Error {
 }
 
 const SESSION_KEY = "audin_session_id"
+const AUTH_TOKEN_KEY = "audin_auth_token"
+const AUTH_USER_KEY = "audin_auth_user"
+
+export function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setAuthToken(token: string): void {
+  try {
+    localStorage.setItem(AUTH_TOKEN_KEY, token)
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function removeAuthToken(): void {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function getStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+export function setStoredUser(user: User): void {
+  try {
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function clearAuth(): void {
+  removeAuthToken()
+  try {
+    localStorage.removeItem(AUTH_USER_KEY)
+  } catch {
+    /* non-fatal */
+  }
+}
 
 /**
  * Fallback identity kept at module scope. When localStorage throws (private
@@ -56,10 +116,14 @@ export function getSessionId(): string {
   }
 }
 
-function authHeaders(extra?: Record<string, string>): Record<string, string> {
+export function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
     "X-User-Session": getSessionId(),
     ...extra,
+  }
+  const token = getAuthToken()
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`
   }
   return headers
 }
@@ -113,6 +177,10 @@ export function uploadAudioToApi(
     const xhr = new XMLHttpRequest()
     xhr.open("POST", `${API_BASE_URL}/audio/upload`)
     xhr.setRequestHeader("X-User-Session", getSessionId())
+    const token = getAuthToken()
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`)
+    }
     if (userApiKey) {
       xhr.setRequestHeader("X-Groq-API-Key", userApiKey)
     }
@@ -257,3 +325,64 @@ export async function updateDocumentSummaryApi(
   if (!res.ok) throw await extractErrorMessage(res, "Failed to update summary")
   return (await res.json()) as DocumentItem
 }
+
+// --- Auth Endpoints ---
+
+export async function loginApi(
+  creds: LoginCredentials,
+  guestSessionId?: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...creds, guestSessionId }),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Login failed")
+  return (await res.json()) as AuthResponse
+}
+
+export async function registerApi(
+  creds: RegisterCredentials,
+  guestSessionId?: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...creds, guestSessionId }),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Registration failed")
+  return (await res.json()) as AuthResponse
+}
+
+export async function fetchCurrentUserApi(): Promise<User | null> {
+  const token = getAuthToken()
+  if (!token) return null
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+      headers: authHeaders(),
+    })
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearAuth()
+      }
+      return null
+    }
+    const data = await res.json()
+    return data.user as User
+  } catch {
+    return null
+  }
+}
+
+export async function claimGuestSessionApi(
+  guestSessionId: string,
+): Promise<{ success: boolean; claimedCount: number }> {
+  const res = await fetch(`${API_BASE_URL}/auth/claim-session`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ guestSessionId }),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to claim guest session")
+  return await res.json()
+}
+

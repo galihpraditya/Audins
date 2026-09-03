@@ -3,12 +3,14 @@ import { NavLink, useNavigate } from "react-router-dom"
 import Logo from "./Logo"
 import FreeTierBar from "../dashboard/FreeTierBar"
 import { useLanguage } from "../../context/LanguageContext"
+import { useAuth } from "../../context/AuthContext"
 import {
   SquaresFour,
   FolderSimpleStar,
   GearSix,
   CaretLeft,
   CaretRight,
+  CloudArrowUp,
 } from "@phosphor-icons/react"
 
 interface SidebarProps {
@@ -93,8 +95,74 @@ export function SettingsNavItem({
   onNavigate?: () => void
   isCollapsed?: boolean
 }) {
+  const { user, isAuthenticated, syncStatus } = useAuth()
   const { t } = useLanguage()
 
+  // When logged in: replace settings button with user profile
+  if (isAuthenticated && user) {
+    const initial = (user.name || user.email || "U")[0].toUpperCase()
+
+    return (
+      <NavLink
+        to="/settings"
+        onClick={() => onNavigate?.()}
+        title={isCollapsed ? (user.name || user.email) : undefined}
+        className={({ isActive }) =>
+          `w-full flex items-center ${
+            isCollapsed
+              ? "justify-center p-0 bg-transparent border-0 shadow-none hover:bg-transparent"
+              : `gap-3 px-3 py-2 rounded-xl text-sm font-medium border transition-all duration-200 ${
+                  isActive
+                    ? "bg-primary-dim text-primary font-semibold border-transparent"
+                    : "text-fg-secondary hover:text-fg hover:bg-surface-2 border-transparent"
+                }`
+          } relative group cursor-pointer`
+        }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && !isCollapsed && (
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
+            )}
+            <div className="relative flex-shrink-0 flex items-center justify-center">
+              <div
+                className={`w-8 h-8 rounded-full bg-primary text-primary-contrast flex items-center justify-center font-bold text-xs select-none transition-all group-hover:scale-105 ${
+                  isCollapsed && isActive
+                    ? "ring-2 ring-primary ring-offset-2 ring-offset-surface shadow-sm"
+                    : isCollapsed
+                    ? "shadow-sm group-hover:ring-2 group-hover:ring-primary/40"
+                    : ""
+                }`}
+              >
+                {initial}
+              </div>
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface ${
+                  syncStatus === "synced" ? "bg-success" : "bg-warning"
+                }`}
+              />
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col min-w-0 text-left flex-1">
+                <span className={`text-xs font-semibold truncate leading-tight ${isActive ? "text-primary font-bold" : "text-fg"}`}>
+                  {user.name || user.email.split("@")[0]}
+                </span>
+                <span className="text-[10px] font-mono text-fg-tertiary truncate leading-tight mt-0.5">
+                  {syncStatus === "synced"
+                    ? t("sync_status_synced")
+                    : syncStatus === "syncing"
+                    ? t("sync_status_syncing")
+                    : t("sync_status_offline")}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </NavLink>
+    )
+  }
+
+  // When guest: standard settings gear icon
   return (
     <NavLink
       to="/settings"
@@ -128,6 +196,47 @@ export function SettingsNavItem({
     </NavLink>
   )
 }
+
+export function UserSidebarItem({
+  onNavigate,
+  isCollapsed = false,
+}: {
+  onNavigate?: () => void
+  isCollapsed?: boolean
+}) {
+  const { isGuest, openAuthModal } = useAuth()
+  const { t } = useLanguage()
+
+  // When logged in, SettingsNavItem already displays the user profile icon,
+  // so UserSidebarItem returns null to avoid any duplicate button.
+  if (!isGuest) return null
+
+  return (
+    <button
+      onClick={() => {
+        onNavigate?.()
+        openAuthModal("login")
+      }}
+      title={isCollapsed ? t("auth_sign_in") : undefined}
+      className={`w-full flex items-center ${
+        isCollapsed
+          ? "justify-center p-0 bg-transparent border-0 hover:bg-transparent shadow-none"
+          : "gap-3 px-3 py-2 rounded-xl text-xs font-medium bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg"
+      } transition-all cursor-pointer group`}
+    >
+      <div className={`flex items-center justify-center ${isCollapsed ? "w-8 h-8 rounded-full bg-surface-2 group-hover:bg-surface-3 transition-colors" : ""}`}>
+        <CloudArrowUp size={18} weight="duotone" className="text-primary group-hover:scale-110 transition-transform flex-shrink-0" />
+      </div>
+      {!isCollapsed && (
+        <div className="flex flex-col text-left min-w-0">
+          <span className="font-semibold text-fg leading-tight truncate">{t("auth_sign_in")}</span>
+          <span className="text-[10px] text-fg-tertiary leading-tight truncate">{t("sync_title")}</span>
+        </div>
+      )}
+    </button>
+  )
+}
+
 
 export default function Sidebar({
   uploadCount,
@@ -212,9 +321,13 @@ export default function Sidebar({
           />
         ) : null}
 
+        {/* Account & Sync Item */}
+        <UserSidebarItem isCollapsed={isCollapsed} />
+
         {/* Settings Navigation Item Placed Below Daily Limit */}
         <SettingsNavItem isCollapsed={isCollapsed} />
       </div>
     </aside>
   )
 }
+
