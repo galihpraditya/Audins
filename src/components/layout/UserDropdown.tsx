@@ -6,11 +6,11 @@ import { useToast } from "../ui/ToastContext"
 import {
   UserCircle,
   SignOut,
+  SignIn,
   ArrowsClockwise,
   GearSix,
   CheckCircle,
   WarningCircle,
-  CloudArrowUp,
   CaretDown,
 } from "@phosphor-icons/react"
 
@@ -75,7 +75,7 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg transition-all cursor-pointer shadow-sm group min-h-[34px]"
         title={t("auth_guest_desc")}
       >
-        <CloudArrowUp size={15} weight="duotone" className="text-primary group-hover:scale-110 transition-transform" />
+        <SignIn size={15} weight="duotone" className="text-primary group-hover:scale-110 transition-transform" />
         <span className={compact ? "hidden sm:inline" : ""}>
           {t("auth_sign_in")}
         </span>

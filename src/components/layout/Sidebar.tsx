@@ -10,7 +10,7 @@ import {
   GearSix,
   CaretLeft,
   CaretRight,
-  CloudArrowUp,
+  SignIn,
 } from "@phosphor-icons/react"
 
 interface SidebarProps {
@@ -209,7 +209,8 @@ export function UserSidebarItem({
 
   // When logged in, SettingsNavItem already displays the user profile icon,
   // so UserSidebarItem returns null to avoid any duplicate button.
-  if (!isGuest) return null
+  // When collapsed, hide the guest login button from the sidebar.
+  if (!isGuest || isCollapsed) return null
 
   return (
     <button
@@ -217,22 +218,17 @@ export function UserSidebarItem({
         onNavigate?.()
         openAuthModal("login")
       }}
-      title={isCollapsed ? t("auth_sign_in") : undefined}
-      className={`w-full flex items-center ${
-        isCollapsed
-          ? "justify-center p-0 bg-transparent border-0 hover:bg-transparent shadow-none"
-          : "gap-3 px-3 py-2 rounded-xl text-xs font-medium bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg"
-      } transition-all cursor-pointer group`}
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg transition-all cursor-pointer group"
     >
-      <div className={`flex items-center justify-center ${isCollapsed ? "w-8 h-8 rounded-full bg-surface-2 group-hover:bg-surface-3 transition-colors" : ""}`}>
-        <CloudArrowUp size={18} weight="duotone" className="text-primary group-hover:scale-110 transition-transform flex-shrink-0" />
+      <SignIn
+        size={18}
+        weight="duotone"
+        className="text-primary group-hover:scale-110 transition-transform flex-shrink-0"
+      />
+      <div className="flex flex-col text-left min-w-0">
+        <span className="font-semibold text-fg leading-tight truncate">{t("auth_sign_in")}</span>
+        <span className="text-[10px] text-fg-tertiary leading-tight truncate">{t("sync_title")}</span>
       </div>
-      {!isCollapsed && (
-        <div className="flex flex-col text-left min-w-0">
-          <span className="font-semibold text-fg leading-tight truncate">{t("auth_sign_in")}</span>
-          <span className="text-[10px] text-fg-tertiary leading-tight truncate">{t("sync_title")}</span>
-        </div>
-      )}
     </button>
   )
 }
