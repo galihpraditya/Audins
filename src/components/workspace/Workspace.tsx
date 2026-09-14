@@ -469,6 +469,8 @@ export default function Workspace({
               entries={transcripts}
               currentTime={currentTime}
               onSeekTo={(secs) => setCurrentTime(secs)}
+              docName={docName}
+              docDate={docDate}
             />
           </div>
 

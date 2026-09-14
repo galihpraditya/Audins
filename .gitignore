@@ -15,3 +15,5 @@ db.json
 users.json
 *.tmp
 .agents/
+uploads/
+server/uploads/

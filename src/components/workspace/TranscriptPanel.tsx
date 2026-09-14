@@ -9,12 +9,23 @@ import {
   Check,
   Quotes,
   Clock,
+  DownloadSimple,
+  FileText,
+  ClosedCaptioning,
+  CaretDown,
 } from "@phosphor-icons/react"
+import {
+  downloadTranscriptFile,
+  copyTranscriptToClipboard,
+  TranscriptExportFormat,
+} from "../../utils/exportTranscript"
 
 interface TranscriptPanelProps {
   entries: TranscriptEntry[]
   currentTime: number
   onSeekTo: (seconds: number) => void
+  docName?: string
+  docDate?: string
 }
 
 /** Escapes user input before building a RegExp (typing "(" used to crash). */
@@ -138,12 +149,38 @@ export default function TranscriptPanel({
   entries,
   currentTime,
   onSeekTo,
+  docName,
+  docDate,
 }: TranscriptPanelProps) {
   const { t } = useLanguage()
   const containerRef = useRef<HTMLDivElement>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [isAllCopied, setIsAllCopied] = useState(false)
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
   const { showToast } = useToast()
+
+  // Close export dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isExportMenuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setIsExportMenuOpen(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsExportMenuOpen(false)
+      }
+    }
+    window.addEventListener("click", handleClickOutside)
+    window.addEventListener("keydown", handleKeyDown)
+    return () => {
+      window.removeEventListener("click", handleClickOutside)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isExportMenuOpen])
 
   // Filter entries based on search
   const filteredEntries = searchQuery.trim()
@@ -155,7 +192,7 @@ export default function TranscriptPanel({
   // Find active entry based on current player timestamp (only in unfiltered view)
   let activeEntryIndex = -1
   if (!searchQuery && filteredEntries.length > 0) {
-    // Binary search over sorted seconds â€” cheaper than findIndex scans on
+    // Binary search over sorted seconds — cheaper than findIndex scans on
     // every playback tick.
     let lo = 0
     let hi = filteredEntries.length - 1
@@ -193,27 +230,165 @@ export default function TranscriptPanel({
     setTimeout(() => setCopiedIndex(null), 2000)
   }
 
+  const handleCopyAll = async () => {
+    if (!entries || entries.length === 0) {
+      showToast(t("toast_no_transcript"), "error")
+      return
+    }
+    try {
+      await copyTranscriptToClipboard(entries, false, docName, docDate)
+      setIsAllCopied(true)
+      showToast(t("toast_transcript_copied"), "success")
+      setTimeout(() => setIsAllCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy transcript:", err)
+      showToast(t("toast_nothing_to_copy"), "error")
+    }
+  }
+
+  const handleExport = (format: TranscriptExportFormat) => {
+    if (!entries || entries.length === 0) {
+      showToast(t("toast_no_transcript"), "error")
+      return
+    }
+    try {
+      downloadTranscriptFile(entries, docName || "Transcript", format, docDate)
+      showToast(t("toast_transcript_exported"), "success")
+      setIsExportMenuOpen(false)
+    } catch (err) {
+      console.error("Failed to export transcript:", err)
+      showToast(t("toast_download_failed"), "error")
+    }
+  }
+
   return (
     <div
       className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col bg-surface relative"
       ref={containerRef}
     >
-      {/* Sticky Header: Search Bar & Match Counter */}
+      {/* Sticky Header: Title, Actions & Search Bar */}
       <div className="p-3.5 sm:p-4 sticky top-0 border-b border-border bg-surface z-20 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Quotes size={15} weight="duotone" className="text-fg-tertiary" />
-            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-fg-secondary">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Quotes + Title + Count */}
+          <div className="flex items-center gap-2 min-w-0">
+            <Quotes size={15} weight="duotone" className="text-fg-tertiary flex-shrink-0" />
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-fg-secondary truncate">
               {t("transcript_title")}
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-3 text-fg-tertiary border border-border">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-3 text-fg-tertiary border border-border flex-shrink-0">
               {entries.length}
             </span>
           </div>
 
-          <span className="text-[10px] font-mono text-fg-tertiary hidden sm:inline">
-            {t("jump_hint")}
-          </span>
+          {/* Right: Actions (Copy All, Export Dropdown) */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Copy All Button */}
+            <button
+              type="button"
+              onClick={handleCopyAll}
+              disabled={entries.length === 0}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              title={t("btn_copy_all_transcript")}
+              aria-label={t("btn_copy_all_transcript")}
+            >
+              {isAllCopied ? (
+                <Check size={13} className="text-success" weight="bold" />
+              ) : (
+                <Copy size={13} weight="duotone" />
+              )}
+              <span className="hidden sm:inline">{t("btn_copy_all_transcript")}</span>
+            </button>
+
+            {/* Export Dropdown */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsExportMenuOpen((prev) => !prev)
+                }}
+                disabled={entries.length === 0}
+                aria-expanded={isExportMenuOpen}
+                aria-haspopup="menu"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                title={t("btn_export_transcript_full")}
+              >
+                <DownloadSimple size={13} weight="duotone" />
+                <span>{t("btn_export_transcript")}</span>
+                <CaretDown
+                  size={11}
+                  weight="bold"
+                  className={`transition-transform duration-200 ${isExportMenuOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {/* Elevated Dropdown Menu */}
+              {isExportMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-1.5 w-64 rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-3 py-1.5 border-b border-border mb-1">
+                    <p className="text-[10px] font-mono font-semibold uppercase tracking-wider text-fg-tertiary">
+                      {t("btn_export_transcript_full")}
+                    </p>
+                  </div>
+
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => handleExport("plain")}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
+                  >
+                    <FileText size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
+                        {t("export_plain_text")}
+                      </span>
+                      <span className="text-[10px] text-fg-tertiary block leading-tight">
+                        {t("export_plain_text_desc")}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => handleExport("timestamps")}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
+                  >
+                    <Clock size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
+                        {t("export_with_timestamps")}
+                      </span>
+                      <span className="text-[10px] text-fg-tertiary block leading-tight">
+                        {t("export_with_timestamps_desc")}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    role="menuitem"
+                    type="button"
+                    onClick={() => handleExport("srt")}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
+                  >
+                    <ClosedCaptioning size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
+                        {t("export_srt")}
+                      </span>
+                      <span className="text-[10px] text-fg-tertiary block leading-tight">
+                        {t("export_srt_desc")}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Search Engine Input */}
