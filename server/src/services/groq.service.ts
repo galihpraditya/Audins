@@ -71,12 +71,26 @@ async function transcribeSingleFile(
   groq: Groq,
   filePath: string,
   timeOffset = 0,
+  language?: string,
+  prompt?: string,
 ): Promise<TranscriptEntry[]> {
-  const transcription = await groq.audio.transcriptions.create({
+  const options: Parameters<typeof groq.audio.transcriptions.create>[0] = {
     file: await toFile(fs.createReadStream(filePath), path.basename(filePath)),
     model: "whisper-large-v3",
     response_format: "verbose_json",
-  })
+  }
+
+  // Force language if specified and not "auto" to prevent Whisper from locking onto opening words
+  if (language && language !== "auto") {
+    options.language = language
+  }
+
+  // Pass prompt (glossary/context hint) to guide Whisper's vocabulary and spelling
+  if (prompt && prompt.trim()) {
+    options.prompt = prompt.trim().slice(0, 500)
+  }
+
+  const transcription = await groq.audio.transcriptions.create(options)
 
   const verboseTranscription =
     transcription as unknown as GroqVerboseJsonTranscription
@@ -111,11 +125,13 @@ async function transcribeSingleFileWithRetry(
   filePath: string,
   timeOffset = 0,
   maxRetries = 2,
+  language?: string,
+  prompt?: string,
 ): Promise<TranscriptEntry[]> {
   let lastError: unknown
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await transcribeSingleFile(groq, filePath, timeOffset)
+      return await transcribeSingleFile(groq, filePath, timeOffset, language, prompt)
     } catch (err) {
       lastError = err
       if (attempt < maxRetries) {
@@ -149,6 +165,8 @@ function convertAudioToMp3(
 export async function transcribeAudioWithGroq(
   filePath: string,
   customApiKey?: string,
+  language?: string,
+  prompt?: string,
 ): Promise<TranscriptionResult> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
 
@@ -182,7 +200,14 @@ export async function transcribeAudioWithGroq(
 
     // If file is <= 24MB, transcribe directly in one request
     if (fileSizeInMB <= 24) {
-      const entries = await transcribeSingleFileWithRetry(groq, targetFilePath)
+      const entries = await transcribeSingleFileWithRetry(
+        groq,
+        targetFilePath,
+        0,
+        2,
+        language,
+        prompt,
+      )
       return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
@@ -239,6 +264,9 @@ export async function transcribeAudioWithGroq(
             groq,
             chunkPath,
             startTime,
+            2,
+            language,
+            prompt,
           )
           console.log(`Transcribed chunk ${index + 1}/${numChunks}`)
         } catch (chunkErr) {

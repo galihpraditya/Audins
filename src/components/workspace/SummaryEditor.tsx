@@ -244,10 +244,11 @@ export default function SummaryEditor({
               type="button"
               onClick={handleCopyAll}
               className="text-xs px-2.5 sm:px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5 cursor-pointer min-h-[34px]"
-              title={t("btn_copy_all")}
+              title={t("btn_copy_summary")}
+              aria-label={t("btn_copy_summary")}
             >
               <Copy size={15} weight="duotone" />
-              <span className="hidden xs:inline">{t("btn_copy_all")}</span>
+              <span className="hidden xs:inline">{t("btn_copy_summary")}</span>
             </button>
 
             <button
@@ -358,7 +359,7 @@ export default function SummaryEditor({
             {isEditing ? (
               <>
                 <Check size={16} weight="bold" />
-                <span>{t("btn_save_markdown")}</span>
+                <span>{t("btn_save_changes")}</span>
               </>
             ) : (
               <>

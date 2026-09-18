@@ -14,6 +14,7 @@ import {
   DownloadSimple,
   Copy,
   Trash,
+  HardDrives,
   FileAudio,
   MagnifyingGlass,
   GridFour,
@@ -25,16 +26,22 @@ interface RecentDocsTableProps {
   documents: DocumentItem[]
   isLoading?: boolean
   onDeleteDocument: (id: number | string) => void
+  onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
   onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
+  showAllMode?: boolean
+  title?: string
 }
 
 export default function RecentDocsTable({
   documents,
   isLoading = false,
   onDeleteDocument,
+  onDeleteAudioOnly,
   onRenameDocument,
   onDuplicateDocument,
+  showAllMode = false,
+  title,
 }: RecentDocsTableProps) {
   const navigate = useNavigate()
   const { t } = useLanguage()
@@ -51,6 +58,8 @@ export default function RecentDocsTable({
   const [statusFilter, setStatusFilter] = useState<"all" | "Completed" | "Processing">("all")
 
   const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(null)
+  const [deleteAudioModalDoc, setDeleteAudioModalDoc] = useState<DocumentItem | null>(null)
+  const [isDeletingAudio, setIsDeletingAudio] = useState(false)
   const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(null)
   const [renameValue, setRenameValue] = useState("")
 
@@ -129,6 +138,8 @@ export default function RecentDocsTable({
           showToast(t("toast_download_failed"), "error")
         }
       }
+    } else if (action === "delete_audio") {
+      setDeleteAudioModalDoc(doc)
     } else if (action === "delete") {
       setDeleteModalDoc(doc)
     }
@@ -168,6 +179,16 @@ export default function RecentDocsTable({
               <span>{act.text}</span>
             </button>
           ))}
+          {doc.audioUrl && doc.audioUrl !== "Expired" && (
+            <button
+              role="menuitem"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-amber-500 hover:bg-amber-500/10 transition-colors"
+              onClick={(e) => handleActionClick(e, "delete_audio", doc)}
+            >
+              <HardDrives size={15} weight="duotone" />
+              <span>{t("action_delete_audio")}</span>
+            </button>
+          )}
           <div className="my-1 mx-2 h-px bg-border" />
           <button
             role="menuitem"
@@ -189,6 +210,17 @@ export default function RecentDocsTable({
     }
   }
 
+  const confirmDeleteAudio = async () => {
+    if (!deleteAudioModalDoc || !onDeleteAudioOnly) return
+    try {
+      setIsDeletingAudio(true)
+      await onDeleteAudioOnly(deleteAudioModalDoc.id)
+      setDeleteAudioModalDoc(null)
+    } finally {
+      setIsDeletingAudio(false)
+    }
+  }
+
   const confirmRename = () => {
     if (renameModalDoc && renameValue.trim()) {
       onRenameDocument(renameModalDoc.id, renameValue.trim())
@@ -202,7 +234,7 @@ export default function RecentDocsTable({
     { id: "duplicate", text: t("action_duplicate"), icon: <Copy size={15} weight="duotone" /> },
   ] as const
   const isSearchingOrFiltering = searchQuery.trim().length > 0 || statusFilter !== "all"
-  const displayedDocs = isSearchingOrFiltering ? filteredDocs : filteredDocs.slice(0, 6)
+  const displayedDocs = (showAllMode || isSearchingOrFiltering) ? filteredDocs : filteredDocs.slice(0, 6)
 
   return (
     <div className="space-y-4">
@@ -237,6 +269,45 @@ export default function RecentDocsTable({
         </Modal>
       )}
 
+      {/* Delete Audio confirmation modal */}
+      {deleteAudioModalDoc && (
+        <Modal
+          onClose={() => !isDeletingAudio && setDeleteAudioModalDoc(null)}
+          labelledBy="delete-audio-modal-title"
+          panelClassName="bg-surface border border-amber-500/25 w-full max-w-sm rounded-xl p-6 shadow-raised animate-scale-in"
+        >
+          <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center mb-4 text-amber-500">
+            <HardDrives size={24} weight="duotone" />
+          </div>
+          <h3 id="delete-audio-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+            {t("modal_delete_audio_title")}
+          </h3>
+          <p className="text-xs text-fg-secondary mb-3 leading-relaxed">
+            {t("modal_delete_audio_desc")}{" "}
+            <span className="font-semibold text-fg">"{deleteAudioModalDoc.name}"</span>?
+          </p>
+          <div className="p-3 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/90 leading-relaxed">
+            ⚠️ {t("modal_delete_audio_warning")}
+          </div>
+          <div className="flex gap-2.5 justify-end">
+            <button
+              onClick={() => setDeleteAudioModalDoc(null)}
+              disabled={isDeletingAudio}
+              className="px-4 py-2.5 text-xs font-semibold text-fg-secondary hover:text-fg bg-surface-2 hover:bg-surface-3 border border-border rounded-xl transition-colors min-h-[36px] cursor-pointer disabled:opacity-50"
+            >
+              {t("btn_cancel")}
+            </button>
+            <button
+              onClick={confirmDeleteAudio}
+              disabled={isDeletingAudio}
+              className="px-4 py-2.5 text-xs font-semibold text-black bg-amber-500 hover:bg-amber-400 rounded-xl transition-colors min-h-[36px] cursor-pointer disabled:opacity-50"
+            >
+              {isDeletingAudio ? t("btn_deleting") : t("action_delete_audio")}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {/* Rename modal */}
       {renameModalDoc && (
         <Modal onClose={() => setRenameModalDoc(null)} labelledBy="rename-modal-title" panelClassName="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-raised animate-scale-in">
@@ -259,7 +330,7 @@ export default function RecentDocsTable({
             }}
             autoFocus
             className="w-full px-3.5 py-2.5 text-xs bg-surface-2 border border-border rounded-xl text-fg outline-none focus:border-primary/50 mb-4"
-            placeholder="Recording Name..."
+            placeholder={t("modal_rename_placeholder")}
           />
           <div className="flex gap-2.5 justify-end">
             <button
@@ -282,9 +353,17 @@ export default function RecentDocsTable({
       {/* Header controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-base sm:text-lg font-bold font-display text-fg tracking-tight">
-            {t("recent_documents")}
-          </h2>
+          {title !== undefined ? (
+            title ? (
+              <h2 className="text-base sm:text-lg font-bold font-display text-fg tracking-tight">
+                {title}
+              </h2>
+            ) : null
+          ) : (
+            <h2 className="text-base sm:text-lg font-bold font-display text-fg tracking-tight">
+              {showAllMode ? t("workspace_library_title") : t("recent_documents")}
+            </h2>
+          )}
         </div>
 
         {/* Search, Filter, View Mode Toggle */}
@@ -325,7 +404,7 @@ export default function RecentDocsTable({
             </div>
 
             {/* Grid / Table Toggle — hidden on small viewports */}
-            <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="View mode">
+            <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label={t("a11y_view_mode")}>
             <button
               onClick={() => toggleViewMode("grid")}
               aria-pressed={effectiveViewMode === "grid"}
@@ -462,6 +541,16 @@ export default function RecentDocsTable({
                               <span>{act.text}</span>
                             </button>
                           ))}
+                          {doc.audioUrl && doc.audioUrl !== "Expired" && (
+                            <button
+                              role="menuitem"
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                              onClick={(e) => handleActionClick(e, "delete_audio", doc)}
+                            >
+                              <HardDrives size={14} weight="duotone" />
+                              <span>{t("action_delete_audio")}</span>
+                            </button>
+                          )}
                           <div className="my-1 mx-2 h-px bg-border" />
                           <button
                             role="menuitem"
@@ -483,7 +572,7 @@ export default function RecentDocsTable({
       )}
 
       {/* Show All Link Button on Dashboard */}
-      {filteredDocs.length > 6 && !isSearchingOrFiltering && (
+      {!showAllMode && filteredDocs.length > 6 && !isSearchingOrFiltering && (
         <div className="flex justify-center pt-2">
           <button
             onClick={() => navigate("/workspace")}

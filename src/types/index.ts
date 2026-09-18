@@ -36,6 +36,12 @@ export interface DocumentItem {
   warnings?: string[]
 }
 
+export interface RetranscribeOptions {
+  language?: string
+  prompt?: string
+  regenerateSummary?: boolean
+}
+
 export interface RateLimitResponse {
   remaining: number
   maxLimit: number

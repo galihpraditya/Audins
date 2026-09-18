@@ -83,7 +83,7 @@ export async function getAllDocuments(
 
   const allLocalDocs = Array.from(documentsStore.values())
   if (userId) {
-    return allLocalDocs.filter((d) => d.userId === userId)
+    return allLocalDocs.filter((d) => !d.userId || d.userId === userId)
   }
   return allLocalDocs
 }
@@ -155,6 +155,44 @@ export async function deleteDocument(id: string): Promise<boolean> {
   }
 
   return true
+}
+
+/**
+ * Deletes only the audio blob for a document to free storage quota while
+ * preserving transcripts, AI summary, and metadata.
+ */
+export async function deleteDocumentAudio(
+  id: string,
+): Promise<FullDocument | null> {
+  const doc = await getDocumentById(id)
+  if (!doc) return null
+
+  if (doc.audioUrl && doc.audioUrl !== "Expired") {
+    try {
+      const url = new URL(doc.audioUrl)
+      const fileName = path.basename(url.pathname)
+
+      // Refcount check: ensure no other document shares this audio blob (e.g. duplicates)
+      const allDocs = await getAllDocuments()
+      const stillReferenced = allDocs.some(
+        (other) =>
+          other.id !== id &&
+          other.audioUrl &&
+          other.audioUrl !== "Expired" &&
+          path.basename(new URL(other.audioUrl).pathname) === fileName,
+      )
+
+      if (!stillReferenced) {
+        await deleteBlobForUrl(doc.audioUrl)
+      }
+    } catch (e) {
+      console.error("Failed to evaluate blob refs on audio delete:", e)
+    }
+  }
+
+  doc.audioUrl = undefined
+  doc.sizeBytes = 0
+  return await saveDocument(doc)
 }
 
 export async function cleanupExpiredAudio(): Promise<void> {

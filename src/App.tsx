@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom"
-import { DocumentItem } from "./types"
+import { DocumentItem, RetranscribeOptions } from "./types"
 import Sidebar from "./components/layout/Sidebar"
 import MobileNav from "./components/layout/MobileNav"
 import TopHeader from "./components/layout/TopHeader"
@@ -16,6 +16,8 @@ import {
   reSummarizeApi,
   fetchDocumentsFromApi,
   deleteDocumentApi,
+  deleteAudioOnlyApi,
+  retranscribeDocumentApi,
   renameDocumentApi,
   duplicateDocumentApi,
   updateDocumentSummaryApi,
@@ -398,6 +400,52 @@ export default function App() {
     }
   }
 
+  const handleDeleteAudioOnly = async (id: number | string) => {
+    try {
+      const updatedDoc = await deleteAudioOnlyApi(id)
+      revokeTempBlob(id)
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
+      )
+      showToast(t("toast_audio_deleted"), "success")
+      void refreshFromServer()
+    } catch (err) {
+      showToast(
+        t("toast_audio_delete_failed", { error: (err as Error).message }),
+        "error",
+      )
+    }
+  }
+
+  const handleRetranscribe = async (
+    id: number | string,
+    options: RetranscribeOptions,
+  ) => {
+    const previousDoc = documents.find((d) => d.id === id)
+    if (!previousDoc) return
+
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, status: "Processing" } : d)),
+    )
+
+    try {
+      const updatedDoc = await retranscribeDocumentApi(id, options, userApiKey)
+      setDocuments((prev) =>
+        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
+      )
+      showToast(t("toast_retranscribe_success"), "success")
+      void refreshFromServer()
+    } catch (err) {
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === id ? previousDoc : d)),
+      )
+      showToast(
+        t("toast_retranscribe_failed", { error: (err as Error).message }),
+        "error",
+      )
+    }
+  }
+
   const handleRenameDocument = async (id: number | string, newName: string) => {
     try {
       const updatedDoc = await renameDocumentApi(id, newName)
@@ -505,6 +553,7 @@ export default function App() {
                 onUploadFile={handleUploadFile}
                 onOpenLiveRecorder={handleOpenLiveRecorder}
                 onDeleteDocument={handleDeleteDocument}
+                onDeleteAudioOnly={handleDeleteAudioOnly}
                 onRenameDocument={handleRenameDocument}
                 onDuplicateDocument={handleDuplicateDocument}
                 setModal={setRateModalOpen}
@@ -522,6 +571,8 @@ export default function App() {
                 isLoading={initialLoading}
                 onReSummarize={handleReSummarize}
                 onDeleteDocument={handleDeleteDocument}
+                onDeleteAudioOnly={handleDeleteAudioOnly}
+                onRetranscribe={handleRetranscribe}
                 onRenameDocument={handleRenameDocument}
                 onDuplicateDocument={handleDuplicateDocument}
                 onUpdateSummary={handleUpdateSummary}
@@ -537,6 +588,8 @@ export default function App() {
                 isLoading={initialLoading}
                 onReSummarize={handleReSummarize}
                 onDeleteDocument={handleDeleteDocument}
+                onDeleteAudioOnly={handleDeleteAudioOnly}
+                onRetranscribe={handleRetranscribe}
                 onRenameDocument={handleRenameDocument}
                 onDuplicateDocument={handleDuplicateDocument}
                 onUpdateSummary={handleUpdateSummary}

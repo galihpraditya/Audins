@@ -6,6 +6,7 @@ import {
   AuthResponse,
   LoginCredentials,
   RegisterCredentials,
+  RetranscribeOptions,
 } from "../types"
 
 // In development default to the local Express backend; in production builds
@@ -284,6 +285,39 @@ export async function deleteDocumentApi(id: string | number): Promise<void> {
   if (!res.ok && res.status !== 404) {
     throw await extractErrorMessage(res, "Failed to delete document")
   }
+}
+
+export async function deleteAudioOnlyApi(
+  id: string | number,
+): Promise<DocumentItem> {
+  const res = await fetch(`${API_BASE_URL}/documents/${id}/audio`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  })
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to delete audio file")
+  return (await res.json()) as DocumentItem
+}
+
+export async function retranscribeDocumentApi(
+  id: string | number,
+  options: RetranscribeOptions,
+  userApiKey?: string,
+): Promise<DocumentItem> {
+  const headers = authHeaders({
+    "Content-Type": "application/json",
+  })
+  if (userApiKey) {
+    headers["X-Groq-API-Key"] = userApiKey
+  }
+
+  const res = await fetch(`${API_BASE_URL}/documents/${id}/retranscribe`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(options),
+  })
+
+  if (!res.ok) throw await extractErrorMessage(res, "Re-transcribe failed")
+  return (await res.json()) as DocumentItem
 }
 
 export async function renameDocumentApi(

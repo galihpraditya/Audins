@@ -13,6 +13,7 @@ import {
   FileText,
   ClosedCaptioning,
   CaretDown,
+  ArrowsClockwise,
 } from "@phosphor-icons/react"
 import {
   downloadTranscriptFile,
@@ -26,6 +27,8 @@ interface TranscriptPanelProps {
   onSeekTo: (seconds: number) => void
   docName?: string
   docDate?: string
+  onRetranscribe?: () => void
+  hasAudio?: boolean
 }
 
 /** Escapes user input before building a RegExp (typing "(" used to crash). */
@@ -151,6 +154,8 @@ export default function TranscriptPanel({
   onSeekTo,
   docName,
   docDate,
+  onRetranscribe,
+  hasAudio = true,
 }: TranscriptPanelProps) {
   const { t } = useLanguage()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -280,23 +285,38 @@ export default function TranscriptPanel({
             </span>
           </div>
 
-          {/* Right: Actions (Copy All, Export Dropdown) */}
+          {/* Right: Actions (Copy All, Export Dropdown, Re-transcribe) */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Re-transcribe Button */}
+            {onRetranscribe && (
+              <button
+                type="button"
+                onClick={onRetranscribe}
+                disabled={!hasAudio}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-primary border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer min-h-[34px]"
+                title={hasAudio ? t("btn_retranscribe") : t("retranscribe_disabled_no_audio")}
+                aria-label={t("btn_retranscribe")}
+              >
+                <ArrowsClockwise size={13} weight="bold" />
+                <span className="hidden sm:inline">{t("btn_retranscribe")}</span>
+              </button>
+            )}
+
             {/* Copy All Button */}
             <button
               type="button"
               onClick={handleCopyAll}
               disabled={entries.length === 0}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer min-h-[34px]"
-              title={t("btn_copy_all_transcript")}
-              aria-label={t("btn_copy_all_transcript")}
+              title={t("btn_copy_transcript")}
+              aria-label={t("btn_copy_transcript")}
             >
               {isAllCopied ? (
                 <Check size={13} className="text-success" weight="bold" />
               ) : (
                 <Copy size={13} weight="duotone" />
               )}
-              <span className="hidden sm:inline">{t("btn_copy_all_transcript")}</span>
+              <span className="hidden sm:inline">{t("btn_copy_transcript")}</span>
             </button>
 
             {/* Export Dropdown */}

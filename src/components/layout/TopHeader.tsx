@@ -38,7 +38,8 @@ export default function TopHeader({ onOpenMobileNav }: TopHeaderProps) {
           <button
             onClick={onOpenMobileNav}
             className="md:hidden p-2 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors"
-            aria-label="Open Navigation"
+            aria-label={t("a11y_expand_sidebar")}
+            title={t("a11y_expand_sidebar")}
           >
             <List size={18} weight="bold" />
           </button>

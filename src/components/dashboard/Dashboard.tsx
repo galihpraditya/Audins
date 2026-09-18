@@ -9,6 +9,7 @@ interface DashboardProps {
   onUploadFile: (file: File) => void
   onOpenLiveRecorder: () => void
   onDeleteDocument: (id: number | string) => void
+  onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
   onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
   setModal: (v: boolean) => void
@@ -23,6 +24,7 @@ export default function Dashboard({
   onUploadFile,
   onOpenLiveRecorder,
   onDeleteDocument,
+  onDeleteAudioOnly,
   onRenameDocument,
   onDuplicateDocument,
   setModal,
@@ -60,6 +62,7 @@ export default function Dashboard({
           documents={documents}
           isLoading={isLoading}
           onDeleteDocument={onDeleteDocument}
+          onDeleteAudioOnly={onDeleteAudioOnly}
           onRenameDocument={onRenameDocument}
           onDuplicateDocument={onDuplicateDocument}
         />

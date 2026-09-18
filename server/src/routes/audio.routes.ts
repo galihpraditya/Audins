@@ -16,6 +16,7 @@ import {
   getDocumentById,
   saveDocument,
   deleteDocument,
+  deleteDocumentAudio,
   renameDocument,
   duplicateDocument,
   calculateStorageUsed,
@@ -147,7 +148,7 @@ async function requireOwnedDocument(
     return null
   }
 
-  if (!doc || doc.userId !== userId) {
+  if (!doc || (doc.userId && doc.userId !== userId)) {
     res.status(404).json({ error: "Document not found" })
     return null
   }
@@ -488,6 +489,126 @@ router.delete("/documents/:id", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to delete document" })
   }
 })
+
+// DELETE /api/v1/documents/:id/audio - Delete audio file only to free storage
+router.delete("/documents/:id/audio", async (req: Request, res: Response) => {
+  const doc = await requireOwnedDocument(req, res)
+  if (!doc) return
+
+  try {
+    if (!doc.audioUrl || doc.audioUrl === "Expired") {
+      res.status(400).json({ error: "Audio file already deleted or not available" })
+      return
+    }
+
+    const updated = await deleteDocumentAudio(doc.id)
+    if (!updated) {
+      res.status(404).json({ error: "Document not found" })
+      return
+    }
+
+    res.json(updated)
+  } catch (error) {
+    console.error("Delete audio error:", error)
+    res.status(500).json({ error: "Failed to delete audio file" })
+  }
+})
+
+// POST /api/v1/documents/:id/retranscribe - Re-transcribe audio with forced language
+router.post(
+  "/documents/:id/retranscribe",
+  checkPortfolioRateLimit,
+  async (req: Request, res: Response) => {
+    const doc = await requireOwnedDocument(req, res)
+    if (!doc) return
+
+    if (!doc.audioUrl || doc.audioUrl === "Expired") {
+      res.status(400).json({
+        error: "Audio file is not available. Cannot re-transcribe because the audio has been deleted.",
+      })
+      return
+    }
+
+    const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
+    const { language, prompt, regenerateSummary = true } = req.body || {}
+
+    let workingFilePath = ""
+    let isTempFile = false
+
+    try {
+      // 1. Locate local audio file or stream from cloud storage (R2/Supabase)
+      if (doc.audioUrl.includes("/uploads/")) {
+        const localBasename = path.basename(doc.audioUrl.split("?")[0])
+        const localFilePath = path.join(UPLOADS_DIR, localBasename)
+        if (fs.existsSync(localFilePath)) {
+          workingFilePath = localFilePath
+        }
+      }
+
+      if (!workingFilePath) {
+        // Remote cloud file: fetch and write to temp local file for Whisper & FFmpeg
+        const parsedUrl = new URL(doc.audioUrl)
+        const ext = path.extname(parsedUrl.pathname) || ".mp3"
+        workingFilePath = path.join(
+          UPLOADS_DIR,
+          `temp-retranscribe-${uuidv4()}${ext}`,
+        )
+        isTempFile = true
+
+        const audioRes = await fetch(doc.audioUrl)
+        if (!audioRes.ok || !audioRes.body) {
+          throw new Error("Failed to fetch audio stream from cloud storage")
+        }
+
+        const fileStream = fs.createWriteStream(workingFilePath)
+        await pipeline(
+          Readable.fromWeb(audioRes.body as import("node:stream/web").ReadableStream),
+          fileStream,
+        )
+      }
+
+      // 2. Transcribe with Whisper using specified language and prompt
+      const result = await transcribeAudioWithGroq(
+        workingFilePath,
+        customApiKey,
+        language,
+        prompt,
+      )
+
+      doc.transcripts = result.entries
+      if (result.failedChunks > 0) {
+        doc.warnings = [
+          `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
+        ]
+      } else {
+        doc.warnings = undefined
+      }
+
+      // 3. Optionally regenerate summary with new transcript
+      if (regenerateSummary) {
+        const fullText = result.entries.map((t: TranscriptEntry) => t.text).join(" ")
+        if (fullText.trim()) {
+          const summary = await summarizeTranscriptWithGroq(
+            fullText,
+            doc.name,
+            customApiKey,
+          )
+          doc.summary = summary
+        }
+      }
+
+      await saveDocument(doc)
+      res.json(doc)
+    } catch (error: any) {
+      console.error("Retranscribe error:", error)
+      res.status(500).json({ error: error?.message || "Failed to re-transcribe audio" })
+    } finally {
+      if (isTempFile && workingFilePath && fs.existsSync(workingFilePath)) {
+        await fs.promises.unlink(workingFilePath).catch(() => {})
+      }
+    }
+  },
+)
 
 // GET /api/v1/documents/:id/download - Authenticated download proxy with
 // proper original filename and extension.

@@ -14,6 +14,8 @@ import {
   Waveform,
   Spinner,
   WarningCircle,
+  HardDrives,
+  Trash,
 } from "@phosphor-icons/react"
 
 interface AudioPlayerProps {
@@ -22,6 +24,7 @@ interface AudioPlayerProps {
   setCurrentTime: (time: number) => void
   durationSeconds?: number
   onDownload?: () => void
+  onDeleteAudio?: () => void
   /**
    * Controlled play state. When provided (by Workspace), a second compact
    * instance elsewhere in the tree can drive the SAME playback without
@@ -39,6 +42,7 @@ export default function AudioPlayer({
   setCurrentTime,
   durationSeconds: initialDurationSec = 0,
   onDownload,
+  onDeleteAudio,
   isPlaying: controlledPlaying,
   onPlayingChange,
   compact = false,
@@ -283,7 +287,7 @@ export default function AudioPlayer({
           </div>
         </div>
 
-        {onDownload && (
+        {onDownload && !isAudioMissingOrExpired && (
           <button
             onClick={onDownload}
             className="p-2 text-fg-tertiary hover:text-fg hover:bg-surface-2 rounded-lg transition-colors flex-shrink-0 cursor-pointer"
@@ -291,6 +295,16 @@ export default function AudioPlayer({
             aria-label={t("a11y_download_audio")}
           >
             <DownloadSimple size={14} weight="duotone" />
+          </button>
+        )}
+        {onDeleteAudio && !isAudioMissingOrExpired && (
+          <button
+            onClick={onDeleteAudio}
+            className="p-2 text-fg-tertiary hover:text-danger hover:bg-danger-dim rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+            title={t("action_delete_audio")}
+            aria-label={t("action_delete_audio")}
+          >
+            <Trash size={14} weight="duotone" />
           </button>
         )}
       </div>
@@ -306,7 +320,7 @@ export default function AudioPlayer({
 
   return (
     <div className="flex-shrink-0 p-3 sm:p-5 border-b border-border bg-surface relative select-none print:hidden">
-      {audioUrl && !compact && (
+      {audioUrl && !compact && !isAudioMissingOrExpired && (
         <audio
           ref={audioRef}
           src={audioUrl}
@@ -321,41 +335,65 @@ export default function AudioPlayer({
       {/* Header bar: Status & Playback Rate selector */}
       <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center flex-shrink-0 ${audioError || isAudioMissingOrExpired ? "bg-danger" : "bg-primary"}`}>
+          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center flex-shrink-0 ${audioError ? "bg-danger" : isAudioMissingOrExpired ? "bg-fg-tertiary" : "bg-primary"}`}>
             {playing && <span className="w-1.5 h-1.5 rounded-full bg-primary-contrast animate-ping" />}
           </div>
           <span className="text-[10px] sm:text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary flex items-center gap-1.5 truncate">
-            <Waveform size={14} weight="duotone" className={`flex-shrink-0 ${audioError || isAudioMissingOrExpired ? "text-danger" : "text-primary"}`} />
+            <Waveform size={14} weight="duotone" className={`flex-shrink-0 ${audioError ? "text-danger" : isAudioMissingOrExpired ? "text-fg-tertiary" : "text-primary"}`} />
             <span className="truncate">{audioUrl && !isAudioMissingOrExpired ? t("audio_player") : t("no_audio")}</span>
           </span>
         </div>
 
-        {/* Speed Selector */}
-        <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0" role="group" aria-label="Playback speed">
-          <Gauge size={13} className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block" />
-          {speedOptions.map((spd) => (
+        <div className="flex items-center gap-2">
+          {/* Delete Audio Button */}
+          {onDeleteAudio && !isAudioMissingOrExpired && (
             <button
-              key={spd}
-              onClick={() => setPlaybackRate(spd)}
-              aria-pressed={playbackRate === spd}
-              className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-[10px] font-mono font-semibold transition-colors cursor-pointer ${
-                playbackRate === spd
-                  ? "bg-primary text-primary-contrast shadow-sm"
-                  : "text-fg-tertiary hover:text-fg"
-              }`}
+              onClick={onDeleteAudio}
+              className="p-1.5 text-fg-tertiary hover:text-danger hover:bg-danger-dim rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+              title={t("action_delete_audio")}
+              aria-label={t("action_delete_audio")}
             >
-              {spd}x
+              <Trash size={15} weight="duotone" />
             </button>
-          ))}
+          )}
+
+          {/* Speed Selector */}
+          <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0" role="group" aria-label="Playback speed">
+            <Gauge size={13} className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block" />
+            {speedOptions.map((spd) => (
+              <button
+                key={spd}
+                onClick={() => setPlaybackRate(spd)}
+                aria-pressed={playbackRate === spd}
+                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-[10px] font-mono font-semibold transition-colors cursor-pointer ${
+                  playbackRate === spd
+                    ? "bg-primary text-primary-contrast shadow-sm"
+                    : "text-fg-tertiary hover:text-fg"
+                }`}
+              >
+                {spd}x
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Audio Error Alert Banner */}
-      {(audioError || isAudioMissingOrExpired) && (
+      {/* Informative Audio Removed Banner */}
+      {isAudioMissingOrExpired && (
+        <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-fg-secondary flex items-center gap-2.5 text-xs animate-scale-in">
+          <HardDrives size={16} weight="duotone" className="flex-shrink-0 text-primary" />
+          <span className="font-medium leading-relaxed">
+            {t("audio_deleted_banner")}
+          </span>
+        </div>
+      )}
+
+      {/* Audio Error Alert Banner (Only when actual playback error occurs) */}
+      {audioError && !isAudioMissingOrExpired && (
         <div className="mb-3 px-3 py-2 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
           <WarningCircle size={16} weight="fill" className="flex-shrink-0" />
           <span className="font-medium">
-            {audioError || t("audio_not_found_desc")}
+            {audioError}
           </span>
         </div>
       )}
@@ -375,7 +413,7 @@ export default function AudioPlayer({
         {waveformLoading && waveformPeaks.length === 0 ? (
           <div className="w-full h-full flex items-center justify-center gap-2 text-xs font-mono text-fg-tertiary">
             <Spinner size={14} className="animate-spin text-primary" />
-            <span>Memproses gelombang suara...</span>
+            <span>{t("loading_waveform")}</span>
           </div>
         ) : (
           (waveformPeaks.length > 0 ? waveformPeaks : Array(64).fill(25)).map((peakHeight, i, arr) => {
@@ -525,7 +563,8 @@ export default function AudioPlayer({
           disabled={!audioUrl}
           onClick={togglePlay}
           className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:scale-95 cursor-pointer shadow-sm"
-          aria-label={playing ? "Pause audio" : "Play audio"}
+          aria-label={playing ? t("btn_pause") : t("a11y_play_audio")}
+          title={playing ? t("btn_pause") : t("a11y_play_audio")}
         >
           {playing ? (
             <Pause size={20} weight="fill" />
