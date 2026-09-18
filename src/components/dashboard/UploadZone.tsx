@@ -110,28 +110,28 @@ export default function UploadZone({
         className="hidden"
       />
 
-      <div className="flex flex-col items-center justify-center py-10 sm:py-14 px-6 sm:px-10 text-center">
+      <div className="flex flex-col items-center justify-center py-8 sm:py-14 px-4 sm:px-10 text-center">
         {/* Icon */}
         <div
-          className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-surface-2 border flex items-center justify-center mb-5 transition-colors duration-200 ${dragging ? "border-primary/40 text-primary" : "border-border text-fg-tertiary"
+          className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-surface-2 border flex items-center justify-center mb-4 sm:mb-5 transition-colors duration-200 ${dragging ? "border-primary/40 text-primary" : "border-border text-fg-tertiary"
             }`}
         >
-          <CloudArrowUp size={30} weight="duotone" />
+          <CloudArrowUp size={28} weight="duotone" className="sm:scale-110" />
         </div>
 
         {/* Title & Description */}
         <h2 className="text-base sm:text-lg font-bold font-display tracking-tight text-fg mb-1.5">
           {dragging ? t("upload_drop_title") : t("upload_title")}
         </h2>
-        <p className="text-xs sm:text-sm text-fg-secondary max-w-md mb-6 leading-relaxed">
+        <p className="text-xs sm:text-sm text-fg-secondary max-w-md mb-5 sm:mb-6 leading-relaxed">
           {t("upload_desc")}
         </p>
 
         {/* Action Buttons: Browse File + Record Live Audio */}
-        <div className="flex flex-wrap items-center justify-center gap-2.5 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 mb-5 sm:mb-6 w-full sm:w-auto max-w-xs sm:max-w-none">
           <button
             onClick={handleBrowseClick}
-            className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-primary hover:bg-primary-hover text-primary-contrast transition-colors flex items-center gap-2 min-h-[38px] shadow-sm cursor-pointer"
+            className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-primary hover:bg-primary-hover text-primary-contrast transition-colors flex items-center justify-center gap-2 min-h-[40px] shadow-sm cursor-pointer w-full sm:w-auto"
           >
             <FolderOpen size={15} weight="duotone" />
             <span>{t("browse_device")}</span>
@@ -139,7 +139,7 @@ export default function UploadZone({
 
           <button
             onClick={handleRecordClick}
-            className="group px-4 py-2.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-danger/40 text-fg-secondary hover:text-danger transition-all duration-200 flex items-center gap-2 min-h-[38px] cursor-pointer hover:shadow-sm"
+            className="group px-4 py-2.5 rounded-lg text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-danger/40 text-fg-secondary hover:text-danger transition-all duration-200 flex items-center justify-center gap-2 min-h-[40px] cursor-pointer hover:shadow-sm w-full sm:w-auto"
           >
             <Microphone size={15} weight="duotone" className="text-danger group-hover:scale-110 transition-transform duration-200" />
             <span>{t("btn_record_live")}</span>

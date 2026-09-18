@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect, MouseEvent } from "react"
+import { useState, useMemo, useEffect, MouseEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { DocumentItem } from "../../types"
 import StatusBadge from "./StatusBadge"
@@ -288,8 +288,8 @@ export default function RecentDocsTable({
         </div>
 
         {/* Search, Filter, View Mode Toggle */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2.5">
+          <div className="relative w-full sm:w-64">
             <MagnifyingGlass
               size={15}
               className="text-fg-tertiary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
@@ -303,28 +303,29 @@ export default function RecentDocsTable({
               placeholder={t("search_documents")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-1.5 rounded-lg text-xs bg-surface-2 border border-border text-fg placeholder:text-fg-tertiary outline-none focus:border-primary/50 transition-colors"
+              className="w-full pl-9 pr-3.5 py-2 sm:py-1.5 rounded-lg text-xs bg-surface-2 border border-border text-fg placeholder:text-fg-tertiary outline-none focus:border-primary/50 transition-colors min-h-[36px]"
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label={t("col_status")}>
-            {(["all", "Completed", "Processing"] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setStatusFilter(filter)}
-                aria-pressed={statusFilter === filter}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${statusFilter === filter
-                    ? "bg-surface text-primary shadow-card"
-                    : "text-fg-tertiary hover:text-fg"
-                  }`}
-              >
-                {filter === "all" ? t("filter_all") : filter === "Completed" ? t("filter_completed") : t("filter_processing")}
-              </button>
-            ))}
-          </div>
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg flex-1 sm:flex-none justify-center" role="group" aria-label={t("col_status")}>
+              {(["all", "Completed", "Processing"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setStatusFilter(filter)}
+                  aria-pressed={statusFilter === filter}
+                  className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer text-center ${statusFilter === filter
+                      ? "bg-surface text-primary shadow-card"
+                      : "text-fg-tertiary hover:text-fg"
+                    }`}
+                >
+                  {filter === "all" ? t("filter_all") : filter === "Completed" ? t("filter_completed") : t("filter_processing")}
+                </button>
+              ))}
+            </div>
 
-          {/* Grid / Table Toggle — hidden on small viewports */}
-          <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="View mode">
+            {/* Grid / Table Toggle — hidden on small viewports */}
+            <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="View mode">
             <button
               onClick={() => toggleViewMode("grid")}
               aria-pressed={effectiveViewMode === "grid"}
@@ -351,6 +352,7 @@ export default function RecentDocsTable({
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Main Content Area */}

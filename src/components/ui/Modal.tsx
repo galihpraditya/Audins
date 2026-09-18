@@ -87,7 +87,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
       onClick={(e) => {
         if (dismissible && e.target === e.currentTarget) onClose()
       }}
@@ -98,7 +98,7 @@ export default function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={`outline-none ${panelClassName}`}
+        className={`outline-none max-h-[calc(100dvh-2rem)] overflow-y-auto ${panelClassName}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

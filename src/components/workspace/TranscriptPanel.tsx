@@ -66,7 +66,7 @@ const TranscriptRow = memo(function TranscriptRow({
       type="button"
       onClick={onSeekTo}
       data-active={isActive ? "true" : "false"}
-      className={`w-full text-left p-3.5 rounded-lg transition-colors duration-150 border cursor-pointer group relative overflow-hidden ${
+      className={`w-full text-left p-3 sm:p-3.5 rounded-lg transition-colors duration-150 border cursor-pointer group relative overflow-hidden ${
         isActive
           ? "bg-primary-dim border-primary/40"
           : "border-transparent bg-surface-2/50 hover:bg-surface-2 hover:border-border"
@@ -115,7 +115,7 @@ const TranscriptRow = memo(function TranscriptRow({
         </div>
 
         {/* Right Action: Copy sentence button & Live Soundwave badge */}
-        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
+        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
           {isActive && (
             <div className="flex items-center gap-0.5 h-3 px-1 text-primary">
               <span className="w-0.5 h-full bg-primary animate-pulse" />
@@ -267,7 +267,7 @@ export default function TranscriptPanel({
       ref={containerRef}
     >
       {/* Sticky Header: Title, Actions & Search Bar */}
-      <div className="p-3.5 sm:p-4 sticky top-0 border-b border-border bg-surface z-20 space-y-2.5">
+      <div className="p-3 sm:p-4 sticky top-0 border-b border-border bg-surface z-20 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           {/* Left: Quotes + Title + Count */}
           <div className="flex items-center gap-2 min-w-0">
@@ -287,7 +287,7 @@ export default function TranscriptPanel({
               type="button"
               onClick={handleCopyAll}
               disabled={entries.length === 0}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer min-h-[34px]"
               title={t("btn_copy_all_transcript")}
               aria-label={t("btn_copy_all_transcript")}
             >
@@ -310,7 +310,7 @@ export default function TranscriptPanel({
                 disabled={entries.length === 0}
                 aria-expanded={isExportMenuOpen}
                 aria-haspopup="menu"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer min-h-[34px]"
                 title={t("btn_export_transcript_full")}
               >
                 <DownloadSimple size={13} weight="duotone" />
@@ -326,7 +326,7 @@ export default function TranscriptPanel({
               {isExportMenuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 mt-1.5 w-64 rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
+                  className="absolute right-0 mt-1.5 w-60 sm:w-64 max-w-[calc(100vw-2rem)] rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="px-3 py-1.5 border-b border-border mb-1">

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { useLanguage } from "../../context/LanguageContext"
 import Modal from "../ui/Modal"
 import Alert from "../ui/Alert"
@@ -13,11 +13,16 @@ import {
   Waveform,
   CheckCircle,
   DeviceMobile,
+  Minus,
+  CornersOut,
 } from "@phosphor-icons/react"
 
 interface LiveRecorderModalProps {
   onClose: () => void
   onUploadFile: (file: File) => void
+  isMinimized?: boolean
+  onMinimize?: () => void
+  onExpand?: () => void
 }
 
 type RecordingState = "idle" | "recording" | "paused" | "preview"
@@ -25,6 +30,9 @@ type RecordingState = "idle" | "recording" | "paused" | "preview"
 export default function LiveRecorderModal({
   onClose,
   onUploadFile,
+  isMinimized = false,
+  onMinimize,
+  onExpand,
 }: LiveRecorderModalProps) {
   const { t } = useLanguage()
   const [recordingState, setRecordingState] = useState<RecordingState>("idle")
@@ -88,6 +96,61 @@ export default function LiveRecorderModal({
   }
 
   // Draw real-time audio visualizer on canvas
+  const startDrawLoop = useCallback(() => {
+    if (!analyserRef.current) return
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+
+    const analyser = analyserRef.current
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    const draw = () => {
+      if (!canvasRef.current || !analyserRef.current) return
+      animFrameRef.current = requestAnimationFrame(draw)
+
+      analyserRef.current.getByteFrequencyData(dataArray)
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const width = canvas.width
+      const height = canvas.height
+
+      // Calculate number of bars to draw
+      const barCount = 32
+      const barWidth = Math.max(3, (width / barCount) - 3)
+      const gap = 3
+
+      for (let i = 0; i < barCount; i++) {
+        // Mirror frequency or distribute evenly
+        const dataIdx = Math.floor((i / barCount) * bufferLength)
+        const value = dataArray[dataIdx] || 0
+
+        // Calculate dynamic bar height
+        const normalized = value / 255
+        const minHeight = 4
+        const barHeight = Math.max(minHeight, normalized * (height - 8))
+
+        const x = i * (barWidth + gap) + 4
+        const y = height / 2 - barHeight / 2
+
+        // Gradient color: glowing coral-red to bright rose
+        const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight)
+        gradient.addColorStop(0, "rgba(244, 63, 94, 0.95)")
+        gradient.addColorStop(0.5, "rgba(225, 29, 72, 0.9)")
+        gradient.addColorStop(1, "rgba(251, 113, 133, 0.8)")
+
+        ctx.fillStyle = gradient
+        ctx.beginPath()
+        ctx.roundRect(x, y, barWidth, barHeight, 3)
+        ctx.fill()
+      }
+    }
+
+    animFrameRef.current = requestAnimationFrame(draw)
+  }, [])
+
   const startVisualizer = (stream: MediaStream) => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
@@ -100,58 +163,21 @@ export default function LiveRecorderModal({
       source.connect(analyser)
       analyserRef.current = analyser
 
-      const bufferLength = analyser.frequencyBinCount
-      const dataArray = new Uint8Array(bufferLength)
-
-      const draw = () => {
-        if (!canvasRef.current || !analyserRef.current) return
-        animFrameRef.current = requestAnimationFrame(draw)
-
-        analyserRef.current.getByteFrequencyData(dataArray)
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext("2d")
-        if (!ctx) return
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        const width = canvas.width
-        const height = canvas.height
-
-        // Calculate number of bars to draw
-        const barCount = 32
-        const barWidth = Math.max(3, (width / barCount) - 3)
-        const gap = 3
-
-        for (let i = 0; i < barCount; i++) {
-          // Mirror frequency or distribute evenly
-          const dataIdx = Math.floor((i / barCount) * bufferLength)
-          const value = dataArray[dataIdx] || 0
-
-          // Calculate dynamic bar height
-          const normalized = value / 255
-          const minHeight = 4
-          const barHeight = Math.max(minHeight, normalized * (height - 8))
-
-          const x = i * (barWidth + gap) + 4
-          const y = height / 2 - barHeight / 2
-
-          // Gradient color: glowing coral-red to bright rose
-          const gradient = ctx.createLinearGradient(0, y, 0, y + barHeight)
-          gradient.addColorStop(0, "rgba(244, 63, 94, 0.95)")
-          gradient.addColorStop(0.5, "rgba(225, 29, 72, 0.9)")
-          gradient.addColorStop(1, "rgba(251, 113, 133, 0.8)")
-
-          ctx.fillStyle = gradient
-          ctx.beginPath()
-          ctx.roundRect(x, y, barWidth, barHeight, 3)
-          ctx.fill()
-        }
-      }
-
-      draw()
+      startDrawLoop()
     } catch (e) {
       console.warn("Visualizer failed to start", e)
     }
   }
+
+  // Resume visualizer loop whenever user restores from minimized state
+  useEffect(() => {
+    if (!isMinimized && analyserRef.current && (recordingState === "recording" || recordingState === "paused")) {
+      const tId = setTimeout(() => {
+        startDrawLoop()
+      }, 60)
+      return () => clearTimeout(tId)
+    }
+  }, [isMinimized, recordingState, startDrawLoop])
 
   // Start recording
   const handleStartRecording = async () => {
@@ -179,9 +205,9 @@ export default function LiveRecorderModal({
       let mediaRecorder: MediaRecorder
       try {
         mediaRecorder = new MediaRecorder(stream, { mimeType })
-      } catch (recError) {
-        stopTracks()
-        throw recError
+      } catch (mimeErr) {
+        console.warn(`MediaRecorder init failed with mimeType "${mimeType}", fallback to browser default`, mimeErr)
+        mediaRecorder = new MediaRecorder(stream)
       }
       mediaRecorderRef.current = mediaRecorder
 
@@ -206,6 +232,9 @@ export default function LiveRecorderModal({
         stopTracks()
         releaseWakeLock()
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+        if (isMinimized && onExpand) {
+          onExpand()
+        }
       }
 
       mediaRecorder.start(250)
@@ -250,6 +279,9 @@ export default function LiveRecorderModal({
       mediaRecorderRef.current.stop()
       releaseWakeLock()
       if (timerRef.current) clearInterval(timerRef.current)
+      if (isMinimized && onExpand) {
+        onExpand()
+      }
     }
   }
 
@@ -292,11 +324,93 @@ export default function LiveRecorderModal({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
+  // Minimized Floating Bar/Pill Mode (Ultra-minimalist, icon-only)
+  if (isMinimized) {
+    return (
+      <aside
+        role="region"
+        aria-label={t("recorder_title")}
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2.5 px-3 py-2 rounded-full bg-surface/90 backdrop-blur-md border border-border shadow-raised animate-slide-up select-none"
+      >
+        {/* Status Beacon & Elapsed Timer (Clicking expands modal) */}
+        <button
+          type="button"
+          onClick={onExpand}
+          className="flex items-center gap-2 px-1 text-left group cursor-pointer focus:outline-none"
+          title={t("recorder_expand")}
+          aria-label={t("recorder_expand")}
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            {recordingState === "recording" && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                recordingState === "recording" ? "bg-danger" : "bg-warning"
+              }`}
+            />
+          </span>
+          <span className="text-xs sm:text-sm font-mono font-bold text-fg tracking-wider group-hover:text-primary transition-colors">
+            {formatTime(elapsedSeconds)}
+          </span>
+        </button>
+
+        {/* Subtle divider */}
+        <span className="h-4 w-px bg-border" aria-hidden="true" />
+
+        {/* Transport Controls (Clean icon-only circular buttons) */}
+        <div className="flex items-center gap-1">
+          {recordingState === "recording" ? (
+            <button
+              type="button"
+              onClick={handlePause}
+              aria-label={t("btn_pause")}
+              title={t("btn_pause")}
+              className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg border border-border transition-colors cursor-pointer"
+            >
+              <Pause size={14} weight="bold" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleResume}
+              aria-label={t("btn_resume")}
+              title={t("btn_resume")}
+              className="w-8 h-8 rounded-full flex items-center justify-center bg-primary hover:bg-primary-hover active:scale-95 text-primary-contrast transition-colors cursor-pointer"
+            >
+              <Play size={14} weight="fill" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleStop}
+            aria-label={t("btn_stop_preview")}
+            title={t("btn_stop_preview")}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-danger hover:bg-danger/90 active:scale-95 text-danger-contrast transition-all cursor-pointer shadow-xs"
+          >
+            <Stop size={14} weight="fill" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onExpand}
+            aria-label={t("recorder_expand")}
+            title={t("recorder_expand")}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg border border-border transition-colors cursor-pointer"
+          >
+            <CornersOut size={14} weight="bold" />
+          </button>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <Modal
       onClose={onClose}
       labelledBy="recorder-modal-title"
-      dismissible={recordingState !== "recording"}
+      dismissible={recordingState !== "recording" && recordingState !== "paused"}
       panelClassName="w-full max-w-lg rounded-2xl overflow-hidden bg-surface border border-border shadow-raised animate-scale-in flex flex-col relative"
     >
       {/* Modal Header */}
@@ -321,29 +435,43 @@ export default function LiveRecorderModal({
             </p>
           </div>
         </div>
-        {recordingState !== "recording" && (
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
-            aria-label={t("btn_close")}
-          >
-            <X size={16} weight="bold" />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {(recordingState === "recording" || recordingState === "paused") && onMinimize && (
+            <button
+              type="button"
+              onClick={onMinimize}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+              aria-label={t("recorder_minimize")}
+              title={t("recorder_minimize")}
+            >
+              <Minus size={18} weight="bold" />
+            </button>
+          )}
+          {recordingState !== "recording" && recordingState !== "paused" && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+              aria-label={t("btn_close")}
+            >
+              <X size={16} weight="bold" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Modal Body */}
-      <div className="p-6 sm:p-8 space-y-6 flex-1">
+      <div className="p-5 sm:p-8 space-y-4 sm:space-y-6 flex-1">
         {/* Error Banner */}
         {errorMessage && (
           <Alert variant="danger">{errorMessage}</Alert>
         )}
 
         {/* Visualizer & Animated Stage Area */}
-        <div className="relative flex flex-col items-center justify-center py-7 px-4 rounded-2xl bg-surface-2/70 border border-border overflow-hidden space-y-5">
+        <div className="relative flex flex-col items-center justify-center py-6 sm:py-7 px-3 sm:px-4 rounded-2xl bg-surface-2/70 border border-border overflow-hidden space-y-4 sm:space-y-5">
 
           {/* Animated Central Microphone Hub */}
-          <div className="relative flex items-center justify-center w-28 h-28 my-1">
+          <div className="relative flex items-center justify-center w-24 h-24 sm:w-28 sm:h-28 my-1">
             {/* Sonar Radar Waves during active recording */}
             {recordingState === "recording" && (
               <>
@@ -413,12 +541,12 @@ export default function LiveRecorderModal({
 
           {/* Audio Wave Visualizer Canvas */}
           {(recordingState === "recording" || recordingState === "paused") && (
-            <div className="w-full h-14 sm:h-16 flex items-center justify-center overflow-hidden z-10">
+            <div className="w-full h-12 sm:h-16 flex items-center justify-center overflow-hidden z-10 px-2">
               <canvas
                 ref={canvasRef}
                 width={360}
                 height={60}
-                className="w-full h-full max-w-sm"
+                className="w-full h-full max-w-[280px] sm:max-w-sm"
               />
             </div>
           )}
@@ -443,17 +571,17 @@ export default function LiveRecorderModal({
               value={recordingName}
               onChange={(e) => setRecordingName(e.target.value)}
               placeholder={t("recorder_name_placeholder")}
-              className="w-full px-4 py-3 rounded-2xl text-xs sm:text-sm bg-surface-2 border border-border text-fg outline-none focus:border-primary transition-colors font-sans"
+              className="w-full px-4 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm bg-surface-2 border border-border text-fg outline-none focus:border-primary transition-colors font-sans min-h-[42px]"
             />
           </div>
         )}
 
         {/* Recording Controls */}
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className="flex items-center justify-center gap-2.5 sm:gap-3 pt-1 sm:pt-2">
           {recordingState === "idle" && (
             <button
               onClick={handleStartRecording}
-              className="group w-full py-3.5 px-6 rounded-xl text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 min-h-[46px] shadow-sm hover:shadow-danger/20 cursor-pointer"
+              className="group w-full py-3 px-6 rounded-xl text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 min-h-[46px] shadow-sm hover:shadow-danger/20 cursor-pointer"
             >
               <Microphone size={18} weight="bold" className="group-hover:scale-110 transition-transform" />
               <span>{t("btn_start_record")}</span>
@@ -464,14 +592,14 @@ export default function LiveRecorderModal({
             <>
               <button
                 onClick={handlePause}
-                className="px-5 py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg transition-all flex items-center gap-2 cursor-pointer border border-border"
+                className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg transition-all flex items-center gap-2 cursor-pointer border border-border min-h-[44px]"
               >
                 <Pause size={16} weight="bold" />
                 <span>{t("btn_pause")}</span>
               </button>
               <button
                 onClick={handleStop}
-                className="flex-1 py-3 px-6 rounded-xl text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer min-h-[44px]"
               >
                 <Stop size={18} weight="fill" />
                 <span>{t("btn_stop_preview")}</span>
@@ -483,14 +611,14 @@ export default function LiveRecorderModal({
             <>
               <button
                 onClick={handleResume}
-                className="px-5 py-3 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover active:scale-95 text-primary-contrast transition-all flex items-center gap-2 cursor-pointer"
+                className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover active:scale-95 text-primary-contrast transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
               >
                 <Play size={16} weight="fill" />
                 <span>{t("btn_resume")}</span>
               </button>
               <button
                 onClick={handleStop}
-                className="flex-1 py-3 px-6 rounded-xl text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer min-h-[44px]"
               >
                 <Stop size={18} weight="fill" />
                 <span>{t("btn_stop_preview")}</span>
@@ -502,14 +630,14 @@ export default function LiveRecorderModal({
             <>
               <button
                 onClick={handleDiscard}
-                className="group px-4 py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg transition-all flex items-center gap-1.5 cursor-pointer border border-border"
+                className="group px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg transition-all flex items-center gap-1.5 cursor-pointer border border-border min-h-[44px]"
               >
                 <ArrowCounterClockwise size={16} weight="bold" className="group-hover:-rotate-90 transition-transform duration-200" />
                 <span>{t("btn_rerecord")}</span>
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 py-3 px-6 rounded-xl text-sm font-semibold text-primary-contrast bg-primary hover:bg-primary-hover active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
+                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-primary-contrast bg-primary hover:bg-primary-hover active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
               >
                 <UploadSimple size={18} weight="bold" />
                 <span>{t("btn_submit_transcribe")}</span>

@@ -52,6 +52,9 @@ export const translations = {
     btn_discard: "Discard",
     btn_rerecord: "Record Again",
     btn_submit_transcribe: "Transcribe & Analyze",
+    recorder_minimize: "Minimize recording",
+    recorder_expand: "Expand recording",
+    recorder_minimized_hint: "Recording in background",
 
     // Document Table & Actions
     col_document: "DOCUMENT",
@@ -300,6 +303,9 @@ export const translations = {
     btn_discard: "Buang",
     btn_rerecord: "Rekam Ulang",
     btn_submit_transcribe: "Transkrip & Analisis",
+    recorder_minimize: "Kecilkan rekaman",
+    recorder_expand: "Perbesar rekaman",
+    recorder_minimized_hint: "Merekam di latar belakang",
 
     // Document Table & Actions
     col_document: "DOKUMEN",

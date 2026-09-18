@@ -36,6 +36,12 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [rateModalOpen, setRateModalOpen] = useState<boolean>(false)
   const [liveRecorderOpen, setLiveRecorderOpen] = useState<boolean>(false)
+  const [liveRecorderMinimized, setLiveRecorderMinimized] = useState<boolean>(false)
+
+  const handleOpenLiveRecorder = useCallback(() => {
+    setLiveRecorderMinimized(false)
+    setLiveRecorderOpen(true)
+  }, [])
   const {
     authModalOpen,
     authModalTab,
@@ -497,7 +503,7 @@ export default function App() {
                 documents={documents}
                 isLoading={initialLoading}
                 onUploadFile={handleUploadFile}
-                onOpenLiveRecorder={() => setLiveRecorderOpen(true)}
+                onOpenLiveRecorder={handleOpenLiveRecorder}
                 onDeleteDocument={handleDeleteDocument}
                 onRenameDocument={handleRenameDocument}
                 onDuplicateDocument={handleDuplicateDocument}
@@ -552,10 +558,22 @@ export default function App() {
         </Routes>
       </div>
 
-      {/* Live Audio Recorder Modal */}
-      {liveRecorderOpen && (
+      {/* Live Audio Recorder Modal & Minimized Floating Transport Bar */}
+      {(liveRecorderOpen || liveRecorderMinimized) && (
         <LiveRecorderModal
-          onClose={() => setLiveRecorderOpen(false)}
+          isMinimized={liveRecorderMinimized}
+          onMinimize={() => {
+            setLiveRecorderMinimized(true)
+            setLiveRecorderOpen(false)
+          }}
+          onExpand={() => {
+            setLiveRecorderMinimized(false)
+            setLiveRecorderOpen(true)
+          }}
+          onClose={() => {
+            setLiveRecorderOpen(false)
+            setLiveRecorderMinimized(false)
+          }}
           onUploadFile={handleUploadFile}
         />
       )}

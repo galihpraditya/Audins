@@ -16,7 +16,7 @@ export default function StatusBadge({ status, uploadProgress, size = "md" }: Sta
   if (status === "Completed") {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-semibold bg-success-dim text-success border border-success/25 ${paddingClass}`}
+        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-semibold bg-success-dim text-success border border-success/25 flex-shrink-0 select-none ${paddingClass}`}
       >
         <CheckCircle size={isSm ? 12 : 14} weight="fill" className="flex-shrink-0 text-success" />
         <span>{t("filter_completed")}</span>
@@ -28,7 +28,7 @@ export default function StatusBadge({ status, uploadProgress, size = "md" }: Sta
   if (status === "Failed") {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-danger-dim text-danger border border-danger/30 ${paddingClass}`}
+        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-danger-dim text-danger border border-danger/30 flex-shrink-0 select-none ${paddingClass}`}
       >
         <WarningCircle size={isSm ? 12 : 14} weight="fill" className="flex-shrink-0 text-danger" />
         <span>{t("filter_failed")}</span>
@@ -39,7 +39,7 @@ export default function StatusBadge({ status, uploadProgress, size = "md" }: Sta
   if (uploadProgress !== undefined && uploadProgress < 100) {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-info-dim text-info border border-info/30 ${paddingClass}`}
+        className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-info-dim text-info border border-info/30 flex-shrink-0 select-none ${paddingClass}`}
       >
         <CloudArrowUp size={isSm ? 12 : 14} weight="duotone" className="flex-shrink-0 text-info" />
         <span>{uploadProgress}%</span>
@@ -49,7 +49,7 @@ export default function StatusBadge({ status, uploadProgress, size = "md" }: Sta
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-warning-dim text-warning border border-warning/30 ${paddingClass}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-mono font-medium bg-warning-dim text-warning border border-warning/30 flex-shrink-0 select-none ${paddingClass}`}
     >
       <CircleNotch size={isSm ? 12 : 14} weight="bold" className="animate-spin flex-shrink-0 text-warning" />
       <span>{t("filter_processing")}</span>

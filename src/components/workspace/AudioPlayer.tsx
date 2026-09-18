@@ -265,19 +265,21 @@ export default function AudioPlayer({
             <span>{formatTime(duration)}</span>
           </div>
           <div
-            className="h-1.5 rounded-full overflow-hidden bg-surface-3 cursor-pointer"
+            className="py-1.5 cursor-pointer touch-none"
             onClick={(e) => {
               if (!duration) return
               const rect = e.currentTarget.getBoundingClientRect()
-              const target = Math.floor(((e.clientX - rect.left) / rect.width) * duration)
+              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+              const target = Math.floor(ratio * duration)
               setCurrentTime(target)
-              if (audioRef.current) audioRef.current.currentTime = target
             }}
           >
-            <div
-              className="h-full rounded-full bg-primary"
-              style={{ width: `${progressPercent}%` }}
-            />
+            <div className="h-1.5 rounded-full overflow-hidden bg-surface-3">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-75"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
           </div>
         </div>
 
@@ -303,7 +305,7 @@ export default function AudioPlayer({
   }
 
   return (
-    <div className="flex-shrink-0 p-4 sm:p-5 border-b border-border bg-surface relative select-none print:hidden">
+    <div className="flex-shrink-0 p-3 sm:p-5 border-b border-border bg-surface relative select-none print:hidden">
       {audioUrl && !compact && (
         <audio
           ref={audioRef}
@@ -317,26 +319,26 @@ export default function AudioPlayer({
       )}
 
       {/* Header bar: Status & Playback Rate selector */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center ${audioError || isAudioMissingOrExpired ? "bg-danger" : "bg-primary"}`}>
+      <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center flex-shrink-0 ${audioError || isAudioMissingOrExpired ? "bg-danger" : "bg-primary"}`}>
             {playing && <span className="w-1.5 h-1.5 rounded-full bg-primary-contrast animate-ping" />}
           </div>
-          <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary flex items-center gap-1.5">
-            <Waveform size={14} weight="duotone" className={audioError || isAudioMissingOrExpired ? "text-danger" : "text-primary"} />
-            {audioUrl && !isAudioMissingOrExpired ? t("audio_player") : t("no_audio")}
+          <span className="text-[10px] sm:text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary flex items-center gap-1.5 truncate">
+            <Waveform size={14} weight="duotone" className={`flex-shrink-0 ${audioError || isAudioMissingOrExpired ? "text-danger" : "text-primary"}`} />
+            <span className="truncate">{audioUrl && !isAudioMissingOrExpired ? t("audio_player") : t("no_audio")}</span>
           </span>
         </div>
 
         {/* Speed Selector */}
-        <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label="Playback speed">
-          <Gauge size={13} className="text-fg-tertiary ml-1" />
+        <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0" role="group" aria-label="Playback speed">
+          <Gauge size={13} className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block" />
           {speedOptions.map((spd) => (
             <button
               key={spd}
               onClick={() => setPlaybackRate(spd)}
               aria-pressed={playbackRate === spd}
-              className={`px-2 py-1 rounded-md text-[10px] font-mono font-semibold transition-colors cursor-pointer ${
+              className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-[10px] font-mono font-semibold transition-colors cursor-pointer ${
                 playbackRate === spd
                   ? "bg-primary text-primary-contrast shadow-sm"
                   : "text-fg-tertiary hover:text-fg"
@@ -350,8 +352,8 @@ export default function AudioPlayer({
 
       {/* Audio Error Alert Banner */}
       {(audioError || isAudioMissingOrExpired) && (
-        <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
-          <WarningCircle size={17} weight="fill" className="flex-shrink-0" />
+        <div className="mb-3 px-3 py-2 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
+          <WarningCircle size={16} weight="fill" className="flex-shrink-0" />
           <span className="font-medium">
             {audioError || t("audio_not_found_desc")}
           </span>
@@ -360,7 +362,7 @@ export default function AudioPlayer({
 
       {/* Authentic Waveform Visualization */}
       <div
-        className="flex items-end gap-[2px] sm:gap-1 h-12 sm:h-14 mb-3.5 px-3 py-2 rounded-xl bg-surface-2 border border-border overflow-hidden relative cursor-pointer group hover:border-border-hover transition-colors"
+        className="flex items-end gap-[2px] sm:gap-1 h-10 sm:h-14 mb-2.5 sm:mb-3.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-surface-2 border border-border overflow-hidden relative cursor-pointer group hover:border-border-hover transition-colors"
         onClick={(e) => {
           if (!duration) return
           const rect = e.currentTarget.getBoundingClientRect()
@@ -481,7 +483,7 @@ export default function AudioPlayer({
                 setVolume(parseFloat(e.target.value))
                 if (isMuted) setIsMuted(false)
               }}
-              className="w-14 h-1 bg-surface-2 accent-primary rounded-lg cursor-pointer"
+              className="w-14 h-1 bg-surface-2 accent-primary rounded-lg cursor-pointer hidden sm:block"
               title={t("a11y_volume")}
             />
           </div>
@@ -511,7 +513,7 @@ export default function AudioPlayer({
             setCurrentTime(t)
             if (audioRef.current) audioRef.current.currentTime = t
           }}
-          className="p-2.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40"
+          className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           aria-label={t("a11y_skip_backward")}
           title={t("a11y_skip_backward")}
         >
@@ -522,7 +524,7 @@ export default function AudioPlayer({
         <button
           disabled={!audioUrl}
           onClick={togglePlay}
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-colors duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:bg-primary cursor-pointer"
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:scale-95 cursor-pointer shadow-sm"
           aria-label={playing ? "Pause audio" : "Play audio"}
         >
           {playing ? (
@@ -540,7 +542,7 @@ export default function AudioPlayer({
             setCurrentTime(t)
             if (audioRef.current) audioRef.current.currentTime = t
           }}
-          className="p-2.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40"
+          className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           aria-label={t("a11y_skip_forward")}
           title={t("a11y_skip_forward")}
         >

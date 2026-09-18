@@ -20,6 +20,8 @@ import {
   DownloadSimple,
   Copy,
   Trash,
+  Quotes,
+  Sparkle,
 } from "@phosphor-icons/react"
 
 interface WorkspaceProps {
@@ -392,28 +394,28 @@ export default function Workspace({
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background print:block print:overflow-visible print:h-auto print:bg-white">
       {/* Studio Top Control Bar */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-border bg-surface flex-shrink-0 print:hidden z-20">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-2.5 border-b border-border bg-surface flex-shrink-0 print:hidden z-20">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={() => navigate("/workspace")}
-            className="px-3 py-1.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors flex items-center gap-1.5 text-xs font-semibold min-h-[32px]"
+            className="px-2.5 sm:px-3 py-1.5 rounded-lg text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors flex items-center gap-1.5 text-xs font-semibold min-h-[36px] cursor-pointer flex-shrink-0"
             aria-label={t("btn_back")}
             title={t("btn_back")}
           >
-            <ArrowLeft size={14} weight="bold" />
+            <ArrowLeft size={15} weight="bold" />
             <span className="hidden sm:inline">{t("btn_back")}</span>
           </button>
           <div className="w-px h-4 flex-shrink-0 bg-border" />
 
           {/* Active File Title & Status */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-bold font-display truncate text-fg">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-xs sm:text-sm font-bold font-display truncate text-fg flex-1 min-w-0">
                 {docName}
               </p>
               <StatusBadge status={document.status} uploadProgress={document.uploadProgress} size="sm" />
             </div>
-            <p className="text-[11px] font-mono text-fg-tertiary mt-0.5">
+            <p className="text-[10px] sm:text-[11px] font-mono text-fg-tertiary mt-0.5 truncate">
               {docDate}
             </p>
           </div>
@@ -423,28 +425,32 @@ export default function Workspace({
       {/* Split Panels / Tabs for Mobile */}
       <div className="flex-1 flex flex-col overflow-hidden relative print:block print:overflow-visible print:h-auto print:bg-white">
         {/* Mobile Tabs Header */}
-        <div className="md:hidden flex items-center border-b border-border bg-surface print:hidden">
+        <div className="md:hidden flex items-center border-b border-border bg-surface print:hidden px-2 gap-1" role="tablist">
           <button
-            aria-pressed={activeTab === "transcript"}
-            className={`flex-1 py-3 text-xs font-semibold font-display transition-colors border-b-2 ${
+            role="tab"
+            aria-selected={activeTab === "transcript"}
+            className={`flex-1 py-2.5 px-3 text-xs font-semibold font-display transition-all flex items-center justify-center gap-2 border-b-2 min-h-[44px] cursor-pointer ${
               activeTab === "transcript"
-                ? "border-primary text-primary"
+                ? "border-primary text-primary bg-primary-dim/30"
                 : "border-transparent text-fg-secondary hover:text-fg"
             }`}
             onClick={() => setActiveTab("transcript")}
           >
-            {t("transcript_title")}
+            <Quotes size={15} weight="duotone" />
+            <span>{t("transcript_title")}</span>
           </button>
           <button
-            aria-pressed={activeTab === "summary"}
-            className={`flex-1 py-3 text-xs font-semibold font-display transition-colors border-b-2 ${
+            role="tab"
+            aria-selected={activeTab === "summary"}
+            className={`flex-1 py-2.5 px-3 text-xs font-semibold font-display transition-all flex items-center justify-center gap-2 border-b-2 min-h-[44px] cursor-pointer ${
               activeTab === "summary"
-                ? "border-primary text-primary"
+                ? "border-primary text-primary bg-primary-dim/30"
                 : "border-transparent text-fg-secondary hover:text-fg"
             }`}
             onClick={() => setActiveTab("summary")}
           >
-            {t("summary_title")}
+            <Sparkle size={15} weight="duotone" />
+            <span>{t("summary_title")}</span>
           </button>
         </div>
 

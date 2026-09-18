@@ -235,26 +235,26 @@ export default function SummaryEditor({
 
   return (
     <div className="flex-1 overflow-y-auto bg-background printable-area print:bg-white print:p-0 print:m-0 print:overflow-visible print:w-full">
-      <div className="max-w-3xl mx-auto px-5 sm:px-10 py-6 sm:py-8 space-y-6 print:max-w-none print:p-0 print:m-0 print:w-full print:space-y-4 print:bg-white">
+      <div className="max-w-3xl mx-auto px-4 sm:px-10 py-5 sm:py-8 space-y-5 sm:space-y-6 print:max-w-none print:p-0 print:m-0 print:w-full print:space-y-4 print:bg-white">
         {/* Top Studio Toolbar */}
-        <div className="flex items-center justify-between gap-3 pb-4 border-b border-border no-print flex-wrap">
+        <div className="flex items-center justify-between gap-2 sm:gap-3 pb-3 sm:pb-4 border-b border-border no-print">
           {/* Action Buttons Left */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
             <button
               type="button"
               onClick={handleCopyAll}
-              className="text-xs px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5 cursor-pointer"
+              className="text-xs px-2.5 sm:px-3.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg font-medium border border-border transition-all flex items-center gap-1.5 cursor-pointer min-h-[34px]"
               title={t("btn_copy_all")}
             >
               <Copy size={15} weight="duotone" />
-              <span>{t("btn_copy_all")}</span>
+              <span className="hidden xs:inline">{t("btn_copy_all")}</span>
             </button>
 
             <button
               type="button"
               onClick={handleExportPDF}
               disabled={isProcessing}
-              className={`text-xs px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`text-xs px-2.5 sm:px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 cursor-pointer min-h-[34px] ${
                 isProcessing
                   ? "opacity-40 cursor-not-allowed bg-surface-2 text-fg-tertiary border-border"
                   : "bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border-border"
@@ -262,7 +262,7 @@ export default function SummaryEditor({
               title={t("btn_export_pdf")}
             >
               <Printer size={15} weight="duotone" />
-              <span>{t("btn_export_pdf")}</span>
+              <span className="hidden xs:inline">{t("btn_export_pdf")}</span>
             </button>
 
             {onReSummarize && (
@@ -270,7 +270,7 @@ export default function SummaryEditor({
                 <button
                   onClick={() => setShowReSummarizeModal(!showReSummarizeModal)}
                   disabled={isProcessing}
-                  className={`text-xs px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 ${
+                  className={`text-xs px-2.5 sm:px-3.5 py-2 rounded-lg font-medium border transition-all flex items-center gap-1.5 min-h-[34px] cursor-pointer ${
                     showReSummarizeModal
                       ? "bg-primary-dim text-primary-hover border-primary/40"
                       : "bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-fg border-border"
@@ -278,12 +278,12 @@ export default function SummaryEditor({
                   title={t("btn_re_summarize")}
                 >
                   <Sparkle size={15} weight="duotone" className="text-fg-tertiary" />
-                  <span>{t("btn_re_summarize")}</span>
+                  <span className="hidden sm:inline">{t("btn_re_summarize")}</span>
                 </button>
 
                 {/* Re-Summarize Popup Panel */}
                 {showReSummarizeModal && (
-                  <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-surface border border-border rounded-xl shadow-raised z-50 p-5 animate-scale-in">
+                  <div className="fixed inset-x-3 top-24 sm:absolute sm:inset-x-auto sm:left-0 sm:top-full mt-2 w-auto sm:w-96 max-w-sm sm:max-w-none bg-surface border border-border rounded-xl shadow-raised z-50 p-4 sm:p-5 animate-scale-in">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-lg bg-surface-2 flex items-center justify-center text-fg-tertiary">
@@ -328,13 +328,13 @@ export default function SummaryEditor({
 
                     <div className="flex justify-end gap-2">
                       <button
-                        className="px-3.5 py-1.5 text-xs font-medium text-fg-secondary hover:text-fg bg-surface-2 rounded-xl transition-colors"
+                        className="px-3.5 py-1.5 text-xs font-medium text-fg-secondary hover:text-fg bg-surface-2 rounded-xl transition-colors min-h-[34px]"
                         onClick={() => setShowReSummarizeModal(false)}
                       >
                         {t("btn_cancel")}
                       </button>
                       <button
-                        className="px-4 py-1.5 text-xs font-semibold text-primary-contrast bg-primary hover:bg-primary-hover rounded-xl transition-opacity"
+                        className="px-4 py-1.5 text-xs font-semibold text-primary-contrast bg-primary hover:bg-primary-hover rounded-xl transition-opacity min-h-[34px]"
                         onClick={handleConfirmReSummarize}
                       >
                         {t("btn_run_analysis")}
@@ -349,7 +349,7 @@ export default function SummaryEditor({
           {/* Edit Button Right */}
           <button
             onClick={handleToggleEdit}
-            className={`text-xs px-4 py-2 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+            className={`text-xs px-3 sm:px-4 py-2 rounded-xl font-semibold transition-all flex items-center gap-1.5 sm:gap-2 flex-shrink-0 min-h-[34px] cursor-pointer ${
               isEditing
                 ? "bg-success hover:opacity-90 text-success-contrast"
                 : "bg-primary hover:bg-primary-hover text-primary-contrast"
@@ -380,7 +380,7 @@ export default function SummaryEditor({
               <textarea
                 value={editMarkdown}
                 onChange={(e) => setEditMarkdown(e.target.value)}
-                className="w-full min-h-[500px] p-6 bg-surface-2/90 border border-primary/40 rounded-2xl text-sm text-fg leading-relaxed focus:outline-none focus:border-primary resize-y font-sans"
+                className="w-full min-h-[300px] sm:min-h-[500px] p-4 sm:p-6 bg-surface-2/90 border border-primary/40 rounded-2xl text-xs sm:text-sm text-fg leading-relaxed focus:outline-none focus:border-primary resize-y font-sans"
                 placeholder="# Summary Title&#10;&#10;## Section 1&#10;Your structured notes..."
               />
             </div>
@@ -525,7 +525,7 @@ export default function SummaryEditor({
 
                           <button
                             onClick={() => handleCopySection(section.heading, section.content, idx)}
-                            className="ml-auto opacity-0 group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-md text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors text-xs flex items-center gap-1 no-print flex-shrink-0"
+                            className="ml-auto opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-md text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors text-xs flex items-center justify-center min-h-[30px] min-w-[30px] no-print flex-shrink-0 cursor-pointer"
                             title={t("btn_copy_section")}
                             aria-label={t("btn_copy_section")}
                           >
