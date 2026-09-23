@@ -3,576 +3,1310 @@ export type Language = "en" | "id"
 export const translations = {
   en: {
     // Navigation & Common
+
     app_name: "Audins",
+
     app_tagline: "Audio Insight",
+
     nav_dashboard: "Dashboard",
+
     nav_workspace: "Workspace",
+
     nav_settings: "Settings",
+
     btn_back: "Back",
+
     btn_cancel: "Cancel",
+
     btn_save: "Save",
+
     btn_delete: "Delete",
+
     btn_close: "Close",
+
     btn_open: "Open",
+
     btn_open_workspace: "Open in Studio",
 
     // Dashboard
+
     dashboard_title: "Dashboard",
-    dashboard_desc: "Upload or record audio to generate transcripts and executive summaries.",
+
+    dashboard_desc:
+      "Upload or record audio to generate transcripts and executive summaries.",
+
     upload_title: "Upload Audio or Video",
+
     upload_drop_title: "Release to upload recording",
-    upload_desc: "Drag and drop your audio or video file here, or choose an option below.",
+
+    upload_desc:
+      "Drag and drop your audio or video file here, or choose an option below.",
+
     browse_device: "Browse from device",
+
     btn_record_live: "Record Live Audio",
+
     max_file_size: "Maximum file size: 500MB",
+
     recent_documents: "Recent Documents",
+
     no_documents: "No documents found",
+
     no_documents_desc: "Upload or record an audio file above to get started.",
+
     search_documents: "Search documents...",
+
     filter_all: "All",
+
     filter_completed: "Completed",
+
     filter_processing: "Processing",
+
     filter_failed: "Failed",
 
     // Live Recording Modal
+
     recorder_title: "Live Audio Recording",
-    recorder_desc: "Speak into your microphone to record lectures, interviews, or meetings.",
-    recorder_mic_error: "Microphone access denied or unavailable. Please check your browser permissions.",
-    recorder_unsupported: "Audio recording is not supported in this browser. Please try Chrome, Edge, or Firefox.",
+
+    recorder_desc:
+      "Speak into your microphone to record lectures, interviews, or meetings.",
+
+    recorder_mic_error:
+      "Microphone access denied or unavailable. Please check your browser permissions.",
+
+    recorder_unsupported:
+      "Audio recording is not supported in this browser. Please try Chrome, Edge, or Firefox.",
+
     recorder_idle_hint: "Click the red button below to start recording.",
+
     recorder_recording: "Recording in progress...",
+
     recorder_paused: "Recording paused",
+
     recorder_finished: "Recording finished. Preview or transcribe below.",
+
     recorder_name_label: "RECORDING TITLE",
+
     recorder_name_placeholder: "e.g. Project Meeting, Biology Lecture...",
+
     btn_start_record: "Start Recording",
+
     btn_pause: "Pause",
+
     btn_resume: "Resume",
+
     btn_stop_preview: "Stop & Preview",
+
     btn_discard: "Discard",
+
     btn_rerecord: "Record Again",
+
     btn_download_audio_only: "Download Audio Only",
+
     btn_submit_transcribe: "Transcribe & Analyze",
+
     recorder_minimize: "Minimize recording",
+
     recorder_expand: "Expand recording",
+
     recorder_minimized_hint: "Recording in background",
 
     // Document Table & Actions
+
     col_document: "DOCUMENT",
+
     col_date: "DATE",
+
     col_duration: "DURATION",
+
     col_status: "STATUS",
+
     col_actions: "ACTIONS",
+
     action_rename: "Rename",
+
     action_download: "Download Audio",
+
     action_duplicate: "Duplicate",
+
     action_delete: "Delete",
+
     modal_delete_title: "Delete Document?",
+
     modal_delete_desc: "Are you sure you want to permanently delete",
+
     modal_delete_subdesc: "Transcripts and audio files will be purged.",
+
     action_delete_audio: "Delete Audio Only",
+
     modal_delete_audio_title: "Delete Audio File Only?",
-    modal_delete_audio_desc: "Are you sure you want to delete the audio file for",
-    modal_delete_audio_warning: "Transcripts and AI summaries will be permanently preserved, but you will not be able to play the audio or re-transcribe it.",
+
+    modal_delete_audio_desc:
+      "Are you sure you want to delete the audio file for",
+
+    modal_delete_audio_warning:
+      "Transcripts and AI summaries will be permanently preserved, but you will not be able to play the audio or re-transcribe it.",
+
     toast_audio_deleted: "Audio file deleted. Storage space freed!",
-    audio_deleted_banner: "Audio file was removed to save storage space. Transcripts & summaries are preserved.",
+
+    audio_deleted_banner:
+      "Audio file was removed to save storage space. Transcripts & summaries are preserved.",
+
     audio_deleted_tooltip: "Audio file has been removed",
+
     btn_retranscribe: "Re-transcribe",
+
     modal_retranscribe_title: "Re-transcribe Audio",
-    modal_retranscribe_desc: "Choose the primary language to force Whisper AI to transcribe correctly, especially if the audio starts with a foreign greeting.",
+
+    modal_retranscribe_desc:
+      "Choose the primary language to force Whisper AI to transcribe correctly, especially if the audio starts with a foreign greeting.",
+
     retranscribe_lang_label: "SELECT LANGUAGE",
+
     retranscribe_lang_id: "Indonesian (Bahasa Indonesia)",
+
     retranscribe_lang_en: "English",
+
     retranscribe_lang_auto: "Auto-detect",
+
     retranscribe_lang_jv: "Javanese (Basa Jawa)",
+
     retranscribe_prompt_label: "VOCABULARY / GLOSSARY HINTS (OPTIONAL)",
-    retranscribe_prompt_placeholder: "e.g. specialized acronyms, company names, technical terms...",
-    retranscribe_auto_summary: "Automatically regenerate AI summary with new transcript",
+
+    retranscribe_prompt_placeholder:
+      "e.g. specialized acronyms, company names, technical terms...",
+
+    retranscribe_auto_summary:
+      "Automatically regenerate AI summary with new transcript",
+
     btn_start_retranscribe: "Start Re-transcribing",
+
     toast_retranscribe_started: "Re-transcribing audio in progress...",
+
     toast_retranscribe_done: "Audio successfully re-transcribed!",
-    retranscribe_disabled_no_audio: "Audio file was removed. Re-transcribing is not available.",
+
+    retranscribe_disabled_no_audio:
+      "Audio file was removed. Re-transcribing is not available.",
+
     modal_rename_title: "Rename Audio File",
+
     modal_rename_desc: "Enter a descriptive label for this recording.",
 
     // Workspace & Player
+
     workspace_title: "Workspace Recordings",
+
     workspace_desc: "Select a recording to view transcript and summary.",
+
     audio_player: "Audio Player",
+
     no_audio: "No Audio",
+
     loading_waveform: "Processing audio waveform...",
+
     transcript_title: "Transcript",
+
     search_transcript: "Search keywords in transcript...",
+
     no_transcript_matches: "No transcript matches found for",
+
     jump_hint: "Click segment to jump",
+
     btn_copy_sentence: "Copy sentence",
+
     btn_copy_section: "Copy section",
+
     btn_copy_all: "Copy Summary",
+
     btn_copy_summary: "Copy Summary",
+
     btn_copy_transcript: "Copy Transcript",
+
     btn_copy_all_transcript: "Copy All",
+
     btn_export_transcript: "Export",
+
     btn_export_transcript_full: "Export Transcript",
+
     export_plain_text: "Plain Text (.txt)",
+
     export_plain_text_desc: "Continuous narrative without time markers",
+
     export_with_timestamps: "With Timestamps (.txt)",
+
     export_with_timestamps_desc: "Includes [mm:ss] timestamp per segment",
+
     export_srt: "Subtitles (.srt)",
+
     export_srt_desc: "Standard video subtitle format",
+
     btn_export_pdf: "Export PDF",
+
     btn_re_summarize: "Re-summarize AI",
+
     btn_edit_summary: "Edit Summary",
+
     btn_save_markdown: "Save Markdown",
+
     btn_save_changes: "Save Changes",
+
     summary_title: "Summary",
+
     re_summarize_title: "Custom AI Guidelines",
-    re_summarize_desc: "Provide specific instructions or select a preset prompt below:",
+
+    re_summarize_desc:
+      "Provide specific instructions or select a preset prompt below:",
+
     preset_indonesian: "Translate and summarize entirely in Indonesian",
-    preset_action_items: "Focus primarily on Action Items, Deadlines, and Key Decisions",
-    preset_study_notes: "Create detailed study notes with bullet points & takeaways",
+
+    preset_action_items:
+      "Focus primarily on Action Items, Deadlines, and Key Decisions",
+
+    preset_study_notes:
+      "Create detailed study notes with bullet points & takeaways",
+
     preset_executive: "Generate high-level Executive Brief for stakeholders",
+
     preset_summary_3points: "Summarize into 3 key takeaways only",
+
     preset_summary_action_items: "Extract all action items and deadlines",
+
     preset_summary_email: "Draft a formal follow-up email",
+
     preset_summary_risks: "Identify key blockers and risks",
-    re_summarize_placeholder: "e.g. Focus on financial metrics... or Write in French...",
+
+    re_summarize_placeholder:
+      "e.g. Focus on financial metrics... or Write in French...",
+
     btn_run_analysis: "Run Analysis",
 
     // Processing & Failures
+
     status_processing_title: "AI Speech-to-Text & Summarization in Progress...",
-    status_processing_desc: "You can safely switch tabs or browse other files. It runs asynchronously in the cloud.",
+
+    status_processing_desc:
+      "You can safely switch tabs or browse other files. It runs asynchronously in the cloud.",
+
     status_failed_title: "Processing Failed",
-    status_failed_desc: "Failed to transcribe or summarize. Please check your Groq API quota or re-upload.",
+
+    status_failed_desc:
+      "Failed to transcribe or summarize. Please check your Groq API quota or re-upload.",
 
     // Free Tier & Settings
+
     daily_uploads: "Daily Uploads",
+
     storage: "Storage",
+
     btn_api_limits: "API Key / Limits",
+
     auto_purge_days: "Auto-purged after 7 days",
+
     unlimited: "Unlimited",
+
     custom_api_key: "Custom API Key",
+
     uploads_left: "uploads left today",
+
     settings_title: "Settings",
+
     settings_desc: "Configure your API key and preferences",
+
     tab_api_key: "API Key",
+
     tab_about: "About",
+
     demo_quota_active: "Free Demo Quota Active",
-    demo_quota_desc: "You are using the shared studio demo quota. Enter your personal Groq API key to unlock unlimited transcriptions.",
+
+    demo_quota_desc:
+      "You are using the shared studio demo quota. Enter your personal Groq API key to unlock unlimited transcriptions.",
+
     personal_api_key_label: "PERSONAL GROQ API KEY",
-    key_storage_hint: "Stored only in your browser localStorage. Never transmitted to our databases.",
+
+    key_storage_hint:
+      "Stored only in your browser localStorage. Never transmitted to our databases.",
+
     btn_save_config: "Save Configuration",
+
     settings_saved: "Settings saved successfully!",
 
     settings_appearance_title: "Appearance",
-    settings_appearance_desc: "Choose how Audins looks and the language you prefer.",
+
+    settings_appearance_desc:
+      "Choose how Audins looks and the language you prefer.",
+
     settings_language_label: "Language",
+
     settings_theme_label: "Theme",
 
     // Rate Limit Modal
+
     limit_reached_title: "Daily Demo Quota Reached",
-    limit_reached_desc: "You've reached the daily public demo quota. Wait until reset or enter your own Groq API key to continue immediately.",
+
+    limit_reached_desc:
+      "You've reached the daily public demo quota. Wait until reset or enter your own Groq API key to continue immediately.",
+
     resets_in: "Quota resets in",
+
     midnight_utc: "(Midnight UTC)",
+
     btn_continue: "Continue",
 
     // Theme & Lang
+
     theme_light: "Light Mode",
+
     theme_dark: "Dark Mode",
+
     lang_en: "English",
+
     lang_id: "Indonesian",
 
     // Toasts & async feedback
+
     toast_region_label: "Notifications",
+
     toast_dismiss: "Dismiss toast",
+
     toast_upload_too_large: "File size exceeds the 500MB maximum limit.",
+
     toast_processing_started: "AI is processing your audio in the background.",
+
     toast_processing_done: "Processing complete for {name}!",
+
     toast_processing_failed: "Processing failed for {name}.",
-    toast_polling_timeout: "Processing is taking longer than usual. Please refresh or check back later.",
+
+    toast_polling_timeout:
+      "Processing is taking longer than usual. Please refresh or check back later.",
+
     toast_upload_cancelled: "Upload cancelled",
+
     toast_resummarize_failed: "Re-summarize failed: {error}",
+
     toast_delete_failed: "Failed to delete document: {error}",
+
     toast_rename_failed: "Failed to rename document: {error}",
+
     toast_duplicate_failed: "Failed to duplicate document: {error}",
+
     toast_summary_save_failed: "Failed to save summary: {error}",
-    toast_duplicated: "Duplicated \"{name}\"",
-    toast_deleted: "Deleted \"{name}\"",
-    toast_renamed_to: "Renamed to \"{name}\"",
+
+    toast_duplicated: 'Duplicated "{name}"',
+
+    toast_deleted: 'Deleted "{name}"',
+
+    toast_renamed_to: 'Renamed to "{name}"',
+
     toast_summary_saved: "Summary saved successfully",
+
     toast_nothing_to_copy: "Nothing to copy",
+
     btn_show_all_documents: "Show all in Workspace",
+
     audio_not_found_desc: "Audio file not found or has been deleted.",
+
     toast_audio_not_found: "Audio file not found or has been deleted.",
-    toast_downloading: "Downloading \"{name}\"...",
-    toast_download_done: "Downloaded \"{name}\" successfully",
+
+    toast_downloading: 'Downloading "{name}"...',
+
+    toast_download_done: 'Downloaded "{name}" successfully',
+
     toast_download_failed: "Download failed. Please try again.",
+
     toast_recording_downloaded: "Audio recording downloaded successfully",
+
     toast_transcript_exported: "Transcript exported successfully",
+
     toast_transcript_copied: "Transcript copied to clipboard",
+
     toast_no_transcript: "No transcript available to export",
 
     // Load error banner
+
     error_load_title: "Couldn't load your documents",
-    error_load_desc: "We couldn't reach the server. Check your connection and try again.",
+
+    error_load_desc:
+      "We couldn't reach the server. Check your connection and try again.",
+
     btn_retry: "Retry",
 
     // Misc UI strings
-    search_no_match: "No documents matching \"{query}\".",
+
+    search_no_match: 'No documents matching "{query}".',
+
     ingest_audio: "Uploading audio... {progress}%",
+
     summary_fallback_title: "Summary",
-    summary_empty_sections: "No structured summary sections yet. Click \"Re-summarize AI\" above to generate insights.",
-    markdown_hint: "Markdown Editor: Use # Heading and ## Subheading to structure your notes.",
-    partial_transcript_warning: "Warning: this transcript may be incomplete. {warning}",
+
+    summary_empty_sections:
+      'No structured summary sections yet. Click "Re-summarize AI" above to generate insights.',
+
+    markdown_hint:
+      "Markdown Editor: Use # Heading and ## Subheading to structure your notes.",
+
+    partial_transcript_warning:
+      "Warning: this transcript may be incomplete. {warning}",
+
     api_status_checking: "Checking",
+
     api_status_active: "Active",
+
     api_status_invalid: "Invalid",
+
     quota_resets_soon: "Soon",
+
     quota_resets_tomorrow: "Tomorrow",
 
     // Accessibility labels
+
     a11y_switch_language: "Switch language",
+
     a11y_toggle_theme: "Toggle theme",
+
     a11y_close_menu: "Close menu",
+
     a11y_more_options: "More options",
+
     a11y_view_mode: "Document view mode",
+
     a11y_grid_view: "Grid view",
+
     a11y_table_view: "Table view",
+
     a11y_scrubber: "Audio playback timeline",
+
     a11y_play_audio: "Play audio",
+
     a11y_skip_backward: "Skip backward 10s",
+
     a11y_skip_forward: "Skip forward 10s",
+
     a11y_mute: "Mute",
+
     a11y_unmute: "Unmute",
+
     a11y_volume: "Volume",
+
     a11y_download_audio: "Download source audio",
+
     a11y_expand_sidebar: "Expand navigation",
+
     a11y_collapse_sidebar: "Collapse navigation",
 
     // Auth & Cross-Device Sync
+
     auth_sign_in: "Sign In",
+
     auth_sign_up: "Create Account",
+
     auth_modal_title_login: "Welcome Back to Audins",
-    auth_modal_desc_login: "Sign in to access your recordings, transcripts, and AI notes on any device.",
+
+    auth_modal_desc_login:
+      "Sign in to access your recordings, transcripts, and AI notes on any device.",
+
     auth_modal_title_register: "Create Your Audins Account",
-    auth_modal_desc_register: "Sync your audio workspace across laptops, phones, and tablets seamlessly.",
+
+    auth_modal_desc_register:
+      "Sync your audio workspace across laptops, phones, and tablets seamlessly.",
+
     auth_email_label: "Email Address",
+
     auth_email_placeholder: "name@example.com",
+
     auth_password_label: "Password",
+
     auth_password_placeholder: "At least 6 characters",
+
     auth_confirm_password_label: "Confirm Password",
+
     auth_name_label: "Full Name (Optional)",
+
     auth_name_placeholder: "e.g. Alex Johnson",
-    auth_claim_guest_recordings: "Sync existing recordings on this device to your account",
+
+    auth_claim_guest_recordings:
+      "Sync existing recordings on this device to your account",
+
     auth_no_account: "Don't have an account?",
+
     auth_have_account: "Already have an account?",
+
     auth_btn_sign_in: "Sign In",
+
     auth_btn_sign_up: "Create Account",
+
     auth_btn_signing_in: "Signing in...",
+
     auth_btn_signing_up: "Creating account...",
+
     auth_sign_out: "Sign Out",
+
     auth_guest: "Guest Mode",
+
     auth_guest_desc: "Log in to sync your recordings across devices.",
+
     auth_account: "Account",
+
     auth_password_mismatch: "Passwords do not match",
+
     auth_logged_in_as: "Signed in as",
+
     sync_title: "Device Synchronization",
-    sync_desc: "Access your transcripts, audio recordings, and AI summaries seamlessly across your laptop, phone, and tablet.",
+
+    sync_desc:
+      "Access your transcripts, audio recordings, and AI summaries seamlessly across your laptop, phone, and tablet.",
+
     sync_status_synced: "Synced across devices",
+
     sync_status_syncing: "Syncing...",
+
     sync_status_offline: "Offline / Local Mode",
+
     sync_status_guest: "Not Synced (Guest)",
+
     sync_btn_now: "Sync Now",
+
     sync_now_toast: "Device data synchronized successfully",
+
     sync_claimed_toast: "Migrated {count} recording(s) to your account!",
+
     sync_card_login_cta: "Sign in or register to enable cross-device sync.",
+
+    // Share & Public Note
+
+    action_share: "Share",
+
+    share_badge_public: "Shared",
+
+    share_modal_title: "Share Note & Audio",
+
+    share_modal_desc:
+      "Create a public link to share your note, AI summary, and audio with anyone.",
+
+    share_toggle_label: "Public Link Access",
+
+    share_toggle_desc_on: "Anyone with this unique link can view this note.",
+
+    share_toggle_desc_off: "This note is private. Only you can access it.",
+
+    share_link_label: "SHAREABLE LINK",
+
+    share_btn_copy_link: "Copy Link",
+
+    share_link_copied: "Copied!",
+
+    share_content_options: "CONTENT TO INCLUDE",
+
+    share_opt_audio: "Include Audio Playback",
+
+    share_opt_audio_hint:
+      "Allow recipients to listen to the synchronized recording",
+
+    share_opt_audio_unavailable: "Audio file is no longer available on server",
+
+    share_opt_summary: "Include AI Summary",
+
+    share_opt_summary_hint: "Display key takeaways and formatted breakdown",
+
+    share_opt_transcript: "Include Full Transcript",
+
+    share_opt_transcript_hint: "Display timestamped conversation segments",
+
+    share_btn_preview: "Open Public View",
+
+    share_btn_regenerate: "Generate New Link",
+
+    share_regenerate_confirm:
+      "Are you sure? The current link will immediately stop working.",
+
+    share_quick_social: "Quick Share",
+    share_btn_system_dialog: "Open Share Dialog...",
+
+    share_toast_updated: "Share settings updated",
+
+    share_toast_link_copied: "Share link copied to clipboard!",
+
+    share_public_view_count: "{count} views",
+
+    share_public_footer_cta: "Powered by Audins AI",
+
+    share_public_make_own: "Transcribe your own audio",
+
+    share_public_save_to_workspace: "Save to My Workspace",
+
+    share_public_saving: "Saving copy...",
+
+    share_public_saved_toast: "Note copied to your workspace!",
+
+    share_public_inactive_title: "Note Not Available",
+
+    share_public_inactive_desc:
+      "This note is private, has expired, or public sharing was disabled by the author.",
+
+    share_public_btn_home: "Go to Audins Homepage",
+
+    share_public_audio_unavailable:
+      "Audio is not included in this shared note.",
   },
+
   id: {
     // Navigation & Common
+
     app_name: "Audins",
+
     app_tagline: "Audio Insight",
+
     nav_dashboard: "Dasbor",
+
     nav_workspace: "Ruang Kerja",
+
     nav_settings: "Pengaturan",
+
     btn_back: "Kembali",
+
     btn_cancel: "Batal",
+
     btn_save: "Simpan",
+
     btn_delete: "Hapus",
+
     btn_close: "Tutup",
+
     btn_open: "Buka",
+
     btn_open_workspace: "Buka di Studio",
 
     // Dashboard
+
     dashboard_title: "Dasbor",
-    dashboard_desc: "Unggah atau rekam audio untuk menghasilkan transkrip dan rangkuman eksekutif.",
+
+    dashboard_desc:
+      "Unggah atau rekam audio untuk menghasilkan transkrip dan rangkuman eksekutif.",
+
     upload_title: "Unggah Audio atau Video",
+
     upload_drop_title: "Lepaskan untuk mengunggah rekaman",
-    upload_desc: "Tarik & lepas file audio atau video Anda di sini, atau pilih opsi di bawah.",
+
+    upload_desc:
+      "Tarik & lepas file audio atau video Anda di sini, atau pilih opsi di bawah.",
+
     browse_device: "Pilih dari perangkat",
+
     btn_record_live: "Rekam Suara Langsung",
+
     max_file_size: "Ukuran file maksimum: 500MB",
+
     recent_documents: "Dokumen Terbaru",
+
     no_documents: "Tidak ada dokumen",
+
     no_documents_desc: "Unggah atau rekam file audio di atas untuk memulai.",
+
     search_documents: "Cari dokumen...",
+
     filter_all: "Semua",
+
     filter_completed: "Selesai",
+
     filter_processing: "Diproses",
+
     filter_failed: "Gagal",
 
     // Live Recording Modal
+
     recorder_title: "Perekaman Suara Langsung",
-    recorder_desc: "Bicaralah ke mikrofon Anda untuk merekam kuliah, wawancara, atau rapat.",
-    recorder_mic_error: "Akses mikrofon ditolak atau tidak tersedia. Silakan periksa izin browser Anda.",
-    recorder_unsupported: "Perekaman audio tidak didukung di browser ini. Silakan coba Chrome, Edge, atau Firefox.",
+
+    recorder_desc:
+      "Bicaralah ke mikrofon Anda untuk merekam kuliah, wawancara, atau rapat.",
+
+    recorder_mic_error:
+      "Akses mikrofon ditolak atau tidak tersedia. Silakan periksa izin browser Anda.",
+
+    recorder_unsupported:
+      "Perekaman audio tidak didukung di browser ini. Silakan coba Chrome, Edge, atau Firefox.",
+
     recorder_idle_hint: "Klik tombol merah di bawah untuk mulai merekam.",
+
     recorder_recording: "Perekaman sedang berlangsung...",
+
     recorder_paused: "Perekaman dijeda",
-    recorder_finished: "Perekaman selesai. Pratinjau atau transkripsikan di bawah.",
+
+    recorder_finished:
+      "Perekaman selesai. Pratinjau atau transkripsikan di bawah.",
+
     recorder_name_label: "JUDUL REKAMAN",
+
     recorder_name_placeholder: "mis. Rapat Proyek, Kuliah Biologi...",
+
     btn_start_record: "Mulai Merekam",
+
     btn_pause: "Jeda",
+
     btn_resume: "Lanjutkan",
+
     btn_stop_preview: "Berhenti & Pratinjau",
+
     btn_discard: "Buang",
+
     btn_rerecord: "Rekam Ulang",
+
     btn_download_audio_only: "Unduh Audio Saja",
+
     btn_submit_transcribe: "Transkrip & Analisis",
+
     recorder_minimize: "Kecilkan rekaman",
+
     recorder_expand: "Perbesar rekaman",
+
     recorder_minimized_hint: "Merekam di latar belakang",
 
     // Document Table & Actions
+
     col_document: "DOKUMEN",
+
     col_date: "TANGGAL",
+
     col_duration: "DURASI",
+
     col_status: "STATUS",
+
     col_actions: "AKSI",
+
     action_rename: "Ganti Nama",
+
     action_download: "Unduh Audio",
+
     action_duplicate: "Duplikat",
+
     action_delete: "Hapus",
+
     modal_delete_title: "Hapus Dokumen?",
+
     modal_delete_desc: "Apakah Anda yakin ingin menghapus secara permanen",
+
     modal_delete_subdesc: "Transkrip dan file audio akan dihapus.",
+
     action_delete_audio: "Hapus Audio Saja",
+
     modal_delete_audio_title: "Hapus File Audio Saja?",
-    modal_delete_audio_desc: "Apakah Anda yakin ingin menghapus file audio untuk",
-    modal_delete_audio_warning: "Transkrip dan rangkuman teks akan tetap tersimpan secara permanen, namun audio tidak dapat diputar kembali dan fitur transkrip ulang tidak akan tersedia.",
-    toast_audio_deleted: "File audio berhasil dihapus. Ruang penyimpanan berhasil dibebaskan!",
-    audio_deleted_banner: "File audio telah dihapus untuk menghemat ruang penyimpanan. Transkrip & rangkuman tetap tersimpan.",
+
+    modal_delete_audio_desc:
+      "Apakah Anda yakin ingin menghapus file audio untuk",
+
+    modal_delete_audio_warning:
+      "Transkrip dan rangkuman teks akan tetap tersimpan secara permanen, namun audio tidak dapat diputar kembali dan fitur transkrip ulang tidak akan tersedia.",
+
+    toast_audio_deleted:
+      "File audio berhasil dihapus. Ruang penyimpanan berhasil dibebaskan!",
+
+    audio_deleted_banner:
+      "File audio telah dihapus untuk menghemat ruang penyimpanan. Transkrip & rangkuman tetap tersimpan.",
+
     audio_deleted_tooltip: "File audio telah dihapus",
+
     btn_retranscribe: "Transkrip Ulang",
+
     modal_retranscribe_title: "Transkrip Ulang Audio",
-    modal_retranscribe_desc: "Pilih bahasa utama untuk memaksa Whisper AI mentranskrip secara akurat, terutama jika rekaman diawali dengan sapaan bahasa asing.",
+
+    modal_retranscribe_desc:
+      "Pilih bahasa utama untuk memaksa Whisper AI mentranskrip secara akurat, terutama jika rekaman diawali dengan sapaan bahasa asing.",
+
     retranscribe_lang_label: "PILIH BAHASA",
+
     retranscribe_lang_id: "Bahasa Indonesia",
+
     retranscribe_lang_en: "Bahasa Inggris",
+
     retranscribe_lang_auto: "Deteksi Otomatis",
+
     retranscribe_lang_jv: "Bahasa Jawa",
+
     retranscribe_prompt_label: "KATA KUNCI / ISTILAH KHUSUS (OPSIONAL)",
-    retranscribe_prompt_placeholder: "mis. singkatan khusus, nama brand, istilah teknis...",
-    retranscribe_auto_summary: "Perbarui rangkuman AI secara otomatis dengan transkrip baru",
+
+    retranscribe_prompt_placeholder:
+      "mis. singkatan khusus, nama brand, istilah teknis...",
+
+    retranscribe_auto_summary:
+      "Perbarui rangkuman AI secara otomatis dengan transkrip baru",
+
     btn_start_retranscribe: "Mulai Transkrip Ulang",
+
     toast_retranscribe_started: "Sedang mentranskrip ulang audio...",
+
     toast_retranscribe_done: "Audio berhasil ditranskrip ulang!",
-    retranscribe_disabled_no_audio: "File audio telah dihapus. Transkrip ulang tidak tersedia.",
+
+    retranscribe_disabled_no_audio:
+      "File audio telah dihapus. Transkrip ulang tidak tersedia.",
+
     modal_rename_title: "Ganti Nama File Audio",
+
     modal_rename_desc: "Masukkan nama baru untuk rekaman ini.",
 
     // Workspace & Player
+
     workspace_title: "Daftar Rekaman",
+
     workspace_desc: "Pilih rekaman untuk melihat transkrip dan rangkuman.",
+
     audio_player: "Pemutar Audio",
+
     no_audio: "Tidak Ada Audio",
+
     loading_waveform: "Memproses visualisasi suara...",
+
     transcript_title: "Transkrip",
+
     search_transcript: "Cari kata kunci dalam transkrip...",
+
     no_transcript_matches: "Tidak ada hasil transkrip untuk",
+
     jump_hint: "Klik segmen untuk melompat",
+
     btn_copy_sentence: "Salin kalimat",
+
     btn_copy_section: "Salin bagian",
+
     btn_copy_all: "Salin Rangkuman",
+
     btn_copy_summary: "Salin Rangkuman",
+
     btn_copy_transcript: "Salin Transkrip",
+
     btn_copy_all_transcript: "Salin Semua",
+
     btn_export_transcript: "Ekspor",
+
     btn_export_transcript_full: "Ekspor Transkrip",
+
     export_plain_text: "Teks Polos (.txt)",
+
     export_plain_text_desc: "Narasi mengalir tanpa penanda waktu",
+
     export_with_timestamps: "Dengan Cap Waktu (.txt)",
+
     export_with_timestamps_desc: "Menyertakan penanda waktu [mm:ss] per segmen",
+
     export_srt: "Subtitle (.srt)",
+
     export_srt_desc: "Format takarir standar video",
+
     btn_export_pdf: "Ekspor PDF",
+
     btn_re_summarize: "Rangkum Ulang AI",
+
     btn_edit_summary: "Edit Rangkuman",
+
     btn_save_markdown: "Simpan Markdown",
+
     btn_save_changes: "Simpan Perubahan",
+
     summary_title: "Rangkuman",
+
     re_summarize_title: "Panduan Khusus AI",
+
     re_summarize_desc: "Berikan instruksi spesifik atau pilih preset di bawah:",
-    preset_indonesian: "Terjemahkan dan rangkum sepenuhnya dalam Bahasa Indonesia",
-    preset_action_items: "Fokus pada Action Items, Tenggat Waktu, dan Keputusan Kunci",
-    preset_study_notes: "Buat catatan belajar terperinci dengan poin-poin penting",
-    preset_executive: "Hasilkan Ringkasan Eksekutif tingkat tinggi untuk pemangku kepentingan",
+
+    preset_indonesian:
+      "Terjemahkan dan rangkum sepenuhnya dalam Bahasa Indonesia",
+
+    preset_action_items:
+      "Fokus pada Action Items, Tenggat Waktu, dan Keputusan Kunci",
+
+    preset_study_notes:
+      "Buat catatan belajar terperinci dengan poin-poin penting",
+
+    preset_executive:
+      "Hasilkan Ringkasan Eksekutif tingkat tinggi untuk pemangku kepentingan",
+
     preset_summary_3points: "Ringkas menjadi 3 poin utama saja",
+
     preset_summary_action_items: "Ekstrak semua action items dan tenggat waktu",
+
     preset_summary_email: "Buat format email tindak lanjut resmi",
+
     preset_summary_risks: "Identifikasi kendala dan risiko utama",
-    re_summarize_placeholder: "mis. Fokus pada metrik keuangan... atau Tulis dalam Bahasa Indonesia...",
+
+    re_summarize_placeholder:
+      "mis. Fokus pada metrik keuangan... atau Tulis dalam Bahasa Indonesia...",
+
     btn_run_analysis: "Jalankan Analisis",
 
     // Processing & Failures
+
     status_processing_title: "AI Sedang Mengonversi Suara & Merangkum...",
-    status_processing_desc: "Anda dapat berpindah tab atau melihat file lain dengan aman. Proses berjalan di latar belakang.",
+
+    status_processing_desc:
+      "Anda dapat berpindah tab atau melihat file lain dengan aman. Proses berjalan di latar belakang.",
+
     status_failed_title: "Pemrosesan Gagal",
-    status_failed_desc: "Gagal mentranskripsi atau merangkum. Silakan periksa kuota API Groq Anda atau unggah ulang.",
+
+    status_failed_desc:
+      "Gagal mentranskripsi atau merangkum. Silakan periksa kuota API Groq Anda atau unggah ulang.",
 
     // Free Tier & Settings
+
     daily_uploads: "Unggahan Harian",
+
     storage: "Penyimpanan",
+
     btn_api_limits: "Kunci API / Batasan",
+
     auto_purge_days: "Dihapus otomatis setelah 7 hari",
+
     unlimited: "Tanpa Batas",
+
     custom_api_key: "Kunci API Kustom",
+
     uploads_left: "unggahan tersisa hari ini",
+
     settings_title: "Pengaturan",
+
     settings_desc: "Konfigurasi kunci API dan preferensi Anda",
+
     tab_api_key: "Kunci API",
+
     tab_about: "Tentang",
+
     demo_quota_active: "Kuota Demo Gratis Aktif",
-    demo_quota_desc: "Anda menggunakan kuota demo bersama. Masukkan kunci API Groq pribadi Anda untuk transkripsi tanpa batas.",
+
+    demo_quota_desc:
+      "Anda menggunakan kuota demo bersama. Masukkan kunci API Groq pribadi Anda untuk transkripsi tanpa batas.",
+
     personal_api_key_label: "KUNCI API GROQ PRIBADI",
-    key_storage_hint: "Disimpan secara lokal di browser Anda. Tidak pernah dikirim ke basis data kami.",
+
+    key_storage_hint:
+      "Disimpan secara lokal di browser Anda. Tidak pernah dikirim ke basis data kami.",
+
     btn_save_config: "Simpan Konfigurasi",
+
     settings_saved: "Pengaturan berhasil disimpan!",
 
     settings_appearance_title: "Tampilan",
+
     settings_appearance_desc: "Atur tampilan dan bahasa Audins.",
+
     settings_language_label: "Bahasa",
+
     settings_theme_label: "Tema",
 
     // Rate Limit Modal
+
     limit_reached_title: "Batas Kuota Demo Harian Tercapai",
-    limit_reached_desc: "Anda telah mencapai batas kuota demo hari ini. Tunggu hingga reset atau masukkan kunci API Groq Anda untuk langsung melanjutkan.",
+
+    limit_reached_desc:
+      "Anda telah mencapai batas kuota demo hari ini. Tunggu hingga reset atau masukkan kunci API Groq Anda untuk langsung melanjutkan.",
+
     resets_in: "Kuota reset dalam",
+
     midnight_utc: "(Tengah Malam UTC)",
+
     btn_continue: "Lanjutkan",
 
     // Theme & Lang
+
     theme_light: "Mode Terang",
+
     theme_dark: "Mode Gelap",
+
     lang_en: "Inggris",
+
     lang_id: "Indonesia",
 
     // Toasts & async feedback
+
     toast_region_label: "Notifikasi",
+
     toast_dismiss: "Tutup notifikasi",
+
     toast_upload_too_large: "Ukuran berkas melebihi batas maksimum 500MB.",
-    toast_processing_started: "AI sedang memproses audio Anda di latar belakang.",
+
+    toast_processing_started:
+      "AI sedang memproses audio Anda di latar belakang.",
+
     toast_processing_done: "Pemrosesan selesai untuk {name}!",
+
     toast_processing_failed: "Pemrosesan gagal untuk {name}.",
-    toast_polling_timeout: "Pemrosesan membutuhkan waktu lebih lama dari biasanya. Silakan muat ulang atau periksa kembali nanti.",
+
+    toast_polling_timeout:
+      "Pemrosesan membutuhkan waktu lebih lama dari biasanya. Silakan muat ulang atau periksa kembali nanti.",
+
     toast_upload_cancelled: "Unggahan dibatalkan",
+
     toast_resummarize_failed: "Rangkum ulang gagal: {error}",
+
     toast_delete_failed: "Gagal menghapus dokumen: {error}",
+
     toast_rename_failed: "Gagal mengganti nama dokumen: {error}",
+
     toast_duplicate_failed: "Gagal menduplikat dokumen: {error}",
+
     toast_summary_save_failed: "Gagal menyimpan rangkuman: {error}",
-    toast_duplicated: "Duplikat \"{name}\" dibuat",
-    toast_deleted: "\"{name}\" dihapus",
-    toast_renamed_to: "Diubah menjadi \"{name}\"",
+
+    toast_duplicated: 'Duplikat "{name}" dibuat',
+
+    toast_deleted: '"{name}" dihapus',
+
+    toast_renamed_to: 'Diubah menjadi "{name}"',
+
     toast_summary_saved: "Rangkuman berhasil disimpan",
+
     toast_nothing_to_copy: "Tidak ada yang bisa disalin",
+
     btn_show_all_documents: "Lihat semua di Ruang Kerja",
+
     audio_not_found_desc: "Audio tidak ditemukan atau telah dihapus.",
+
     toast_audio_not_found: "File audio tidak ditemukan atau telah dihapus.",
-    toast_downloading: "Mengunduh \"{name}\"...",
-    toast_download_done: "\"{name}\" berhasil diunduh",
+
+    toast_downloading: 'Mengunduh "{name}"...',
+
+    toast_download_done: '"{name}" berhasil diunduh',
+
     toast_download_failed: "Unduhan gagal. Silakan coba lagi.",
+
     toast_recording_downloaded: "Rekaman audio berhasil diunduh",
+
     toast_transcript_exported: "Transkrip berhasil diekspor",
+
     toast_transcript_copied: "Transkrip disalin ke papan klip",
+
     toast_no_transcript: "Transkrip belum tersedia untuk diekspor",
 
     // Load error banner
+
     error_load_title: "Dokumen Anda gagal dimuat",
-    error_load_desc: "Kami tidak dapat menghubungi server. Periksa koneksi Anda dan coba lagi.",
+
+    error_load_desc:
+      "Kami tidak dapat menghubungi server. Periksa koneksi Anda dan coba lagi.",
+
     btn_retry: "Coba Lagi",
 
     // Misc UI strings
-    search_no_match: "Tidak ada dokumen yang cocok dengan \"{query}\".",
+
+    search_no_match: 'Tidak ada dokumen yang cocok dengan "{query}".',
+
     ingest_audio: "Mengunggah audio... {progress}%",
+
     summary_fallback_title: "Rangkuman",
-    summary_empty_sections: "Belum ada bagian rangkuman terstruktur. Klik \"Rangkum Ulang AI\" di atas untuk menghasilkan wawasan.",
-    markdown_hint: "Editor Markdown: Gunakan # Judul dan ## Judul Bagian untuk menyusun catatan Anda.",
-    partial_transcript_warning: "Perhatian: transkrip ini mungkin tidak lengkap. {warning}",
+
+    summary_empty_sections:
+      'Belum ada bagian rangkuman terstruktur. Klik "Rangkum Ulang AI" di atas untuk menghasilkan wawasan.',
+
+    markdown_hint:
+      "Editor Markdown: Gunakan # Judul dan ## Judul Bagian untuk menyusun catatan Anda.",
+
+    partial_transcript_warning:
+      "Perhatian: transkrip ini mungkin tidak lengkap. {warning}",
+
     modal_rename_placeholder: "mis. Rapat Mingguan, Wawancara...",
+
     workspace_library_title: "Pustaka Dokumen",
-    workspace_library_desc: "Jelajahi, cari, dan kelola semua rekaman audio, transkrip, serta rangkuman AI Anda.",
+
+    workspace_library_desc:
+      "Jelajahi, cari, dan kelola semua rekaman audio, transkrip, serta rangkuman AI Anda.",
+
     api_status_checking: "Memeriksa",
+
     api_status_active: "Aktif",
+
     api_status_invalid: "Tidak Valid",
+
     quota_resets_soon: "Segera",
+
     quota_resets_tomorrow: "Besok",
 
     // Accessibility labels
+
     a11y_switch_language: "Ganti bahasa",
+
     a11y_toggle_theme: "Ganti tema",
+
     a11y_close_menu: "Tutup menu",
+
     a11y_more_options: "Opsi lainnya",
+
     a11y_view_mode: "Mode tampilan dokumen",
+
     a11y_grid_view: "Tampilan kisi",
+
     a11y_table_view: "Tampilan tabel",
+
     a11y_scrubber: "Bilah penunjuk durasi audio",
+
     a11y_play_audio: "Putar audio",
+
     a11y_skip_backward: "Mundur 10 detik",
+
     a11y_skip_forward: "Maju 10 detik",
+
     a11y_mute: "Bisukan",
+
     a11y_unmute: "Suarakan",
+
     a11y_volume: "Volume",
+
     a11y_download_audio: "Unduh sumber audio",
+
     a11y_expand_sidebar: "Buka menu navigasi",
+
     a11y_collapse_sidebar: "Tutup menu navigasi",
 
     // Auth & Cross-Device Sync
+
     auth_sign_in: "Masuk",
+
     auth_sign_up: "Daftar Akun",
+
     auth_modal_title_login: "Selamat Datang Kembali di Audins",
-    auth_modal_desc_login: "Masuk untuk mengakses rekaman, transkrip, dan catatan AI Anda di perangkat mana pun.",
+
+    auth_modal_desc_login:
+      "Masuk untuk mengakses rekaman, transkrip, dan catatan AI Anda di perangkat mana pun.",
+
     auth_modal_title_register: "Buat Akun Audins Anda",
-    auth_modal_desc_register: "Sinkronkan rekaman audio di laptop, ponsel, dan tablet Anda dengan mulus.",
+
+    auth_modal_desc_register:
+      "Sinkronkan rekaman audio di laptop, ponsel, dan tablet Anda dengan mulus.",
+
     auth_email_label: "Alamat Email",
+
     auth_email_placeholder: "nama@example.com",
+
     auth_password_label: "Kata Sandi",
+
     auth_password_placeholder: "Minimal 6 karakter",
+
     auth_confirm_password_label: "Konfirmasi Kata Sandi",
+
     auth_name_label: "Nama Lengkap (Opsional)",
+
     auth_name_placeholder: "mis. Galih Praditya",
-    auth_claim_guest_recordings: "Sinkronkan rekaman yang sudah ada di perangkat ini ke akun Anda",
+
+    auth_claim_guest_recordings:
+      "Sinkronkan rekaman yang sudah ada di perangkat ini ke akun Anda",
+
     auth_no_account: "Belum punya akun?",
+
     auth_have_account: "Sudah punya akun?",
+
     auth_btn_sign_in: "Masuk",
+
     auth_btn_sign_up: "Daftar Akun",
+
     auth_btn_signing_in: "Sedang masuk...",
+
     auth_btn_signing_up: "Membuat akun...",
+
     auth_sign_out: "Keluar",
+
     auth_guest: "Mode Tamu",
+
     auth_guest_desc: "Masuk untuk menyinkronkan rekaman Anda antar perangkat.",
+
     auth_account: "Akun",
+
     auth_password_mismatch: "Kata sandi tidak cocok",
+
     auth_logged_in_as: "Masuk sebagai",
+
     sync_title: "Sinkronisasi Antar Perangkat",
-    sync_desc: "Akses transkrip, rekaman audio, dan rangkuman AI dengan mulus di seluruh laptop, ponsel, dan tablet Anda.",
+
+    sync_desc:
+      "Akses transkrip, rekaman audio, dan rangkuman AI dengan mulus di seluruh laptop, ponsel, dan tablet Anda.",
+
     sync_status_synced: "Tersinkron di semua perangkat",
+
     sync_status_syncing: "Menyinkronkan...",
+
     sync_status_offline: "Mode Offline / Lokal",
+
     sync_status_guest: "Belum Tersinkron (Tamu)",
+
     sync_btn_now: "Sinkronkan Sekarang",
+
     sync_now_toast: "Data perangkat berhasil disinkronkan",
+
     sync_claimed_toast: "Berhasil memindahkan {count} rekaman ke akun Anda!",
-    sync_card_login_cta: "Masuk atau buat akun untuk mengaktifkan sinkronisasi antar perangkat.",
+
+    sync_card_login_cta:
+      "Masuk atau buat akun untuk mengaktifkan sinkronisasi antar perangkat.",
+
+    // Share & Public Note
+
+    action_share: "Bagikan",
+
+    share_badge_public: "Dibagikan",
+
+    share_modal_title: "Bagikan Catatan & Audio",
+
+    share_modal_desc:
+      "Buat tautan publik untuk membagikan catatan, ringkasan AI, dan audio kepada siapa saja.",
+
+    share_toggle_label: "Akses Tautan Publik",
+
+    share_toggle_desc_on:
+      "Siapa pun yang memiliki tautan unik ini dapat melihat catatan ini.",
+
+    share_toggle_desc_off:
+      "Catatan ini bersifat privat. Hanya Anda yang dapat mengaksesnya.",
+
+    share_link_label: "TAUTAN BERBAGI",
+
+    share_btn_copy_link: "Salin Tautan",
+
+    share_link_copied: "Tersalin!",
+
+    share_content_options: "KONTEN YANG DISERTAKAN",
+
+    share_opt_audio: "Sertakan Pemutar Audio",
+
+    share_opt_audio_hint:
+      "Izinkan penerima mendengarkan rekaman yang tersinkronisasi",
+
+    share_opt_audio_unavailable: "File audio sudah tidak tersedia di server",
+
+    share_opt_summary: "Sertakan Ringkasan AI",
+
+    share_opt_summary_hint:
+      "Tampilkan poin-poin penting dan analisis terstruktur",
+
+    share_opt_transcript: "Sertakan Transkrip Lengkap",
+
+    share_opt_transcript_hint:
+      "Tampilkan percakapan lengkap dengan penanda waktu",
+
+    share_btn_preview: "Buka Tampilan Publik",
+
+    share_btn_regenerate: "Buat Tautan Baru",
+
+    share_regenerate_confirm:
+      "Apakah Anda yakin? Tautan saat ini akan langsung tidak berlaku.",
+
+    share_quick_social: "Bagikan Cepat",
+    share_btn_system_dialog: "Buka Dialog Berbagi...",
+
+    share_toast_updated: "Pengaturan berbagi diperbarui",
+
+    share_toast_link_copied: "Tautan berhasil disalin ke clipboard!",
+
+    share_public_view_count: "{count} kali dilihat",
+
+    share_public_footer_cta: "Diberdayakan oleh Audins AI",
+
+    share_public_make_own: "Transkripsikan audio Anda sendiri",
+
+    share_public_save_to_workspace: "Simpan ke Workspace Saya",
+
+    share_public_saving: "Menyimpan salinan...",
+
+    share_public_saved_toast: "Catatan berhasil disalin ke workspace Anda!",
+
+    share_public_inactive_title: "Catatan Tidak Tersedia",
+
+    share_public_inactive_desc:
+      "Catatan ini bersifat privat, telah kedaluwarsa, atau akses berbagi telah dinonaktifkan oleh pemiliknya.",
+
+    share_public_btn_home: "Buka Beranda Audins",
+
+    share_public_audio_unavailable:
+      "Audio tidak disertakan dalam catatan yang dibagikan ini.",
   },
 }
-

@@ -20,8 +20,10 @@ import {
   Quotes,
   Sparkle,
   HardDrives,
+  ShareNetwork,
 } from "@phosphor-icons/react"
 import RetranscribeModal from "../modals/RetranscribeModal"
+import ShareModal from "../modals/ShareModal"
 
 interface WorkspaceProps {
   documents: DocumentItem[]
@@ -30,13 +32,17 @@ interface WorkspaceProps {
   onDeleteDocument: (id: number | string) => void
   onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
-  onUpdateSummary: (id: number | string, summary: DocumentItem["summary"]) => void
+  onUpdateSummary: (
+    id: number | string,
+    summary: DocumentItem["summary"],
+  ) => void
   onCancelUpload?: (id: number | string) => void
   onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
   onRetranscribe?: (
     id: number | string,
-    options: { language: string; prompt: string; regenerateSummary: boolean },
+    options: { language: string prompt: string regenerateSummary: boolean },
   ) => Promise<void> | void
+  onUpdateDocument?: (doc: DocumentItem) => void
 }
 
 export default function Workspace({
@@ -50,6 +56,7 @@ export default function Workspace({
   onCancelUpload,
   onDeleteAudioOnly,
   onRetranscribe,
+  onUpdateDocument,
 }: WorkspaceProps) {
   const { id } = useParams<{ id?: string }>()
   const navigate = useNavigate()
@@ -58,10 +65,13 @@ export default function Workspace({
 
   const [currentTime, setCurrentTime] = useState<number>(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [activeTab, setActiveTab] = useState<"transcript" | "summary">("transcript")
+  const [activeTab, setActiveTab] = useState<"transcript" | "summary">(
+    "transcript",
+  )
 
   // Studio Action Menu & Modal States
   const [studioMenuOpen, setStudioMenuOpen] = useState(false)
+  const [shareModalOpen, setShareModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [renameValue, setRenameValue] = useState("")
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -73,7 +83,8 @@ export default function Workspace({
   useEffect(() => {
     if (!studioMenuOpen) return
     const close = () => setStudioMenuOpen(false)
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setStudioMenuOpen(false)
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && setStudioMenuOpen(false)
     window.addEventListener("click", close)
     window.addEventListener("keydown", onKey)
     return () => {
@@ -203,110 +214,148 @@ export default function Workspace({
 
           {/* Active File Title & Status */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <p className="text-xs sm:text-sm font-bold font-display truncate text-fg flex-1 min-w-0">
-                {docName}
-              </p>
-              <StatusBadge status={document.status} uploadProgress={document.uploadProgress} size="sm" />
-            </div>
-            <p className="text-[10px] sm:text-[11px] font-mono text-fg-tertiary mt-0.5 truncate">
-              {docDate}
+            <p className="text-xs sm:text-sm font-bold font-display truncate text-fg">
+              {docName}
             </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] sm:text-[11px] font-mono text-fg-tertiary truncate">
+                {docDate}
+              </span>
+              {document.status !== "Completed" && (
+                <>
+                  <span className="text-[10px] text-fg-tertiary">&bull;</span>
+                  <StatusBadge
+                    status={document.status}
+                    uploadProgress={document.uploadProgress}
+                    size="sm"
+                  />
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Studio Document Action Kebab Menu */}
-        <div className="relative flex-shrink-0">
+        {/* Studio Document Action Toolbar */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
           <button
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation()
-              setStudioMenuOpen((prev) => !prev)
-            }}
-            aria-label={t("a11y_more_options")}
-            title={t("a11y_more_options")}
-            aria-expanded={studioMenuOpen}
-            aria-haspopup="menu"
+            onClick={() => setShareModalOpen(true)}
+            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold border border-border bg-surface-2 hover:bg-surface-3 text-fg transition-colors cursor-pointer"
+            title={t("action_share")}
           >
-            <DotsThreeVertical size={18} weight="bold" />
+            <ShareNetwork size={15} weight="duotone" />
+            <span className="hidden sm:inline">{t("action_share")}</span>
+            {document.shareSettings?.isPublic && (
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+            )}
           </button>
 
-          {studioMenuOpen && (
-            <div
-              className="absolute right-0 mt-1.5 w-48 rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
-              role="menu"
-              onClick={(e) => e.stopPropagation()}
+          {/* Studio Document Action Kebab Menu */}
+          <div className="relative flex-shrink-0">
+            <button
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation()
+                setStudioMenuOpen((prev) => !prev)
+              }}
+              aria-label={t("a11y_more_options")}
+              title={t("a11y_more_options")}
+              aria-expanded={studioMenuOpen}
+              aria-haspopup="menu"
             >
-              <button
-                role="menuitem"
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
-                onClick={() => {
-                  setStudioMenuOpen(false)
-                  setRenameValue(document.name)
-                  setRenameModalOpen(true)
-                }}
+              <DotsThreeVertical size={18} weight="bold" />
+            </button>
+
+            {studioMenuOpen && (
+              <div
+                className="absolute right-0 mt-1.5 w-48 rounded-xl bg-surface border border-border shadow-raised py-1.5 z-50 animate-scale-in"
+                role="menu"
+                onClick={(e) => e.stopPropagation()}
               >
-                <PencilSimple size={15} weight="duotone" />
-                <span>{t("action_rename")}</span>
-              </button>
-              <button
-                role="menuitem"
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
-                onClick={() => {
-                  setStudioMenuOpen(false)
-                  onDuplicateDocument(document)
-                }}
-              >
-                <Copy size={15} weight="duotone" />
-                <span>{t("action_duplicate")}</span>
-              </button>
-              {hasAudio && (
                 <button
                   role="menuitem"
                   className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
-                  onClick={async () => {
-                    setStudioMenuOpen(false)
-                    await handleDownloadAudio(document)
-                  }}
-                >
-                  <DownloadSimple size={15} weight="duotone" />
-                  <span>{t("action_download")}</span>
-                </button>
-              )}
-              {hasAudio && onDeleteAudioOnly && (
-                <button
-                  role="menuitem"
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-warning hover:bg-warning/10 transition-colors cursor-pointer"
                   onClick={() => {
                     setStudioMenuOpen(false)
-                    setDeleteAudioModalOpen(true)
+                    setShareModalOpen(true)
                   }}
                 >
-                  <HardDrives size={15} weight="duotone" />
-                  <span>{t("action_delete_audio")}</span>
+                  <ShareNetwork size={15} weight="duotone" />
+                  <span>{t("action_share")}</span>
                 </button>
-              )}
-              <div className="my-1 mx-2 h-px bg-border" />
-              <button
-                role="menuitem"
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-danger hover:bg-danger-dim transition-colors cursor-pointer"
-                onClick={() => {
-                  setStudioMenuOpen(false)
-                  setDeleteModalOpen(true)
-                }}
-              >
-                <Trash size={15} weight="duotone" />
-                <span>{t("action_delete")}</span>
-              </button>
-            </div>
-          )}
+                <button
+                  role="menuitem"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setStudioMenuOpen(false)
+                    setRenameValue(document.name)
+                    setRenameModalOpen(true)
+                  }}
+                >
+                  <PencilSimple size={15} weight="duotone" />
+                  <span>{t("action_rename")}</span>
+                </button>
+                <button
+                  role="menuitem"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setStudioMenuOpen(false)
+                    onDuplicateDocument(document)
+                  }}
+                >
+                  <Copy size={15} weight="duotone" />
+                  <span>{t("action_duplicate")}</span>
+                </button>
+                {hasAudio && (
+                  <button
+                    role="menuitem"
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors cursor-pointer"
+                    onClick={async () => {
+                      setStudioMenuOpen(false)
+                      await handleDownloadAudio(document)
+                    }}
+                  >
+                    <DownloadSimple size={15} weight="duotone" />
+                    <span>{t("action_download")}</span>
+                  </button>
+                )}
+                {hasAudio && onDeleteAudioOnly && (
+                  <button
+                    role="menuitem"
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-warning hover:bg-warning/10 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setStudioMenuOpen(false)
+                      setDeleteAudioModalOpen(true)
+                    }}
+                  >
+                    <HardDrives size={15} weight="duotone" />
+                    <span>{t("action_delete_audio")}</span>
+                  </button>
+                )}
+                <div className="my-1 mx-2 h-px bg-border" />
+                <button
+                  role="menuitem"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-danger hover:bg-danger-dim transition-colors cursor-pointer"
+                  onClick={() => {
+                    setStudioMenuOpen(false)
+                    setDeleteModalOpen(true)
+                  }}
+                >
+                  <Trash size={15} weight="duotone" />
+                  <span>{t("action_delete")}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Split Panels / Tabs for Mobile */}
       <div className="flex-1 flex flex-col overflow-hidden relative print:block print:overflow-visible print:h-auto print:bg-white">
         {/* Mobile Tabs Header */}
-        <div className="md:hidden flex items-center border-b border-border bg-surface print:hidden px-2 gap-1" role="tablist">
+        <div
+          className="md:hidden flex items-center border-b border-border bg-surface print:hidden px-2 gap-1"
+          role="tablist"
+        >
           <button
             role="tab"
             aria-selected={activeTab === "transcript"}
@@ -417,7 +466,10 @@ export default function Workspace({
           <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center mb-4 text-amber-500">
             <HardDrives size={24} weight="duotone" />
           </div>
-          <h3 id="delete-audio-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="delete-audio-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_delete_audio_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-3 leading-relaxed">
@@ -456,12 +508,16 @@ export default function Workspace({
           <div className="w-12 h-12 rounded-full bg-danger-dim flex items-center justify-center mb-4 text-danger">
             <Trash size={24} weight="duotone" />
           </div>
-          <h3 id="delete-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="delete-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_delete_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-6 leading-relaxed">
             {t("modal_delete_desc")}{" "}
-            <span className="font-semibold text-fg">"{document.name}"</span>? {t("modal_delete_subdesc")}
+            <span className="font-semibold text-fg">"{document.name}"</span>?{" "}
+            {t("modal_delete_subdesc")}
           </p>
           <div className="flex gap-2.5 justify-end">
             <button
@@ -491,7 +547,10 @@ export default function Workspace({
           <div className="w-12 h-12 rounded-lg bg-primary-dim flex items-center justify-center mb-4 text-primary">
             <PencilSimple size={24} weight="duotone" />
           </div>
-          <h3 id="rename-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="rename-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_rename_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-4">
@@ -525,6 +584,17 @@ export default function Workspace({
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* Share Document Modal */}
+      {shareModalOpen && document && (
+        <ShareModal
+          document={document}
+          onClose={() => setShareModalOpen(false)}
+          onUpdateDoc={(updated) => {
+            onUpdateDocument?.(updated)
+          }}
+        />
       )}
     </div>
   )

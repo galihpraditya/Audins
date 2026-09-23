@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react"
+
 import { NavLink, useNavigate } from "react-router-dom"
+
 import Logo from "./Logo"
+
 import FreeTierBar from "../dashboard/FreeTierBar"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import { useAuth } from "../../context/AuthContext"
+
 import {
   SquaresFour,
   FolderSimpleStar,
@@ -15,18 +21,25 @@ import {
 
 interface SidebarProps {
   uploadCount: number
+
   maxUploads?: number
+
   storageUsed?: number
+
   storageLimit?: number
+
   hasCustomKey?: boolean
+
   apiKeyStatus?: "idle" | "validating" | "valid" | "invalid"
 }
 
 export function NavItems({
   onNavigate,
+
   isCollapsed = false,
 }: {
   onNavigate?: () => void
+
   isCollapsed?: boolean
 }) {
   const { t } = useLanguage()
@@ -34,14 +47,19 @@ export function NavItems({
   const items = [
     {
       to: "/",
+
       label: t("nav_dashboard"),
+
       icon: (isActive: boolean) => (
         <SquaresFour size={20} weight={isActive ? "fill" : "duotone"} />
       ),
     },
+
     {
       to: "/workspace",
+
       label: t("nav_workspace"),
+
       icon: (isActive: boolean) => (
         <FolderSimpleStar size={20} weight={isActive ? "fill" : "duotone"} />
       ),
@@ -74,7 +92,9 @@ export function NavItems({
               )}
               <span
                 className={`transition-colors duration-150 ${
-                  isActive ? "text-primary" : "text-fg-tertiary group-hover:text-fg"
+                  isActive
+                    ? "text-primary"
+                    : "text-fg-tertiary group-hover:text-fg"
                 }`}
               >
                 {item.icon(isActive)}
@@ -90,15 +110,19 @@ export function NavItems({
 
 export function SettingsNavItem({
   onNavigate,
+
   isCollapsed = false,
 }: {
   onNavigate?: () => void
+
   isCollapsed?: boolean
 }) {
   const { user, isAuthenticated, syncStatus } = useAuth()
+
   const { t } = useLanguage()
 
   // When logged in: replace settings button with user profile
+
   if (isAuthenticated && user) {
     const initial = (user.name || user.email || "U")[0].toUpperCase()
 
@@ -106,7 +130,7 @@ export function SettingsNavItem({
       <NavLink
         to="/settings"
         onClick={() => onNavigate?.()}
-        title={isCollapsed ? (user.name || user.email) : undefined}
+        title={isCollapsed ? user.name || user.email : undefined}
         className={({ isActive }) =>
           `w-full flex items-center ${
             isCollapsed
@@ -130,8 +154,8 @@ export function SettingsNavItem({
                   isCollapsed && isActive
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-surface shadow-sm"
                     : isCollapsed
-                    ? "shadow-sm group-hover:ring-2 group-hover:ring-primary/40"
-                    : ""
+                      ? "shadow-sm group-hover:ring-2 group-hover:ring-primary/40"
+                      : ""
                 }`}
               >
                 {initial}
@@ -144,15 +168,19 @@ export function SettingsNavItem({
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0 text-left flex-1">
-                <span className={`text-xs font-semibold truncate leading-tight ${isActive ? "text-primary font-bold" : "text-fg"}`}>
+                <span
+                  className={`text-xs font-semibold truncate leading-tight ${
+                    isActive ? "text-primary font-bold" : "text-fg"
+                  }`}
+                >
                   {user.name || user.email.split("@")[0]}
                 </span>
                 <span className="text-[10px] font-mono text-fg-tertiary truncate leading-tight mt-0.5">
                   {syncStatus === "synced"
                     ? t("sync_status_synced")
                     : syncStatus === "syncing"
-                    ? t("sync_status_syncing")
-                    : t("sync_status_offline")}
+                      ? t("sync_status_syncing")
+                      : t("sync_status_offline")}
                 </span>
               </div>
             )}
@@ -163,6 +191,7 @@ export function SettingsNavItem({
   }
 
   // When guest: standard settings gear icon
+
   return (
     <NavLink
       to="/settings"
@@ -190,7 +219,9 @@ export function SettingsNavItem({
           >
             <GearSix size={20} weight={isActive ? "fill" : "duotone"} />
           </span>
-          {!isCollapsed && <span className="truncate">{t("nav_settings")}</span>}
+          {!isCollapsed && (
+            <span className="truncate">{t("nav_settings")}</span>
+          )}
         </>
       )}
     </NavLink>
@@ -199,23 +230,30 @@ export function SettingsNavItem({
 
 export function UserSidebarItem({
   onNavigate,
+
   isCollapsed = false,
 }: {
   onNavigate?: () => void
+
   isCollapsed?: boolean
 }) {
   const { isGuest, openAuthModal } = useAuth()
+
   const { t } = useLanguage()
 
   // When logged in, SettingsNavItem already displays the user profile icon,
+
   // so UserSidebarItem returns null to avoid any duplicate button.
+
   // When collapsed, hide the guest login button from the sidebar.
+
   if (!isGuest || isCollapsed) return null
 
   return (
     <button
       onClick={() => {
         onNavigate?.()
+
         openAuthModal("login")
       }}
       className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg transition-all cursor-pointer group"
@@ -226,24 +264,34 @@ export function UserSidebarItem({
         className="text-primary group-hover:scale-110 transition-transform flex-shrink-0"
       />
       <div className="flex flex-col text-left min-w-0">
-        <span className="font-semibold text-fg leading-tight truncate">{t("auth_sign_in")}</span>
-        <span className="text-[10px] text-fg-tertiary leading-tight truncate">{t("sync_title")}</span>
+        <span className="font-semibold text-fg leading-tight truncate">
+          {t("auth_sign_in")}
+        </span>
+        <span className="text-[10px] text-fg-tertiary leading-tight truncate">
+          {t("sync_title")}
+        </span>
       </div>
     </button>
   )
 }
 
-
 export default function Sidebar({
   uploadCount,
+
   maxUploads,
+
   storageUsed,
+
   storageLimit,
+
   hasCustomKey,
+
   apiKeyStatus,
 }: SidebarProps) {
   const navigate = useNavigate()
+
   const { t } = useLanguage()
+
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("audin_sidebar_collapsed") === "true"
@@ -280,10 +328,15 @@ export default function Sidebar({
         <button
           onClick={(e) => {
             e.currentTarget.blur()
+
             setIsCollapsed(!isCollapsed)
           }}
-          title={isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")}
-          aria-label={isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")}
+          title={
+            isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")
+          }
+          aria-label={
+            isCollapsed ? t("a11y_expand_sidebar") : t("a11y_collapse_sidebar")
+          }
           className={
             isCollapsed
               ? "absolute inset-0 m-auto w-9 h-9 rounded-xl flex items-center justify-center bg-surface-2 border border-border text-fg shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150 cursor-pointer"
@@ -326,4 +379,3 @@ export default function Sidebar({
     </aside>
   )
 }
-

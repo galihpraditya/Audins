@@ -1,8 +1,13 @@
 import { useState, useEffect, Suspense, lazy } from "react"
+
 import { DocumentItem, AISummary } from "../../types"
+
 import { useToast } from "../ui/ToastContext"
+
 import Alert from "../ui/Alert"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import {
   Copy,
   Printer,
@@ -15,36 +20,60 @@ import {
 } from "@phosphor-icons/react"
 
 // ~50KB gzipped of unified/micromark deps lives behind this boundary — only
+
 // fetched when a completed summary actually needs rendering.
+
 const LazyReactMarkdown = lazy(() => import("react-markdown"))
 
 // Module-level constant so React doesn't remount the markdown tree each render.
+
 const markdownComponents = {
   p: ({ node, ...props }: any) => (
-    <p className="mb-3 last:mb-0 leading-relaxed print:mb-2.5 print:text-[13px] print:leading-relaxed print:text-slate-800" {...props} />
+    <p
+      className="mb-3 last:mb-0 leading-relaxed print:mb-2.5 print:text-[13px] print:leading-relaxed print:text-slate-800"
+      {...props}
+    />
   ),
+
   ul: ({ node, ...props }: any) => (
     <ul
       className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 print:space-y-1.5 print:mb-3 [&>li]:pl-5 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-primary [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden print:[&>li]:text-slate-800"
       {...props}
     />
   ),
-  li: ({ node, ...props }: any) => <li className="print:text-[13px] print:text-slate-800" {...props} />,
+
+  li: ({ node, ...props }: any) => (
+    <li className="print:text-[13px] print:text-slate-800" {...props} />
+  ),
+
   ol: ({ node, ...props }: any) => (
     <ol
       className="list-decimal pl-5 space-y-2 mb-3 last:mb-0 font-mono text-fg-secondary print:text-slate-800 print:space-y-1.5 print:mb-3 print:font-sans print:text-[13px]"
       {...props}
     />
   ),
+
   h3: ({ node, ...props }: any) => (
-    <h3 className="text-sm font-bold font-display text-fg mt-4 mb-2 print:text-[15px] print:font-bold print:text-slate-950 print:mt-4 print:mb-1.5" {...props} />
+    <h3
+      className="text-sm font-bold font-display text-fg mt-4 mb-2 print:text-[15px] print:font-bold print:text-slate-950 print:mt-4 print:mb-1.5"
+      {...props}
+    />
   ),
+
   h4: ({ node, ...props }: any) => (
-    <h4 className="text-xs font-bold text-fg mt-3 mb-1.5 print:text-sm print:font-semibold print:text-slate-900 print:mt-3 print:mb-1" {...props} />
+    <h4
+      className="text-xs font-bold text-fg mt-3 mb-1.5 print:text-sm print:font-semibold print:text-slate-900 print:mt-3 print:mb-1"
+      {...props}
+    />
   ),
+
   strong: ({ node, ...props }: any) => (
-    <strong className="font-semibold text-fg print:font-bold print:text-slate-950" {...props} />
+    <strong
+      className="font-semibold text-fg print:font-bold print:text-slate-950"
+      {...props}
+    />
   ),
+
   code: ({ node, ...props }: any) => (
     <code
       className="bg-surface-3 text-fg-secondary px-1.5 py-0.5 rounded text-xs font-mono print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300"
@@ -55,42 +84,66 @@ const markdownComponents = {
 
 function MarkdownBlock({ children }: { children: string }) {
   return (
-    <Suspense fallback={<p className="text-xs sm:text-sm text-fg-secondary whitespace-pre-wrap">{children}</p>}>
-      <LazyReactMarkdown components={markdownComponents}>{children}</LazyReactMarkdown>
+    <Suspense
+      fallback={
+        <p className="text-xs sm:text-sm text-fg-secondary whitespace-pre-wrap">
+          {children}
+        </p>
+      }
+    >
+      <LazyReactMarkdown components={markdownComponents}>
+        {children}
+      </LazyReactMarkdown>
     </Suspense>
   )
 }
 
 interface SummaryEditorProps {
   document: DocumentItem
+
   onUpdateSummary?: (id: number | string, summary: AISummary) => void
+
   onReSummarize?: (id: string | number, customPrompt?: string) => void
+
   onCancelUpload?: (id: number | string) => void
 }
 
 export default function SummaryEditor({
   document,
+
   onUpdateSummary,
+
   onReSummarize,
+
   onCancelUpload,
 }: SummaryEditorProps) {
   const { t } = useLanguage()
+
   const { showToast } = useToast()
+
   const [isEditing, setIsEditing] = useState(false)
+
   const [editableSummary, setEditableSummary] = useState<AISummary | undefined>(
     document.summary,
   )
+
   const [showReSummarizeModal, setShowReSummarizeModal] = useState(false)
+
   const [customPrompt, setCustomPrompt] = useState("")
-  const [copiedSectionIndex, setCopiedSectionIndex] = useState<number | null>(null)
+
+  const [copiedSectionIndex, setCopiedSectionIndex] = useState<number | null>(
+    null,
+  )
 
   useEffect(() => {
     setEditableSummary(document.summary)
+
     setIsEditing(false)
   }, [document.id, document.summary])
 
   const getPdfTitle = () => {
     const cleanDocName = (document?.name || "Document").replace(/\.[^/.]+$/, "")
+
     return `${cleanDocName}_Summary_Audins`
   }
 
@@ -98,7 +151,9 @@ export default function SummaryEditor({
     const handleBeforePrint = () => {
       window.document.title = getPdfTitle()
     }
+
     window.addEventListener("beforeprint", handleBeforePrint)
+
     return () => {
       window.removeEventListener("beforeprint", handleBeforePrint)
     }
@@ -108,21 +163,28 @@ export default function SummaryEditor({
 
   const summaryToMarkdown = (summary: AISummary) => {
     let text = `# ${summary.title}\n\n`
+
     summary.sections.forEach((s) => {
       text += `## ${s.heading}\n`
+
       text += s.content.join("\n") + "\n\n"
     })
+
     return text.trim()
   }
 
   const markdownToSummary = (
     markdown: string,
+
     baseSummary: AISummary,
   ): AISummary => {
     const lines = markdown.split("\n")
+
     let title = baseSummary.title
-    const sections: { heading: string; content: string[] }[] = []
-    let currentSection: { heading: string; content: string[] } | null = null
+
+    const sections: { heading: string content: string[] }[] = []
+
+    let currentSection: { heading: string content: string[] } | null = null
 
     for (const line of lines) {
       if (line.startsWith("# ")) {
@@ -131,12 +193,15 @@ export default function SummaryEditor({
         if (currentSection) {
           sections.push(currentSection)
         }
+
         currentSection = {
           heading: line.replace("## ", "").trim(),
+
           content: [],
         }
       } else {
         const trimmed = line.trim()
+
         if (currentSection) {
           currentSection.content.push(trimmed)
         } else if (trimmed && !currentSection) {
@@ -151,7 +216,9 @@ export default function SummaryEditor({
 
     return {
       ...baseSummary,
+
       title,
+
       sections,
     }
   }
@@ -160,8 +227,11 @@ export default function SummaryEditor({
     if (isEditing) {
       if (onUpdateSummary && editableSummary) {
         const parsed = markdownToSummary(editMarkdown, editableSummary)
+
         setEditableSummary(parsed)
+
         onUpdateSummary(document.id, parsed)
+
         showToast(t("toast_summary_saved"), "success")
       }
     } else {
@@ -169,49 +239,76 @@ export default function SummaryEditor({
         setEditMarkdown(summaryToMarkdown(editableSummary))
       }
     }
+
     setIsEditing(!isEditing)
   }
 
   const handleCopyAll = () => {
     if (!editableSummary) {
       showToast(t("toast_nothing_to_copy"), "error")
+
       return
     }
+
     let text = `# ${editableSummary.title}\n\n`
+
     editableSummary.sections.forEach((s) => {
       text += `## ${s.heading}\n`
+
       text += s.content.join("\n") + "\n\n"
     })
+
     navigator.clipboard.writeText(text.trim())
+
     showToast(t("btn_copy_all"), "success")
   }
 
-  const handleCopySection = (heading: string, content: string[], idx: number) => {
+  const handleCopySection = (
+    heading: string,
+    content: string[],
+    idx: number,
+  ) => {
     const text = `## ${heading}\n${content.join("\n")}`
+
     navigator.clipboard.writeText(text)
+
     setCopiedSectionIndex(idx)
+
     showToast(t("btn_copy_section"), "success")
+
     setTimeout(() => setCopiedSectionIndex(null), 2000)
   }
 
   const handleExportPDF = () => {
     if (isProcessing) {
       showToast(t("status_processing_title"), "info")
+
       return
     }
-    if (!editableSummary || !editableSummary.sections || editableSummary.sections.length === 0) {
+
+    if (
+      !editableSummary ||
+      !editableSummary.sections ||
+      editableSummary.sections.length === 0
+    ) {
       showToast(t("toast_nothing_to_copy"), "error")
+
       return
     }
+
     try {
       const originalTitle = window.document.title
+
       window.document.title = getPdfTitle()
+
       window.print()
+
       setTimeout(() => {
         window.document.title = originalTitle
       }, 1000)
     } catch (err) {
       console.error("Export PDF error:", err)
+
       window.print()
     }
   }
@@ -219,15 +316,20 @@ export default function SummaryEditor({
   const handleConfirmReSummarize = () => {
     if (onReSummarize) {
       onReSummarize(document.id, customPrompt)
+
       setCustomPrompt("")
+
       setShowReSummarizeModal(false)
     }
   }
 
   const promptPresets = [
     t("preset_indonesian"),
+
     t("preset_action_items"),
+
     t("preset_study_notes"),
+
     t("preset_executive"),
   ]
 
@@ -278,8 +380,14 @@ export default function SummaryEditor({
                   } ${isProcessing ? "opacity-40 cursor-not-allowed" : ""}`}
                   title={t("btn_re_summarize")}
                 >
-                  <Sparkle size={15} weight="duotone" className="text-fg-tertiary" />
-                  <span className="hidden sm:inline">{t("btn_re_summarize")}</span>
+                  <Sparkle
+                    size={15}
+                    weight="duotone"
+                    className="text-fg-tertiary"
+                  />
+                  <span className="hidden sm:inline">
+                    {t("btn_re_summarize")}
+                  </span>
                 </button>
 
                 {/* Re-Summarize Popup Panel */}
@@ -375,7 +483,11 @@ export default function SummaryEditor({
           {isEditing ? (
             <div className="space-y-4">
               <div className="text-xs text-fg-secondary bg-surface-2 p-3.5 rounded-2xl border border-border flex items-center gap-2">
-                <Sparkle size={16} weight="duotone" className="text-fg-tertiary flex-shrink-0" />
+                <Sparkle
+                  size={16}
+                  weight="duotone"
+                  className="text-fg-tertiary flex-shrink-0"
+                />
                 <span>{t("markdown_hint")}</span>
               </div>
               <textarea
@@ -418,17 +530,25 @@ export default function SummaryEditor({
                   </div>
                   <div className="text-right text-xs font-mono text-slate-600 space-y-0.5">
                     <div>
-                      <span className="font-semibold text-slate-900">Document: </span>
+                      <span className="font-semibold text-slate-900">
+                        Document:{" "}
+                      </span>
                       <span className="text-slate-800">{document.name}</span>
                     </div>
                     <div>
-                      <span className="font-semibold text-slate-900">Date: </span>
+                      <span className="font-semibold text-slate-900">
+                        Date:{" "}
+                      </span>
                       <span className="text-slate-800">{document.date}</span>
                     </div>
                     {document.duration && (
                       <div>
-                        <span className="font-semibold text-slate-900">Duration: </span>
-                        <span className="text-slate-800">{document.duration}</span>
+                        <span className="font-semibold text-slate-900">
+                          Duration:{" "}
+                        </span>
+                        <span className="text-slate-800">
+                          {document.duration}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -437,37 +557,58 @@ export default function SummaryEditor({
 
               {/* Header Title Section */}
               <div className="space-y-2 pb-2 print:space-y-0 print:pb-0 print:bg-white">
-                <p className="text-xs font-mono text-fg-tertiary no-print">{document.date}</p>
+                <p className="text-xs font-mono text-fg-tertiary no-print">
+                  {document.date}
+                </p>
                 <h1 className="text-2xl sm:text-3xl font-bold font-display text-fg tracking-tight leading-tight print:text-2xl print:text-slate-950 print:font-extrabold print:pb-2.5 print:mb-6 print:border-b-2 print:border-slate-900">
                   {editableSummary?.title || t("summary_fallback_title")}
                 </h1>
               </div>
 
               {/* Partial transcription warning (backend pipeline notes) */}
-              {!isProcessing && document.status !== "Failed" && document.warnings && document.warnings.length > 0 && (
-                <div className="no-print" role="status">
-                  <Alert variant="warning" title={t("partial_transcript_warning", { warning: "" }).trim().replace(/\.$/, "")}>
-                    <ul className="list-disc pl-4 space-y-1">
-                      {document.warnings.map((w, i) => (
-                        <li key={i}>{w}</li>
-                      ))}
-                    </ul>
-                  </Alert>
-                </div>
-              )}
+              {!isProcessing &&
+                document.status !== "Failed" &&
+                document.warnings &&
+                document.warnings.length > 0 && (
+                  <div className="no-print" role="status">
+                    <Alert
+                      variant="warning"
+                      title={t("partial_transcript_warning", { warning: "" })
+                        .trim()
+                        .replace(/\.$/, "")}
+                    >
+                      <ul className="list-disc pl-4 space-y-1">
+                        {document.warnings.map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                      </ul>
+                    </Alert>
+                  </div>
+                )}
 
               {/* Status or Content */}
               {document.status === "Processing" ? (
                 <div className="p-10 rounded-xl bg-surface-2/60 border border-border text-center space-y-4 no-print flex flex-col items-center">
                   <div className="w-12 h-12 rounded-full bg-surface-2 border border-border flex items-center justify-center text-primary">
-                    <Brain size={26} weight="duotone" className="animate-spin" style={{ animationDuration: '4s' }} />
+                    <Brain
+                      size={26}
+                      weight="duotone"
+                      className="animate-spin"
+                      style={{ animationDuration: "4s" }}
+                    />
                   </div>
 
-                  {document.uploadProgress !== undefined && document.uploadProgress < 100 ? (
+                  {document.uploadProgress !== undefined &&
+                  document.uploadProgress < 100 ? (
                     <div className="w-full max-w-sm mx-auto space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-mono text-fg-secondary" role="status">
-                          {t("ingest_audio", { progress: String(document.uploadProgress) })}
+                        <p
+                          className="text-xs font-mono text-fg-secondary"
+                          role="status"
+                        >
+                          {t("ingest_audio", {
+                            progress: String(document.uploadProgress),
+                          })}
                         </p>
                         {onCancelUpload && (
                           <button
@@ -493,7 +634,10 @@ export default function SummaryEditor({
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold text-fg" role="status">
+                      <p
+                        className="text-sm font-semibold text-fg"
+                        role="status"
+                      >
                         {t("status_processing_title")}
                       </p>
                       <p className="text-xs text-fg-tertiary">
@@ -503,16 +647,23 @@ export default function SummaryEditor({
                   )}
                 </div>
               ) : document.status === "Failed" ? (
-                <div className="p-8 rounded-xl bg-danger-dim border-l-[3px] border-danger border-y border-r border-y-border border-r-border text-center space-y-2 no-print" role="alert">
-                  <p className="text-sm font-bold text-danger">{t("status_failed_title")}</p>
+                <div
+                  className="p-8 rounded-xl bg-danger-dim border-l-[3px] border-danger border-y border-r border-y-border border-r-border text-center space-y-2 no-print"
+                  role="alert"
+                >
+                  <p className="text-sm font-bold text-danger">
+                    {t("status_failed_title")}
+                  </p>
                   <p className="text-xs text-danger/80">
                     {t("status_failed_desc")}
                   </p>
                 </div>
               ) : (
                 /* Continuous document — Notion-like flowing sections */
+
                 <div className="divide-y divide-border-subtle print:divide-y-0 print:space-y-6 print:bg-white">
-                  {editableSummary?.sections && editableSummary.sections.length > 0 ? (
+                  {editableSummary?.sections &&
+                  editableSummary.sections.length > 0 ? (
                     editableSummary.sections.map((section, idx) => (
                       <section
                         key={idx}
@@ -525,13 +676,23 @@ export default function SummaryEditor({
                           </h2>
 
                           <button
-                            onClick={() => handleCopySection(section.heading, section.content, idx)}
+                            onClick={() =>
+                              handleCopySection(
+                                section.heading,
+                                section.content,
+                                idx,
+                              )
+                            }
                             className="ml-auto opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 p-1.5 rounded-md text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors text-xs flex items-center justify-center min-h-[30px] min-w-[30px] no-print flex-shrink-0 cursor-pointer"
                             title={t("btn_copy_section")}
                             aria-label={t("btn_copy_section")}
                           >
                             {copiedSectionIndex === idx ? (
-                              <Check size={14} className="text-success" weight="bold" />
+                              <Check
+                                size={14}
+                                className="text-success"
+                                weight="bold"
+                              />
                             ) : (
                               <Copy size={14} weight="duotone" />
                             )}

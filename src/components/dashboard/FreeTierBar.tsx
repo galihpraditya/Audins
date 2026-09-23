@@ -1,30 +1,53 @@
-import { Lightning, HardDrives, Key, Check, Warning, Spinner } from "@phosphor-icons/react"
+import {
+  Lightning,
+  HardDrives,
+  Key,
+  Check,
+  Warning,
+  Spinner,
+} from "@phosphor-icons/react"
+
 import { useLanguage } from "../../context/LanguageContext"
 
 interface FreeTierBarProps {
   onUpgrade: () => void
+
   uploadCount?: number
+
   maxUploads?: number
+
   storageUsed?: number
+
   storageLimit?: number
+
   hasCustomKey?: boolean
+
   apiKeyStatus?: "idle" | "validating" | "valid" | "invalid"
 }
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 MB"
+
   const mb = bytes / (1024 * 1024)
+
   if (mb < 1) return "< 1 MB"
+
   return `${Math.round(mb)} MB`
 }
 
 export default function FreeTierBar({
   onUpgrade,
+
   uploadCount = 0,
+
   maxUploads = 10,
+
   storageUsed = 0,
+
   storageLimit = 500 * 1024 * 1024,
+
   hasCustomKey = false,
+
   apiKeyStatus = "idle",
 }: FreeTierBarProps) {
   const { t } = useLanguage()
@@ -32,17 +55,32 @@ export default function FreeTierBar({
   const percentage = hasCustomKey
     ? 100
     : Math.round((uploadCount / maxUploads) * 100)
+
   const remaining = Math.max(0, maxUploads - uploadCount)
 
   const storagePercentage = Math.min(
     100,
+
     Math.round((storageUsed / storageLimit) * 100),
   )
 
   // Dynamic color for upload quota
-  const uploadBarColor = percentage >= 100 ? "bg-danger" : percentage >= 70 ? "bg-warning" : "bg-info"
+
+  const uploadBarColor =
+    percentage >= 100
+      ? "bg-danger"
+      : percentage >= 70
+        ? "bg-warning"
+        : "bg-info"
+
   // Dynamic color for storage quota
-  const storageBarColor = storagePercentage >= 90 ? "bg-danger" : storagePercentage >= 70 ? "bg-warning" : "bg-cyan"
+
+  const storageBarColor =
+    storagePercentage >= 90
+      ? "bg-danger"
+      : storagePercentage >= 70
+        ? "bg-warning"
+        : "bg-cyan"
 
   return (
     <div className="w-full p-3.5 rounded-xl bg-surface-2/60 border border-border flex flex-col gap-3">
@@ -69,7 +107,11 @@ export default function FreeTierBar({
         )}
 
         <div className="flex justify-between items-center text-[10px] text-fg-tertiary">
-          <span>{hasCustomKey ? t("custom_api_key") : `${remaining} ${t("uploads_left")}`}</span>
+          <span>
+            {hasCustomKey
+              ? t("custom_api_key")
+              : `${remaining} ${t("uploads_left")}`}
+          </span>
           {hasCustomKey && (
             <div>
               {apiKeyStatus === "validating" && (

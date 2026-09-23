@@ -1,8 +1,13 @@
 import { useState, useEffect, FormEvent } from "react"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import { useAuth } from "../../context/AuthContext"
+
 import { useToast } from "../ui/ToastContext"
+
 import Modal from "../ui/Modal"
+
 import {
   UserCircle,
   EnvelopeSimple,
@@ -18,34 +23,51 @@ import {
 
 interface AuthModalProps {
   open: boolean
+
   initialTab?: "login" | "register"
+
   onClose: () => void
+
   onSuccess?: () => void
 }
 
 export default function AuthModal({
   open,
+
   initialTab = "login",
+
   onClose,
+
   onSuccess,
 }: AuthModalProps) {
   const { t } = useLanguage()
+
   const { login, register } = useAuth()
+
   const { showToast } = useToast()
 
   const [tab, setTab] = useState<"login" | "register">(initialTab)
+
   const [email, setEmail] = useState("")
+
   const [password, setPassword] = useState("")
+
   const [confirmPassword, setConfirmPassword] = useState("")
+
   const [name, setName] = useState("")
+
   const [claimGuestRecordings, setClaimGuestRecordings] = useState(true)
+
   const [showPassword, setShowPassword] = useState(false)
+
   const [loading, setLoading] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
       setTab(initialTab)
+
       setError(null)
     }
   }, [open, initialTab])
@@ -54,42 +76,55 @@ export default function AuthModal({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+
     setError(null)
 
     if (!email.trim()) {
       setError(t("auth_email_label") + " is required")
+
       return
     }
+
     if (!password) {
       setError(t("auth_password_label") + " is required")
+
       return
     }
 
     if (tab === "register") {
       if (password.length < 6) {
         setError(t("auth_password_placeholder"))
+
         return
       }
+
       if (password !== confirmPassword) {
         setError(t("auth_password_mismatch"))
+
         return
       }
     }
 
     setLoading(true)
+
     try {
       if (tab === "login") {
         const res = await login(
           { email: email.trim(), password },
+
           claimGuestRecordings,
         )
+
         showToast(
           `${t("auth_logged_in_as")} ${res.user.email}`,
+
           "success",
         )
+
         if (res.claimedCount && res.claimedCount > 0) {
           showToast(
             t("sync_claimed_toast", { count: res.claimedCount }),
+
             "success",
           )
         }
@@ -97,23 +132,32 @@ export default function AuthModal({
         const res = await register(
           {
             email: email.trim(),
+
             password,
+
             name: name.trim() || undefined,
           },
+
           claimGuestRecordings,
         )
+
         showToast(
           `${t("auth_logged_in_as")} ${res.user.email}`,
+
           "success",
         )
+
         if (res.claimedCount && res.claimedCount > 0) {
           showToast(
             t("sync_claimed_toast", { count: res.claimedCount }),
+
             "success",
           )
         }
       }
+
       onSuccess?.()
+
       onClose()
     } catch (err: any) {
       setError(err?.message || "Authentication failed")
@@ -161,12 +205,14 @@ export default function AuthModal({
             type="button"
             onClick={() => {
               setTab("login")
+
               setError(null)
             }}
-            className={`py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${tab === "login"
+            className={`py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              tab === "login"
                 ? "bg-surface text-fg shadow-card"
                 : "text-fg-tertiary hover:text-fg"
-              }`}
+            }`}
           >
             {t("auth_sign_in")}
           </button>
@@ -174,12 +220,14 @@ export default function AuthModal({
             type="button"
             onClick={() => {
               setTab("register")
+
               setError(null)
             }}
-            className={`py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${tab === "register"
+            className={`py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              tab === "register"
                 ? "bg-surface text-fg shadow-card"
                 : "text-fg-tertiary hover:text-fg"
-              }`}
+            }`}
           >
             {t("auth_sign_up")}
           </button>
@@ -341,6 +389,7 @@ export default function AuthModal({
                 type="button"
                 onClick={() => {
                   setTab("register")
+
                   setError(null)
                 }}
                 className="font-semibold text-primary hover:underline cursor-pointer"
@@ -355,6 +404,7 @@ export default function AuthModal({
                 type="button"
                 onClick={() => {
                   setTab("login")
+
                   setError(null)
                 }}
                 className="font-semibold text-primary hover:underline cursor-pointer"

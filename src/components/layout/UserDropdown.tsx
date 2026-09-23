@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect } from "react"
+
 import { Link } from "react-router-dom"
+
 import { useAuth } from "../../context/AuthContext"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import { useToast } from "../ui/ToastContext"
+
 import {
   UserCircle,
   SignOut,
@@ -21,18 +26,28 @@ interface UserDropdownProps {
 export default function UserDropdown({ compact = false }: UserDropdownProps) {
   const {
     user,
+
     isAuthenticated,
+
     isGuest,
+
     syncStatus,
+
     openAuthModal,
+
     logout,
+
     triggerSync,
   } = useAuth()
+
   const { t } = useLanguage()
+
   const { showToast } = useToast()
 
   const [isOpen, setIsOpen] = useState(false)
+
   const [isSyncing, setIsSyncing] = useState(false)
+
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -41,9 +56,11 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
         setIsOpen(false)
       }
     }
+
     if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside)
     }
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
@@ -51,8 +68,10 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
 
   const handleSyncClick = async () => {
     setIsSyncing(true)
+
     try {
       await triggerSync()
+
       showToast(t("sync_now_toast"), "success")
     } catch {
       showToast(t("error_load_title"), "error")
@@ -63,11 +82,14 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
 
   const handleLogout = () => {
     setIsOpen(false)
+
     logout()
+
     showToast(t("auth_sign_out"), "info")
   }
 
   // GUEST STATE
+
   if (isGuest || !user) {
     return (
       <button
@@ -75,7 +97,11 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface border border-border hover:border-primary/40 text-fg transition-all cursor-pointer shadow-sm group min-h-[34px]"
         title={t("auth_guest_desc")}
       >
-        <SignIn size={15} weight="duotone" className="text-primary group-hover:scale-110 transition-transform" />
+        <SignIn
+          size={15}
+          weight="duotone"
+          className="text-primary group-hover:scale-110 transition-transform"
+        />
         <span className={compact ? "hidden sm:inline" : ""}>
           {t("auth_sign_in")}
         </span>
@@ -84,6 +110,7 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
   }
 
   // AUTHENTICATED STATE
+
   const userInitial = (user.name || user.email || "U")[0].toUpperCase()
 
   return (
@@ -104,15 +131,15 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
               syncStatus === "synced"
                 ? "bg-success"
                 : syncStatus === "syncing"
-                ? "bg-warning animate-pulse"
-                : "bg-fg-tertiary"
+                  ? "bg-warning animate-pulse"
+                  : "bg-fg-tertiary"
             }`}
             title={
               syncStatus === "synced"
                 ? t("sync_status_synced")
                 : syncStatus === "syncing"
-                ? t("sync_status_syncing")
-                : t("sync_status_offline")
+                  ? t("sync_status_syncing")
+                  : t("sync_status_offline")
             }
           />
         </div>
@@ -126,13 +153,19 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
               {syncStatus === "synced"
                 ? t("sync_status_synced")
                 : syncStatus === "syncing"
-                ? t("sync_status_syncing")
-                : t("sync_status_offline")}
+                  ? t("sync_status_syncing")
+                  : t("sync_status_offline")}
             </span>
           </div>
         )}
 
-        <CaretDown size={12} weight="bold" className={`text-fg-tertiary transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        <CaretDown
+          size={12}
+          weight="bold"
+          className={`text-fg-tertiary transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+        />
       </button>
 
       {/* Dropdown Menu */}
@@ -149,17 +182,29 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
             <div className="flex items-center gap-1.5 mt-2 text-[10px] text-fg-secondary">
               {syncStatus === "synced" ? (
                 <>
-                  <CheckCircle size={13} weight="fill" className="text-success flex-shrink-0" />
+                  <CheckCircle
+                    size={13}
+                    weight="fill"
+                    className="text-success flex-shrink-0"
+                  />
                   <span>{t("sync_status_synced")}</span>
                 </>
               ) : syncStatus === "syncing" ? (
                 <>
-                  <ArrowsClockwise size={13} weight="bold" className="text-warning animate-spin flex-shrink-0" />
+                  <ArrowsClockwise
+                    size={13}
+                    weight="bold"
+                    className="text-warning animate-spin flex-shrink-0"
+                  />
                   <span>{t("sync_status_syncing")}</span>
                 </>
               ) : (
                 <>
-                  <WarningCircle size={13} weight="fill" className="text-warning flex-shrink-0" />
+                  <WarningCircle
+                    size={13}
+                    weight="fill"
+                    className="text-warning flex-shrink-0"
+                  />
                   <span>{t("sync_status_offline")}</span>
                 </>
               )}
@@ -186,7 +231,11 @@ export default function UserDropdown({ compact = false }: UserDropdownProps) {
               onClick={() => setIsOpen(false)}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors text-left"
             >
-              <GearSix size={15} weight="duotone" className="text-fg-tertiary" />
+              <GearSix
+                size={15}
+                weight="duotone"
+                className="text-fg-tertiary"
+              />
               <span>{t("nav_settings")}</span>
             </Link>
 

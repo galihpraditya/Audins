@@ -1,13 +1,20 @@
 import { ReactNode } from "react"
+
 import { DocumentItem } from "../../types"
+
 import StatusBadge from "./StatusBadge"
-import { FileAudio, Clock, CalendarBlank } from "@phosphor-icons/react"
+
+import { FileAudio, Clock, CalendarBlank, Globe } from "@phosphor-icons/react"
 
 interface DocCardProps {
   doc: DocumentItem
+
   openLabel: string
+
   onOpen: () => void
+
   /** Optional top-right node (e.g. a kebab menu) — stops propagation itself. */
+
   actions?: ReactNode
 }
 
@@ -15,7 +22,13 @@ interface DocCardProps {
  * Shared document card used by the Dashboard grid and the Workspace library.
  * Flat editorial surface: hairline border, muted glyph, hover ring + arrow.
  */
-export default function DocCard({ doc, openLabel, onOpen, actions }: DocCardProps) {
+
+export default function DocCard({
+  doc,
+  openLabel,
+  onOpen,
+  actions,
+}: DocCardProps) {
   return (
     <div
       role="button"
@@ -25,6 +38,7 @@ export default function DocCard({ doc, openLabel, onOpen, actions }: DocCardProp
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
+
           onOpen()
         }
       }}
@@ -32,11 +46,23 @@ export default function DocCard({ doc, openLabel, onOpen, actions }: DocCardProp
     >
       <div>
         <div className="flex items-center justify-between mb-3.5">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-lg bg-surface-2 flex items-center justify-center text-fg-tertiary flex-shrink-0 transition-colors group-hover:text-primary group-hover:bg-surface-3">
               <FileAudio size={18} weight="duotone" />
             </div>
-            <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} size="sm" />
+            <StatusBadge
+              status={doc.status}
+              uploadProgress={doc.uploadProgress}
+              size="sm"
+            />
+            {doc.shareSettings?.isPublic && (
+              <span
+                className="w-5 h-5 rounded-full bg-success-dim text-success flex items-center justify-center flex-shrink-0"
+                title="Publicly Shared"
+              >
+                <Globe size={11} weight="bold" />
+              </span>
+            )}
           </div>
           {actions}
         </div>
@@ -67,6 +93,7 @@ export default function DocCard({ doc, openLabel, onOpen, actions }: DocCardProp
 }
 
 /** Pulse placeholder matching DocCard dimensions for initial loads. */
+
 export function DocCardSkeleton() {
   return (
     <div

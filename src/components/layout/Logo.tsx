@@ -1,11 +1,19 @@
 interface LogoProps {
   isCollapsed?: boolean
+
   className?: string
 }
 
-export default function Logo({ isCollapsed = false, className = "" }: LogoProps) {
+export default function Logo({
+  isCollapsed = false,
+  className = "",
+}: LogoProps) {
   return (
-    <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-2.5"} ${className}`}>
+    <div
+      className={`flex items-center ${
+        isCollapsed ? "justify-center" : "gap-2.5"
+      } ${className}`}
+    >
       {/* Audio Emblem — full, prominent waveform matching favicon.svg */}
       <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-sm">
         <svg

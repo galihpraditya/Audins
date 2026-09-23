@@ -1,13 +1,23 @@
 import { useState, useMemo, useEffect, MouseEvent } from "react"
+
 import { useNavigate } from "react-router-dom"
+
 import { DocumentItem } from "../../types"
+
 import StatusBadge from "./StatusBadge"
+
 import DocCard, { DocCardSkeleton } from "./DocCard"
+
 import EmptyState, { EmptyStateSkeleton } from "../ui/EmptyState"
+
 import Modal from "../ui/Modal"
+
 import { useToast } from "../ui/ToastContext"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import { downloadAudioFile } from "../../services/download"
+
 import {
   DotsThreeVertical,
   PencilSimple,
@@ -20,64 +30,116 @@ import {
   GridFour,
   Rows,
   ArrowRight,
+  ShareNetwork,
+  Globe,
 } from "@phosphor-icons/react"
+
+import ShareModal from "../modals/ShareModal"
 
 interface RecentDocsTableProps {
   documents: DocumentItem[]
+
   isLoading?: boolean
+
   onDeleteDocument: (id: number | string) => void
+
   onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
+
   onRenameDocument: (id: number | string, newName: string) => void
+
   onDuplicateDocument: (doc: DocumentItem) => void
+
+  onUpdateDocument?: (doc: DocumentItem) => void
+
   showAllMode?: boolean
+
   title?: string
 }
 
 export default function RecentDocsTable({
   documents,
+
   isLoading = false,
+
   onDeleteDocument,
+
   onDeleteAudioOnly,
+
   onRenameDocument,
+
   onDuplicateDocument,
+
+  onUpdateDocument,
+
   showAllMode = false,
+
   title,
 }: RecentDocsTableProps) {
   const navigate = useNavigate()
+
   const { t } = useLanguage()
+
   const { showToast } = useToast()
+
   const [openMenuId, setOpenMenuId] = useState<number | string | null>(null)
+
+  const [shareModalDoc, setShareModalDoc] = useState<DocumentItem | null>(null)
+
   const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
     try {
-      return (localStorage.getItem("audin_dashboard_view") as "grid" | "table") || "grid"
+      return (
+        localStorage.getItem("audin_dashboard_view") as "grid" | "table" ||
+        "grid"
+      )
     } catch {
       return "grid"
     }
   })
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "Completed" | "Processing">("all")
 
-  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(null)
-  const [deleteAudioModalDoc, setDeleteAudioModalDoc] = useState<DocumentItem | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const [statusFilter, setStatusFilter] =
+    useState<"all" | "Completed" | "Processing">("all")
+
+  const [deleteModalDoc, setDeleteModalDoc] = useState<DocumentItem | null>(
+    null,
+  )
+
+  const [deleteAudioModalDoc, setDeleteAudioModalDoc] =
+    useState<DocumentItem | null>(null)
+
   const [isDeletingAudio, setIsDeletingAudio] = useState(false)
-  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(null)
+
+  const [renameModalDoc, setRenameModalDoc] = useState<DocumentItem | null>(
+    null,
+  )
+
   const [renameValue, setRenameValue] = useState("")
 
   // Close any open dropdown when clicking elsewhere or pressing Escape.
+
   useEffect(() => {
     if (openMenuId === null) return
+
     const close = () => setOpenMenuId(null)
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenMenuId(null)
+
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && setOpenMenuId(null)
+
     document.addEventListener("click", close)
+
     document.addEventListener("keydown", onKey)
+
     return () => {
       document.removeEventListener("click", close)
+
       document.removeEventListener("keydown", onKey)
     }
   }, [openMenuId])
 
   const toggleViewMode = (mode: "grid" | "table") => {
     setViewMode(mode)
+
     try {
       localStorage.setItem("audin_dashboard_view", mode)
     } catch {
@@ -88,17 +150,27 @@ export default function RecentDocsTable({
   const filteredDocs = useMemo(
     () =>
       documents.filter((doc) => {
-        const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesStatus = statusFilter === "all" || doc.status === statusFilter
+        const matchesSearch = doc.name
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
+
+        const matchesStatus =
+          statusFilter === "all" || doc.status === statusFilter
+
         return matchesSearch && matchesStatus
       }),
+
     [documents, searchQuery, statusFilter],
   )
 
   // The persisted view mode may be "table" while the toggle itself is hidden
+
   // on phones â€” force the mobile-friendly grid there.
+
   const isMobileViewport =
-    typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 639px)").matches
+
   const effectiveViewMode = isMobileViewport ? "grid" : viewMode
 
   const handleOpenDoc = (doc: DocumentItem) => {
@@ -108,30 +180,40 @@ export default function RecentDocsTable({
   const handleCardKeyDown = (e: React.KeyboardEvent, doc: DocumentItem) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
+
       handleOpenDoc(doc)
     }
   }
 
   const handleActionClick = async (
     e: MouseEvent,
+
     action: string,
+
     doc: DocumentItem,
   ) => {
     e.stopPropagation()
+
     setOpenMenuId(null)
 
-    if (action === "rename") {
+    if (action === "share") {
+      setShareModalDoc(doc)
+    } else if (action === "rename") {
       setRenameValue(doc.name)
+
       setRenameModalDoc(doc)
     } else if (action === "duplicate") {
       onDuplicateDocument(doc)
     } else if (action === "download") {
       showToast(t("toast_downloading", { name: doc.name }), "info")
+
       try {
         await downloadAudioFile(doc)
+
         showToast(t("toast_download_done", { name: doc.name }), "success")
       } catch (err) {
         console.error("Download failed:", err)
+
         if ((err as Error).message === "Audio file not found") {
           showToast(t("toast_audio_not_found"), "error")
         } else {
@@ -146,12 +228,14 @@ export default function RecentDocsTable({
   }
 
   /** Kebab dropdown rendered into DocCard's action slot. */
+
   const renderKebab = (doc: DocumentItem) => (
     <div className="relative">
       <button
         className="w-9 h-9 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-2 transition-colors"
         onClick={(e) => {
           e.stopPropagation()
+
           setOpenMenuId(openMenuId === doc.id ? null : doc.id)
         }}
         aria-label={t("a11y_more_options")}
@@ -206,15 +290,19 @@ export default function RecentDocsTable({
   const confirmDelete = () => {
     if (deleteModalDoc) {
       onDeleteDocument(deleteModalDoc.id)
+
       setDeleteModalDoc(null)
     }
   }
 
   const confirmDeleteAudio = async () => {
     if (!deleteAudioModalDoc || !onDeleteAudioOnly) return
+
     try {
       setIsDeletingAudio(true)
+
       await onDeleteAudioOnly(deleteAudioModalDoc.id)
+
       setDeleteAudioModalDoc(null)
     } finally {
       setIsDeletingAudio(false)
@@ -224,32 +312,69 @@ export default function RecentDocsTable({
   const confirmRename = () => {
     if (renameModalDoc && renameValue.trim()) {
       onRenameDocument(renameModalDoc.id, renameValue.trim())
+
       setRenameModalDoc(null)
     }
   }
 
   const menuActions = [
-    { id: "rename", text: t("action_rename"), icon: <PencilSimple size={15} weight="duotone" /> },
-    { id: "download", text: t("action_download"), icon: <DownloadSimple size={15} weight="duotone" /> },
-    { id: "duplicate", text: t("action_duplicate"), icon: <Copy size={15} weight="duotone" /> },
+    {
+      id: "share",
+      text: t("action_share"),
+      icon: <ShareNetwork size={15} weight="duotone" />,
+    },
+
+    {
+      id: "rename",
+      text: t("action_rename"),
+      icon: <PencilSimple size={15} weight="duotone" />,
+    },
+
+    {
+      id: "download",
+      text: t("action_download"),
+      icon: <DownloadSimple size={15} weight="duotone" />,
+    },
+
+    {
+      id: "duplicate",
+      text: t("action_duplicate"),
+      icon: <Copy size={15} weight="duotone" />,
+    },
   ] as const
-  const isSearchingOrFiltering = searchQuery.trim().length > 0 || statusFilter !== "all"
-  const displayedDocs = (showAllMode || isSearchingOrFiltering) ? filteredDocs : filteredDocs.slice(0, 6)
+
+  const isSearchingOrFiltering =
+    searchQuery.trim().length > 0 || statusFilter !== "all"
+
+  const displayedDocs =
+    showAllMode || isSearchingOrFiltering
+      ? filteredDocs
+      : filteredDocs.slice(0, 6)
 
   return (
     <div className="space-y-4">
       {/* Delete confirmation modal */}
       {deleteModalDoc && (
-        <Modal onClose={() => setDeleteModalDoc(null)} labelledBy="delete-modal-title" panelClassName="bg-surface border border-danger/25 w-full max-w-sm rounded-xl p-6 shadow-raised animate-scale-in">
+        <Modal
+          onClose={() => setDeleteModalDoc(null)}
+          labelledBy="delete-modal-title"
+          panelClassName="bg-surface border border-danger/25 w-full max-w-sm rounded-xl p-6 shadow-raised animate-scale-in"
+        >
           <div className="w-12 h-12 rounded-full bg-danger-dim flex items-center justify-center mb-4 text-danger">
             <Trash size={24} weight="duotone" />
           </div>
-          <h3 id="delete-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="delete-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_delete_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-6 leading-relaxed">
             {t("modal_delete_desc")}{" "}
-            <span className="font-semibold text-fg">"{deleteModalDoc.name}"</span>? {t("modal_delete_subdesc")}
+            <span className="font-semibold text-fg">
+              "{deleteModalDoc.name}"
+            </span>
+            ? {t("modal_delete_subdesc")}
           </p>
           <div className="flex gap-2.5 justify-end">
             <button
@@ -279,12 +404,18 @@ export default function RecentDocsTable({
           <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center mb-4 text-amber-500">
             <HardDrives size={24} weight="duotone" />
           </div>
-          <h3 id="delete-audio-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="delete-audio-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_delete_audio_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-3 leading-relaxed">
             {t("modal_delete_audio_desc")}{" "}
-            <span className="font-semibold text-fg">"{deleteAudioModalDoc.name}"</span>?
+            <span className="font-semibold text-fg">
+              "{deleteAudioModalDoc.name}"
+            </span>
+            ?
           </p>
           <div className="p-3 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/90 leading-relaxed">
             ⚠️ {t("modal_delete_audio_warning")}
@@ -310,11 +441,18 @@ export default function RecentDocsTable({
 
       {/* Rename modal */}
       {renameModalDoc && (
-        <Modal onClose={() => setRenameModalDoc(null)} labelledBy="rename-modal-title" panelClassName="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-raised animate-scale-in">
+        <Modal
+          onClose={() => setRenameModalDoc(null)}
+          labelledBy="rename-modal-title"
+          panelClassName="bg-surface border border-border w-full max-w-sm rounded-2xl p-6 shadow-raised animate-scale-in"
+        >
           <div className="w-12 h-12 rounded-lg bg-primary-dim flex items-center justify-center mb-4 text-primary">
             <PencilSimple size={24} weight="duotone" />
           </div>
-          <h3 id="rename-modal-title" className="text-base sm:text-lg font-bold font-display text-fg mb-1">
+          <h3
+            id="rename-modal-title"
+            className="text-base sm:text-lg font-bold font-display text-fg mb-1"
+          >
             {t("modal_rename_title")}
           </h3>
           <p className="text-xs text-fg-secondary mb-4">
@@ -326,6 +464,7 @@ export default function RecentDocsTable({
             onChange={(e) => setRenameValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") confirmRename()
+
               if (e.key === "Escape") setRenameModalDoc(null)
             }}
             autoFocus
@@ -361,7 +500,9 @@ export default function RecentDocsTable({
             ) : null
           ) : (
             <h2 className="text-base sm:text-lg font-bold font-display text-fg tracking-tight">
-              {showAllMode ? t("workspace_library_title") : t("recent_documents")}
+              {showAllMode
+                ? t("workspace_library_title")
+                : t("recent_documents")}
             </h2>
           )}
         </div>
@@ -387,51 +528,66 @@ export default function RecentDocsTable({
           </div>
 
           <div className="flex items-center justify-between sm:justify-start gap-2">
-            <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg flex-1 sm:flex-none justify-center" role="group" aria-label={t("col_status")}>
+            <div
+              className="flex items-center gap-1 bg-surface-2 p-1 rounded-lg flex-1 sm:flex-none justify-center"
+              role="group"
+              aria-label={t("col_status")}
+            >
               {(["all", "Completed", "Processing"] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setStatusFilter(filter)}
                   aria-pressed={statusFilter === filter}
-                  className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer text-center ${statusFilter === filter
+                  className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer text-center ${
+                    statusFilter === filter
                       ? "bg-surface text-primary shadow-card"
                       : "text-fg-tertiary hover:text-fg"
-                    }`}
+                  }`}
                 >
-                  {filter === "all" ? t("filter_all") : filter === "Completed" ? t("filter_completed") : t("filter_processing")}
+                  {filter === "all"
+                    ? t("filter_all")
+                    : filter === "Completed"
+                      ? t("filter_completed")
+                      : t("filter_processing")}
                 </button>
               ))}
             </div>
 
             {/* Grid / Table Toggle — hidden on small viewports */}
-            <div className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg" role="group" aria-label={t("a11y_view_mode")}>
-            <button
-              onClick={() => toggleViewMode("grid")}
-              aria-pressed={effectiveViewMode === "grid"}
-              className={`p-1.5 rounded-md transition-colors cursor-pointer ${effectiveViewMode === "grid"
-                  ? "bg-surface text-primary shadow-card"
-                  : "text-fg-tertiary hover:text-fg"
-                }`}
-              title={t("a11y_grid_view")}
-              aria-label={t("a11y_grid_view")}
+            <div
+              className="hidden sm:flex items-center gap-1 bg-surface-2 p-1 rounded-lg"
+              role="group"
+              aria-label={t("a11y_view_mode")}
             >
-              <GridFour size={15} weight="duotone" />
-            </button>
-            <button
-              onClick={() => toggleViewMode("table")}
-              aria-pressed={effectiveViewMode === "table"}
-              className={`p-1.5 rounded-md transition-colors cursor-pointer ${effectiveViewMode === "table"
-                  ? "bg-surface text-primary shadow-card"
-                  : "text-fg-tertiary hover:text-fg"
+              <button
+                onClick={() => toggleViewMode("grid")}
+                aria-pressed={effectiveViewMode === "grid"}
+                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                  effectiveViewMode === "grid"
+                    ? "bg-surface text-primary shadow-card"
+                    : "text-fg-tertiary hover:text-fg"
                 }`}
-              title={t("a11y_table_view")}
-              aria-label={t("a11y_table_view")}
-            >
-              <Rows size={15} weight="duotone" />
-            </button>
+                title={t("a11y_grid_view")}
+                aria-label={t("a11y_grid_view")}
+              >
+                <GridFour size={15} weight="duotone" />
+              </button>
+              <button
+                onClick={() => toggleViewMode("table")}
+                aria-pressed={effectiveViewMode === "table"}
+                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                  effectiveViewMode === "table"
+                    ? "bg-surface text-primary shadow-card"
+                    : "text-fg-tertiary hover:text-fg"
+                }`}
+                title={t("a11y_table_view")}
+                aria-label={t("a11y_table_view")}
+              >
+                <Rows size={15} weight="duotone" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       </div>
 
       {/* Main Content Area */}
@@ -464,15 +620,24 @@ export default function RecentDocsTable({
         </div>
       ) : (
         /* Data Table View — horizontally scrollable on narrow screens */
+
         <div className="rounded-xl overflow-x-auto border border-border bg-surface">
           <table className="w-full text-sm border-collapse min-w-[640px]">
             <thead>
               <tr className="border-b border-border bg-surface-2/60">
-                {[t("col_document"), t("col_date"), t("col_duration"), t("col_status"), t("col_actions")].map((col, i) => (
+                {[
+                  t("col_document"),
+                  t("col_date"),
+                  t("col_duration"),
+                  t("col_status"),
+                  t("col_actions"),
+                ].map((col, i) => (
                   <th
                     key={col}
                     className="text-left px-5 py-3.5 text-[11px] font-mono font-semibold text-fg-tertiary tracking-wider uppercase"
-                    style={{ width: i === 0 ? "auto" : i === 4 ? "80px" : "140px" }}
+                    style={{
+                      width: i === 0 ? "auto" : i === 4 ? "80px" : "140px",
+                    }}
                   >
                     {col}
                   </th>
@@ -506,7 +671,21 @@ export default function RecentDocsTable({
                     {doc.duration}
                   </td>
                   <td className="px-5 py-3.5 whitespace-nowrap">
-                    <StatusBadge status={doc.status} uploadProgress={doc.uploadProgress} size="sm" />
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge
+                        status={doc.status}
+                        uploadProgress={doc.uploadProgress}
+                        size="sm"
+                      />
+                      {doc.shareSettings?.isPublic && (
+                        <span
+                          className="w-5 h-5 rounded-full bg-success-dim text-success flex items-center justify-center flex-shrink-0"
+                          title="Publicly Shared"
+                        >
+                          <Globe size={11} weight="bold" />
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-3.5 whitespace-nowrap">
                     <div className="relative">
@@ -514,6 +693,7 @@ export default function RecentDocsTable({
                         className="w-9 h-9 rounded-lg flex items-center justify-center text-fg-tertiary hover:text-fg hover:bg-surface-3 transition-colors cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation()
+
                           setOpenMenuId(openMenuId === doc.id ? null : doc.id)
                         }}
                         aria-label={t("a11y_more_options")}
@@ -545,7 +725,9 @@ export default function RecentDocsTable({
                             <button
                               role="menuitem"
                               className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-amber-500 hover:bg-amber-500/10 transition-colors cursor-pointer"
-                              onClick={(e) => handleActionClick(e, "delete_audio", doc)}
+                              onClick={(e) =>
+                                handleActionClick(e, "delete_audio", doc)
+                              }
                             >
                               <HardDrives size={14} weight="duotone" />
                               <span>{t("action_delete_audio")}</span>
@@ -579,9 +761,26 @@ export default function RecentDocsTable({
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-surface hover:bg-surface-2 border border-border hover:border-primary/40 text-fg hover:text-primary transition-all shadow-sm group cursor-pointer"
           >
             <span>{t("btn_show_all_documents")}</span>
-            <ArrowRight size={14} weight="bold" className="group-hover:translate-x-0.5 transition-transform" />
+            <ArrowRight
+              size={14}
+              weight="bold"
+              className="group-hover:translate-x-0.5 transition-transform"
+            />
           </button>
         </div>
+      )}
+
+      {/* Share Document Modal */}
+      {shareModalDoc && (
+        <ShareModal
+          document={shareModalDoc}
+          onClose={() => setShareModalDoc(null)}
+          onUpdateDoc={(updated) => {
+            setShareModalDoc(updated)
+
+            onUpdateDocument?.(updated)
+          }}
+        />
       )}
     </div>
   )

@@ -1,8 +1,13 @@
 import { useState } from "react"
+
 import { useLanguage } from "../context/LanguageContext"
+
 import { useTheme } from "../context/ThemeContext"
+
 import { useToast } from "../components/ui/ToastContext"
+
 import { useAuth } from "../context/AuthContext"
+
 import {
   Key,
   LockKey,
@@ -19,30 +24,47 @@ import {
 
 interface SettingsPageProps {
   currentApiKey: string
+
   onSaveApiKey: (key: string) => void
 }
 
-export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPageProps) {
+export default function SettingsPage({
+  currentApiKey,
+  onSaveApiKey,
+}: SettingsPageProps) {
   const { t, language, setLanguage } = useLanguage()
+
   const { theme, setTheme } = useTheme()
+
   const { showToast } = useToast()
+
   const {
     user,
+
     isAuthenticated,
+
     syncStatus,
+
     openAuthModal,
+
     logout,
+
     triggerSync,
   } = useAuth()
 
   const [apiKeyInput, setApiKeyInput] = useState(currentApiKey)
+
   const [saveMessage, setSaveMessage] = useState("")
 
   const handleSave = () => {
     onSaveApiKey(apiKeyInput.trim())
+
     const msg = t("settings_saved")
+
     setSaveMessage(msg)
+
     showToast(msg, "success")
+
     setTimeout(() => setSaveMessage(""), 2500)
   }
 
@@ -67,9 +89,7 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
             <h2 className="text-sm font-bold font-display text-fg">
               {t("sync_title")}
             </h2>
-            <p className="text-xs text-fg-tertiary mt-1">
-              {t("sync_desc")}
-            </p>
+            <p className="text-xs text-fg-tertiary mt-1">{t("sync_desc")}</p>
           </div>
 
           {isAuthenticated && user ? (
@@ -95,14 +115,18 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
                       syncStatus === "synced"
                         ? "bg-success-dim border-success/30 text-success"
                         : syncStatus === "syncing"
-                        ? "bg-warning-dim border-warning/30 text-warning"
-                        : "bg-surface-2 border-border text-fg-secondary"
+                          ? "bg-warning-dim border-warning/30 text-warning"
+                          : "bg-surface-2 border-border text-fg-secondary"
                     }`}
                   >
                     {syncStatus === "synced" ? (
                       <CheckCircle size={14} weight="fill" />
                     ) : syncStatus === "syncing" ? (
-                      <ArrowsClockwise size={14} weight="bold" className="animate-spin" />
+                      <ArrowsClockwise
+                        size={14}
+                        weight="bold"
+                        className="animate-spin"
+                      />
                     ) : (
                       <WarningCircle size={14} weight="fill" />
                     )}
@@ -110,8 +134,8 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
                       {syncStatus === "synced"
                         ? t("sync_status_synced")
                         : syncStatus === "syncing"
-                        ? t("sync_status_syncing")
-                        : t("sync_status_offline")}
+                          ? t("sync_status_syncing")
+                          : t("sync_status_offline")}
                     </span>
                   </span>
                 </div>
@@ -122,6 +146,7 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
                   type="button"
                   onClick={async () => {
                     await triggerSync()
+
                     showToast(t("sync_now_toast"), "success")
                   }}
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 text-fg border border-border transition-colors inline-flex items-center gap-2 cursor-pointer"
@@ -144,7 +169,11 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
             <div className="p-4 sm:p-5 rounded-xl bg-surface border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className="w-9 h-9 rounded-xl bg-surface-2 flex items-center justify-center text-fg-tertiary flex-shrink-0">
-                  <CloudArrowUp size={20} weight="duotone" className="text-primary" />
+                  <CloudArrowUp
+                    size={20}
+                    weight="duotone"
+                    className="text-primary"
+                  />
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-fg">
@@ -203,7 +232,11 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
               )}
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-fg-tertiary">
-              <LockKey size={13} weight="duotone" className="text-fg-tertiary" />
+              <LockKey
+                size={13}
+                weight="duotone"
+                className="text-fg-tertiary"
+              />
               <span>{t("key_storage_hint")}</span>
             </div>
           </div>
@@ -255,7 +288,11 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
                 </p>
               </div>
             </div>
-            <div className="flex items-center p-1 rounded-lg bg-surface-2" role="group" aria-label={t("settings_language_label")}>
+            <div
+              className="flex items-center p-1 rounded-lg bg-surface-2"
+              role="group"
+              aria-label={t("settings_language_label")}
+            >
               {(["en", "id"] as const).map((lang) => (
                 <button
                   key={lang}
@@ -292,7 +329,11 @@ export default function SettingsPage({ currentApiKey, onSaveApiKey }: SettingsPa
                 </p>
               </div>
             </div>
-            <div className="flex items-center p-1 rounded-lg bg-surface-2" role="group" aria-label={t("settings_theme_label")}>
+            <div
+              className="flex items-center p-1 rounded-lg bg-surface-2"
+              role="group"
+              aria-label={t("settings_theme_label")}
+            >
               {(["light", "dark"] as const).map((th) => (
                 <button
                   key={th}

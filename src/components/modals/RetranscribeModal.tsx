@@ -113,10 +113,17 @@ export default function RetranscribeModal({
       </div>
 
       {/* Modal Form Body */}
-      <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 overflow-y-auto">
+      <form
+        onSubmit={handleSubmit}
+        className="p-6 space-y-5 flex-1 overflow-y-auto"
+      >
         {/* Informative Hint Banner */}
         <div className="p-3.5 rounded-xl bg-surface-2/80 border border-border text-xs text-fg-secondary flex items-start gap-2.5 leading-relaxed">
-          <Info size={18} weight="fill" className="text-primary flex-shrink-0 mt-0.5" />
+          <Info
+            size={18}
+            weight="fill"
+            className="text-primary flex-shrink-0 mt-0.5"
+          />
           <p>{t("modal_retranscribe_desc")}</p>
         </div>
 
@@ -124,8 +131,14 @@ export default function RetranscribeModal({
         {loading && (
           <div className="p-3.5 rounded-xl bg-primary-dim/30 border border-primary/30 text-xs text-primary flex items-center justify-between gap-3 animate-fade-in">
             <div className="flex items-center gap-2.5 min-w-0">
-              <ArrowsClockwise size={16} weight="bold" className="animate-spin flex-shrink-0" />
-              <span className="truncate">{t("toast_retranscribe_started")}</span>
+              <ArrowsClockwise
+                size={16}
+                weight="bold"
+                className="animate-spin flex-shrink-0"
+              />
+              <span className="truncate">
+                {t("toast_retranscribe_started")}
+              </span>
             </div>
             <button
               type="button"
@@ -165,7 +178,9 @@ export default function RetranscribeModal({
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-base flex-shrink-0">{preset.flag}</span>
+                    <span className="text-base flex-shrink-0">
+                      {preset.flag}
+                    </span>
                     <span className="text-xs font-semibold truncate">
                       {t(preset.labelKey as any)}
                     </span>
@@ -202,7 +217,11 @@ export default function RetranscribeModal({
 
         {/* Auto Regenerate Summary Option */}
         <div className="pt-1">
-          <label className={`flex items-center gap-3 select-none ${loading ? "cursor-not-allowed opacity-60" : "cursor-pointer"} group`}>
+          <label
+            className={`flex items-center gap-3 select-none ${
+              loading ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+            } group`}
+          >
             <input
               type="checkbox"
               checked={regenerateSummary}
@@ -236,7 +255,11 @@ export default function RetranscribeModal({
               weight="bold"
               className={loading ? "animate-spin" : ""}
             />
-            <span>{loading ? t("toast_retranscribe_started") : t("btn_start_retranscribe")}</span>
+            <span>
+              {loading
+                ? t("toast_retranscribe_started")
+                : t("btn_start_retranscribe")}
+            </span>
           </button>
         </div>
       </form>

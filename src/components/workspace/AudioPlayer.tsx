@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect, PointerEvent, MouseEvent } from "react"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import { useToast } from "../ui/ToastContext"
+
 import { extractWaveformPeaks } from "../../utils/audioWaveform"
+
 import {
   Play,
   Pause,
@@ -20,37 +24,59 @@ import {
 
 interface AudioPlayerProps {
   audioUrl?: string
+
   currentTime: number
+
   setCurrentTime: (time: number) => void
+
   durationSeconds?: number
+
   onDownload?: () => void
+
   onDeleteAudio?: () => void
+
   /**
    * Controlled play state. When provided (by Workspace), a second compact
    * instance elsewhere in the tree can drive the SAME playback without
    * mounting a second <audio> element.
    */
+
   isPlaying?: boolean
+
   onPlayingChange?: (playing: boolean) => void
+
   /** Renders a single-row transport with NO <audio> element. */
+
   compact?: boolean
 }
 
 export default function AudioPlayer({
   audioUrl,
+
   currentTime,
+
   setCurrentTime,
+
   durationSeconds: initialDurationSec = 0,
+
   onDownload,
+
   onDeleteAudio,
+
   isPlaying: controlledPlaying,
+
   onPlayingChange,
+
   compact = false,
 }: AudioPlayerProps) {
   const { t } = useLanguage()
+
   const { showToast } = useToast()
+
   const [internalPlaying, setInternalPlaying] = useState(false)
+
   const playing = controlledPlaying ?? internalPlaying
+
   const [audioError, setAudioError] = useState<string | null>(null)
 
   const isAudioMissingOrExpired = !audioUrl || audioUrl === "Expired"
@@ -58,33 +84,50 @@ export default function AudioPlayer({
   const setPlaying = (value: boolean) => {
     if (value && (isAudioMissingOrExpired || audioError)) {
       showToast(t("toast_audio_not_found"), "error")
+
       return
     }
+
     if (onPlayingChange) onPlayingChange(value)
     else setInternalPlaying(value)
   }
+
   const togglePlay = () => {
     if (isAudioMissingOrExpired || audioError) {
       showToast(t("toast_audio_not_found"), "error")
+
       return
     }
+
     setPlaying(!playing)
   }
+
   const [duration, setDuration] = useState<number>(initialDurationSec)
+
   const [isDragging, setIsDragging] = useState(false)
+
   const [scrubTime, setScrubTime] = useState<number>(0)
+
   const [playbackRate, setPlaybackRate] = useState<number>(1)
+
   const [volume, setVolume] = useState<number>(1)
+
   const [isMuted, setIsMuted] = useState<boolean>(false)
+
   const [hoverTime, setHoverTime] = useState<number | null>(null)
+
   const [hoverPos, setHoverPos] = useState<number>(0)
+
   const [waveformPeaks, setWaveformPeaks] = useState<number[]>([])
+
   const [waveformLoading, setWaveformLoading] = useState<boolean>(false)
 
   const audioRef = useRef<HTMLAudioElement>(null)
+
   const scrubberRef = useRef<HTMLDivElement>(null)
 
   // Reset audio error on audioUrl change
+
   useEffect(() => {
     if (audioUrl && audioUrl !== "Expired") {
       setAudioError(null)
@@ -92,24 +135,33 @@ export default function AudioPlayer({
   }, [audioUrl])
 
   // Extract real audio waveform using Web Audio API
+
   useEffect(() => {
     let isCancelled = false
+
     if (!audioUrl || audioUrl === "Expired") {
       setWaveformPeaks([])
+
       setWaveformLoading(false)
+
       return
     }
 
     setWaveformLoading(true)
+
     extractWaveformPeaks(audioUrl, 64)
+
       .then((peaks) => {
         if (!isCancelled) {
           setWaveformPeaks(peaks)
+
           setWaveformLoading(false)
         }
       })
+
       .catch((err) => {
         console.warn("Waveform extraction error:", err)
+
         if (!isCancelled) {
           setWaveformLoading(false)
         }
@@ -127,6 +179,7 @@ export default function AudioPlayer({
   }, [initialDurationSec])
 
   // Sync external currentTime prop changes to the actual audio element
+
   useEffect(() => {
     if (
       audioRef.current &&
@@ -138,13 +191,17 @@ export default function AudioPlayer({
   }, [currentTime, isDragging])
 
   // Play / Pause effect
+
   useEffect(() => {
     if (audioRef.current && audioUrl && !isAudioMissingOrExpired) {
       if (playing) {
         audioRef.current.play().catch((err) => {
           console.warn("Audio play prevented:", err)
+
           setPlaying(false)
+
           setAudioError(t("audio_not_found_desc"))
+
           showToast(t("toast_audio_not_found"), "error")
         })
       } else {
@@ -154,6 +211,7 @@ export default function AudioPlayer({
   }, [playing, audioUrl, isAudioMissingOrExpired])
 
   // Playback rate sync
+
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate
@@ -161,6 +219,7 @@ export default function AudioPlayer({
   }, [playbackRate])
 
   // Volume & Mute sync
+
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume
@@ -169,6 +228,7 @@ export default function AudioPlayer({
 
   const handleLoadedMetadata = () => {
     setAudioError(null)
+
     if (
       audioRef.current &&
       audioRef.current.duration &&
@@ -186,14 +246,20 @@ export default function AudioPlayer({
 
   const updateScrubTime = (clientX: number, commit = false) => {
     if (!scrubberRef.current || !duration) return
+
     const rect = scrubberRef.current.getBoundingClientRect()
+
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width))
+
     const ratio = x / rect.width
+
     const targetTime = Math.floor(ratio * duration)
+
     setScrubTime(targetTime)
 
     if (commit) {
       setCurrentTime(targetTime)
+
       if (audioRef.current) {
         audioRef.current.currentTime = targetTime
       }
@@ -202,51 +268,75 @@ export default function AudioPlayer({
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (!duration || duration <= 0 || !scrubberRef.current) return
+
     setIsDragging(true)
+
     scrubberRef.current.setPointerCapture(e.pointerId)
+
     updateScrubTime(e.clientX)
   }
 
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!isDragging || !scrubberRef.current) return
+
     updateScrubTime(e.clientX)
   }
 
   const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
     if (!isDragging || !scrubberRef.current) return
+
     setIsDragging(false)
+
     scrubberRef.current.releasePointerCapture(e.pointerId)
+
     updateScrubTime(e.clientX, true)
   }
 
   const handleScrubberHover = (e: MouseEvent<HTMLDivElement>) => {
     if (!scrubberRef.current || !duration) return
+
     const rect = scrubberRef.current.getBoundingClientRect()
+
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+
     const ratio = x / rect.width
+
     setHoverTime(Math.floor(ratio * duration))
+
     setHoverPos(x)
   }
 
   const formatTime = (secs: number) => {
     if (!secs || isNaN(secs)) return "00:00"
+
     const m = Math.floor(secs / 60)
+
     const s = Math.floor(secs % 60)
+
     const h = Math.floor(m / 60)
+
     const remM = m % 60
+
     if (h > 0) {
       return `${h}:${remM.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
     }
+
     return `${remM.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
   const displayTime = isDragging ? scrubTime : currentTime
-  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (displayTime / duration) * 100)) : 0
+
+  const progressPercent =
+    duration > 0
+      ? Math.min(100, Math.max(0, (displayTime / duration) * 100))
+      : 0
 
   const speedOptions = [0.75, 1, 1.25, 1.5, 2]
 
   // Compact single-row transport (mobile summary tab). Shares playback state
+
   // with the full instance via controlled isPlaying; owns NO audio element.
+
   if (compact) {
     return (
       <div className="flex-shrink-0 px-4 py-2.5 border-b border-border bg-surface flex items-center gap-3 select-none print:hidden">
@@ -265,16 +355,25 @@ export default function AudioPlayer({
 
         <div className="flex-1 min-w-0">
           <div className="flex justify-between text-[10px] font-mono text-fg-tertiary mb-1">
-            <span className="font-semibold text-fg-secondary">{formatTime(displayTime)}</span>
+            <span className="font-semibold text-fg-secondary">
+              {formatTime(displayTime)}
+            </span>
             <span>{formatTime(duration)}</span>
           </div>
           <div
             className="py-1.5 cursor-pointer touch-none"
             onClick={(e) => {
               if (!duration) return
+
               const rect = e.currentTarget.getBoundingClientRect()
-              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+
+              const ratio = Math.max(
+                0,
+                Math.min(1, (e.clientX - rect.left) / rect.width),
+              )
+
               const target = Math.floor(ratio * duration)
+
               setCurrentTime(target)
             }}
           >
@@ -311,10 +410,15 @@ export default function AudioPlayer({
     )
   }
 
-  const handleAudioError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+  const handleAudioError = (
+    e: React.SyntheticEvent<HTMLAudioElement, Event>,
+  ) => {
     console.warn("Audio element playback error:", e)
+
     setPlaying(false)
+
     setAudioError(t("audio_not_found_desc"))
+
     showToast(t("toast_audio_not_found"), "error")
   }
 
@@ -335,19 +439,50 @@ export default function AudioPlayer({
       {/* Header bar: Status & Playback Rate selector */}
       <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-2.5 h-2.5 rounded-full flex items-center justify-center flex-shrink-0 ${audioError ? "bg-danger" : isAudioMissingOrExpired ? "bg-fg-tertiary" : "bg-primary"}`}>
-            {playing && <span className="w-1.5 h-1.5 rounded-full bg-primary-contrast animate-ping" />}
+          <div
+            className={`w-2.5 h-2.5 rounded-full flex items-center justify-center flex-shrink-0 ${
+              audioError
+                ? "bg-danger"
+                : isAudioMissingOrExpired
+                  ? "bg-fg-tertiary"
+                  : "bg-primary"
+            }`}
+          >
+            {playing && (
+              <span className="w-1.5 h-1.5 rounded-full bg-primary-contrast animate-ping" />
+            )}
           </div>
           <span className="text-[10px] sm:text-[11px] font-mono font-semibold uppercase tracking-wider text-fg-secondary flex items-center gap-1.5 truncate">
-            <Waveform size={14} weight="duotone" className={`flex-shrink-0 ${audioError ? "text-danger" : isAudioMissingOrExpired ? "text-fg-tertiary" : "text-primary"}`} />
-            <span className="truncate">{audioUrl && !isAudioMissingOrExpired ? t("audio_player") : t("no_audio")}</span>
+            <Waveform
+              size={14}
+              weight="duotone"
+              className={`flex-shrink-0 ${
+                audioError
+                  ? "text-danger"
+                  : isAudioMissingOrExpired
+                    ? "text-fg-tertiary"
+                    : "text-primary"
+              }`}
+            />
+            <span className="truncate">
+              {audioUrl && !isAudioMissingOrExpired
+                ? t("audio_player")
+                : t("no_audio")}
+            </span>
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Speed Selector */}
-          <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0" role="group" aria-label="Playback speed">
-            <Gauge size={13} className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block" />
+          <div
+            className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0"
+            role="group"
+            aria-label="Playback speed"
+          >
+            <Gauge
+              size={13}
+              className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block"
+            />
             {speedOptions.map((spd) => (
               <button
                 key={spd}
@@ -369,7 +504,11 @@ export default function AudioPlayer({
       {/* Informative Audio Removed Banner */}
       {isAudioMissingOrExpired && (
         <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-fg-secondary flex items-center gap-2.5 text-xs animate-scale-in">
-          <HardDrives size={16} weight="duotone" className="flex-shrink-0 text-primary" />
+          <HardDrives
+            size={16}
+            weight="duotone"
+            className="flex-shrink-0 text-primary"
+          />
           <span className="font-medium leading-relaxed">
             {t("audio_deleted_banner")}
           </span>
@@ -380,9 +519,7 @@ export default function AudioPlayer({
       {audioError && !isAudioMissingOrExpired && (
         <div className="mb-3 px-3 py-2 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
           <WarningCircle size={16} weight="fill" className="flex-shrink-0" />
-          <span className="font-medium">
-            {audioError}
-          </span>
+          <span className="font-medium">{audioError}</span>
         </div>
       )}
 
@@ -391,10 +528,18 @@ export default function AudioPlayer({
         className="flex items-end gap-[2px] sm:gap-1 h-10 sm:h-14 mb-2.5 sm:mb-3.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-surface-2 border border-border overflow-hidden relative cursor-pointer group hover:border-border-hover transition-colors"
         onClick={(e) => {
           if (!duration) return
+
           const rect = e.currentTarget.getBoundingClientRect()
-          const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+
+          const ratio = Math.max(
+            0,
+            Math.min(1, (e.clientX - rect.left) / rect.width),
+          )
+
           const target = Math.floor(ratio * duration)
+
           setCurrentTime(target)
+
           if (audioRef.current) audioRef.current.currentTime = target
         }}
       >
@@ -404,24 +549,27 @@ export default function AudioPlayer({
             <span>{t("loading_waveform")}</span>
           </div>
         ) : (
-          (waveformPeaks.length > 0 ? waveformPeaks : Array(64).fill(25)).map((peakHeight, i, arr) => {
-            const barProgress = (i / arr.length) * 100
-            const isPlayed = barProgress <= progressPercent
+          (waveformPeaks.length > 0 ? waveformPeaks : Array(64).fill(25)).map(
+            (peakHeight, i, arr) => {
+              const barProgress = (i / arr.length) * 100
 
-            return (
-              <div
-                key={i}
-                className={`flex-1 rounded-full transition-colors duration-100 ${
-                  isPlayed
-                    ? "bg-primary group-hover:opacity-90"
-                    : "bg-surface-3 group-hover:bg-muted"
-                }`}
-                style={{
-                  height: `${peakHeight}%`,
-                }}
-              />
-            )
-          })
+              const isPlayed = barProgress <= progressPercent
+
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 rounded-full transition-colors duration-100 ${
+                    isPlayed
+                      ? "bg-primary group-hover:opacity-90"
+                      : "bg-surface-3 group-hover:bg-muted"
+                  }`}
+                  style={{
+                    height: `${peakHeight}%`,
+                  }}
+                />
+              )
+            },
+          )
         )}
       </div>
 
@@ -444,14 +592,20 @@ export default function AudioPlayer({
         tabIndex={0}
         onKeyDown={(e) => {
           if (!duration || !audioUrl) return
+
           let target: number | null = null
-          if (e.key === "ArrowRight") target = Math.min(duration, currentTime + 5)
+
+          if (e.key === "ArrowRight")
+            target = Math.min(duration, currentTime + 5)
           else if (e.key === "ArrowLeft") target = Math.max(0, currentTime - 5)
           else if (e.key === "Home") target = 0
           else if (e.key === "End") target = duration
+
           if (target !== null) {
             e.preventDefault()
+
             setCurrentTime(Math.floor(target))
+
             if (audioRef.current) audioRef.current.currentTime = target
           }
         }}
@@ -480,7 +634,9 @@ export default function AudioPlayer({
 
       {/* Time Display & Volume row */}
       <div className="flex justify-between items-center text-xs font-mono text-fg-tertiary mb-3">
-        <span className="font-semibold text-fg-secondary">{formatTime(displayTime)}</span>
+        <span className="font-semibold text-fg-secondary">
+          {formatTime(displayTime)}
+        </span>
 
         <div className="flex items-center gap-3">
           {/* Mute/Volume control */}
@@ -492,12 +648,18 @@ export default function AudioPlayer({
               aria-label={isMuted ? t("a11y_unmute") : t("a11y_mute")}
             >
               {isMuted || volume === 0 ? (
-                <SpeakerSimpleX size={15} weight="duotone" className="text-danger" />
+                <SpeakerSimpleX
+                  size={15}
+                  weight="duotone"
+                  className="text-danger"
+                />
               ) : (
                 <SpeakerHigh size={15} weight="duotone" />
               )}
             </button>
-            <label htmlFor="volume-slider" className="sr-only">{t("a11y_volume")}</label>
+            <label htmlFor="volume-slider" className="sr-only">
+              {t("a11y_volume")}
+            </label>
             <input
               id="volume-slider"
               type="range"
@@ -507,6 +669,7 @@ export default function AudioPlayer({
               value={isMuted ? 0 : volume}
               onChange={(e) => {
                 setVolume(parseFloat(e.target.value))
+
                 if (isMuted) setIsMuted(false)
               }}
               className="w-14 h-1 bg-surface-2 accent-primary rounded-lg cursor-pointer hidden sm:block"
@@ -548,7 +711,9 @@ export default function AudioPlayer({
           disabled={!audioUrl}
           onClick={() => {
             const t = Math.max(0, currentTime - 10)
+
             setCurrentTime(t)
+
             if (audioRef.current) audioRef.current.currentTime = t
           }}
           className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
@@ -578,7 +743,9 @@ export default function AudioPlayer({
           disabled={!audioUrl}
           onClick={() => {
             const t = Math.min(duration, currentTime + 10)
+
             setCurrentTime(t)
+
             if (audioRef.current) audioRef.current.currentTime = t
           }}
           className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"

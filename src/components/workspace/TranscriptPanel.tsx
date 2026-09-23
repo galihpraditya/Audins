@@ -1,7 +1,11 @@
 import { useRef, useState, useEffect, memo } from "react"
+
 import { TranscriptEntry } from "../../types"
+
 import { useToast } from "../ui/ToastContext"
+
 import { useLanguage } from "../../context/LanguageContext"
+
 import {
   MagnifyingGlass,
   X,
@@ -15,6 +19,7 @@ import {
   CaretDown,
   ArrowsClockwise,
 } from "@phosphor-icons/react"
+
 import {
   downloadTranscriptFile,
   copyTranscriptToClipboard,
@@ -23,26 +28,39 @@ import {
 
 interface TranscriptPanelProps {
   entries: TranscriptEntry[]
+
   currentTime: number
+
   onSeekTo: (seconds: number) => void
+
   docName?: string
+
   docDate?: string
+
   onRetranscribe?: () => void
+
   hasAudio?: boolean
 }
 
 /** Escapes user input before building a RegExp (typing "(" used to crash). */
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 interface RowProps {
   entry: TranscriptEntry
+
   isActive: boolean
+
   searchQuery: string
+
   copyLabel: string
+
   onSeekTo: () => void
+
   onCopy: () => void
+
   copied: boolean
 }
 
@@ -51,13 +69,20 @@ interface RowProps {
  * segment (~1500 nodes/hour of audio); now only rows whose active state flips
  * re-render.
  */
+
 const TranscriptRow = memo(function TranscriptRow({
   entry,
+
   isActive,
+
   searchQuery,
+
   copyLabel,
+
   onSeekTo,
+
   onCopy,
+
   copied,
 }: RowProps) {
   const highlightParts = searchQuery.trim()
@@ -97,7 +122,9 @@ const TranscriptRow = memo(function TranscriptRow({
           {/* Spoken Text */}
           <p
             className={`text-xs sm:text-sm leading-relaxed transition-colors flex-1 ${
-              isActive ? "text-fg font-medium" : "text-fg-secondary group-hover:text-fg"
+              isActive
+                ? "text-fg font-medium"
+                : "text-fg-secondary group-hover:text-fg"
             }`}
           >
             {highlightParts
@@ -130,6 +157,7 @@ const TranscriptRow = memo(function TranscriptRow({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
+
               onCopy()
             }}
             className="p-2 rounded-lg text-fg-tertiary hover:text-fg hover:bg-surface-3 transition-colors"
@@ -150,44 +178,68 @@ const TranscriptRow = memo(function TranscriptRow({
 
 export default function TranscriptPanel({
   entries,
+
   currentTime,
+
   onSeekTo,
+
   docName,
+
   docDate,
+
   onRetranscribe,
+
   hasAudio = true,
 }: TranscriptPanelProps) {
   const { t } = useLanguage()
+
   const containerRef = useRef<HTMLDivElement>(null)
+
   const exportMenuRef = useRef<HTMLDivElement>(null)
+
   const [searchQuery, setSearchQuery] = useState("")
+
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+
   const [isAllCopied, setIsAllCopied] = useState(false)
+
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false)
+
   const { showToast } = useToast()
 
   // Close export dropdown when clicking outside or pressing Escape
+
   useEffect(() => {
     if (!isExportMenuOpen) return
+
     const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(e.target as Node)
+      ) {
         setIsExportMenuOpen(false)
       }
     }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsExportMenuOpen(false)
       }
     }
+
     window.addEventListener("click", handleClickOutside)
+
     window.addEventListener("keydown", handleKeyDown)
+
     return () => {
       window.removeEventListener("click", handleClickOutside)
+
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [isExportMenuOpen])
 
   // Filter entries based on search
+
   const filteredEntries = searchQuery.trim()
     ? entries.filter((entry) =>
         entry.text.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -195,58 +247,92 @@ export default function TranscriptPanel({
     : entries
 
   // Find active entry based on current player timestamp (only in unfiltered view)
+
   let activeEntryIndex = -1
+
   if (!searchQuery && filteredEntries.length > 0) {
     // Binary search over sorted seconds — cheaper than findIndex scans on
+
     // every playback tick.
+
     let lo = 0
+
     let hi = filteredEntries.length - 1
+
     while (lo <= hi) {
       const mid = (lo + hi) >> 1
+
       if (filteredEntries[mid].seconds <= currentTime) lo = mid + 1
       else hi = mid - 1
     }
+
     activeEntryIndex = hi
   }
 
   // Auto-scroll to the active entry without hijacking ancestor page scroll.
+
   useEffect(() => {
     const container = containerRef.current
+
     if (activeEntryIndex < 0 || !container || searchQuery) return
 
-    const activeEl = container.querySelector<HTMLElement>('[data-active="true"]')
+    const activeEl = container.querySelector<HTMLElement>(
+      '[data-active="true"]',
+    )
+
     if (!activeEl) return
 
     const cRect = container.getBoundingClientRect()
+
     const eRect = activeEl.getBoundingClientRect()
+
     const margin = cRect.height * 0.25
+
     // Only scroll when the active line drifts near the edges.
-    if (eRect.top >= cRect.top + margin && eRect.bottom <= cRect.bottom - margin) return
+
+    if (
+      eRect.top >= cRect.top + margin &&
+      eRect.bottom <= cRect.bottom - margin
+    )
+      return
 
     const delta =
-      eRect.top - cRect.top - container.clientHeight / 2 + activeEl.offsetHeight / 2
+      eRect.top -
+      cRect.top -
+      container.clientHeight / 2 +
+      activeEl.offsetHeight / 2
+
     container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" })
   }, [activeEntryIndex, searchQuery])
 
   const handleCopySentence = (text: string, index: number) => {
     navigator.clipboard.writeText(text)
+
     setCopiedIndex(index)
+
     showToast(t("btn_copy_sentence"), "success")
+
     setTimeout(() => setCopiedIndex(null), 2000)
   }
 
   const handleCopyAll = async () => {
     if (!entries || entries.length === 0) {
       showToast(t("toast_no_transcript"), "error")
+
       return
     }
+
     try {
       await copyTranscriptToClipboard(entries, false, docName, docDate)
+
       setIsAllCopied(true)
+
       showToast(t("toast_transcript_copied"), "success")
+
       setTimeout(() => setIsAllCopied(false), 2000)
     } catch (err) {
       console.error("Failed to copy transcript:", err)
+
       showToast(t("toast_nothing_to_copy"), "error")
     }
   }
@@ -254,14 +340,19 @@ export default function TranscriptPanel({
   const handleExport = (format: TranscriptExportFormat) => {
     if (!entries || entries.length === 0) {
       showToast(t("toast_no_transcript"), "error")
+
       return
     }
+
     try {
       downloadTranscriptFile(entries, docName || "Transcript", format, docDate)
+
       showToast(t("toast_transcript_exported"), "success")
+
       setIsExportMenuOpen(false)
     } catch (err) {
       console.error("Failed to export transcript:", err)
+
       showToast(t("toast_download_failed"), "error")
     }
   }
@@ -276,7 +367,11 @@ export default function TranscriptPanel({
         <div className="flex items-center justify-between gap-2">
           {/* Left: Quotes + Title + Count */}
           <div className="flex items-center gap-2 min-w-0">
-            <Quotes size={15} weight="duotone" className="text-fg-tertiary flex-shrink-0" />
+            <Quotes
+              size={15}
+              weight="duotone"
+              className="text-fg-tertiary flex-shrink-0"
+            />
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-fg-secondary truncate">
               {t("transcript_title")}
             </span>
@@ -294,11 +389,17 @@ export default function TranscriptPanel({
                 onClick={onRetranscribe}
                 disabled={!hasAudio}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-surface-2 hover:bg-surface-3 text-fg-secondary hover:text-primary border border-border transition-colors disabled:opacity-40 disabled:pointer-events-none cursor-pointer min-h-[34px]"
-                title={hasAudio ? t("btn_retranscribe") : t("retranscribe_disabled_no_audio")}
+                title={
+                  hasAudio
+                    ? t("btn_retranscribe")
+                    : t("retranscribe_disabled_no_audio")
+                }
                 aria-label={t("btn_retranscribe")}
               >
                 <ArrowsClockwise size={13} weight="bold" />
-                <span className="hidden sm:inline">{t("btn_retranscribe")}</span>
+                <span className="hidden sm:inline">
+                  {t("btn_retranscribe")}
+                </span>
               </button>
             )}
 
@@ -316,7 +417,9 @@ export default function TranscriptPanel({
               ) : (
                 <Copy size={13} weight="duotone" />
               )}
-              <span className="hidden sm:inline">{t("btn_copy_transcript")}</span>
+              <span className="hidden sm:inline">
+                {t("btn_copy_transcript")}
+              </span>
             </button>
 
             {/* Export Dropdown */}
@@ -325,6 +428,7 @@ export default function TranscriptPanel({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
+
                   setIsExportMenuOpen((prev) => !prev)
                 }}
                 disabled={entries.length === 0}
@@ -338,7 +442,9 @@ export default function TranscriptPanel({
                 <CaretDown
                   size={11}
                   weight="bold"
-                  className={`transition-transform duration-200 ${isExportMenuOpen ? "rotate-180" : ""}`}
+                  className={`transition-transform duration-200 ${
+                    isExportMenuOpen ? "rotate-180" : ""
+                  }`}
                 />
               </button>
 
@@ -361,7 +467,11 @@ export default function TranscriptPanel({
                     onClick={() => handleExport("plain")}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
                   >
-                    <FileText size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <FileText
+                      size={16}
+                      weight="duotone"
+                      className="text-primary mt-0.5 flex-shrink-0"
+                    />
                     <div>
                       <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
                         {t("export_plain_text")}
@@ -378,7 +488,11 @@ export default function TranscriptPanel({
                     onClick={() => handleExport("timestamps")}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
                   >
-                    <Clock size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <Clock
+                      size={16}
+                      weight="duotone"
+                      className="text-primary mt-0.5 flex-shrink-0"
+                    />
                     <div>
                       <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
                         {t("export_with_timestamps")}
@@ -395,7 +509,11 @@ export default function TranscriptPanel({
                     onClick={() => handleExport("srt")}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-surface-2 transition-colors flex items-start gap-2.5 cursor-pointer group"
                   >
-                    <ClosedCaptioning size={16} weight="duotone" className="text-primary mt-0.5 flex-shrink-0" />
+                    <ClosedCaptioning
+                      size={16}
+                      weight="duotone"
+                      className="text-primary mt-0.5 flex-shrink-0"
+                    />
                     <div>
                       <span className="font-semibold text-fg group-hover:text-primary transition-colors block">
                         {t("export_srt")}
@@ -417,7 +535,9 @@ export default function TranscriptPanel({
             size={15}
             className="text-fg-tertiary absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-fg transition-colors"
           />
-          <label htmlFor="transcript-search" className="sr-only">{t("search_transcript")}</label>
+          <label htmlFor="transcript-search" className="sr-only">
+            {t("search_transcript")}
+          </label>
           <input
             id="transcript-search"
             type="text"

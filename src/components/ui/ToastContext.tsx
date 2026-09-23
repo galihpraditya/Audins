@@ -7,14 +7,18 @@ import {
   useRef,
   ReactNode,
 } from "react"
+
 import { CheckCircle, WarningOctagon, Info, X } from "@phosphor-icons/react"
+
 import { useLanguage } from "../../context/LanguageContext"
 
 export type ToastType = "success" | "error" | "info"
 
 interface ToastMessage {
   id: number
+
   message: string
+
   type: ToastType
 }
 
@@ -26,17 +30,23 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function useToast() {
   const context = useContext(ToastContext)
+
   if (!context) {
     throw new Error("useToast must be used within a ToastProvider")
   }
+
   return context
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useLanguage()
+
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+
   // Monotonic counter avoids the Date.now() id collisions that made two
+
   // toasts share a React key and disappear together.
+
   const idCounterRef = useRef(0)
 
   const dismiss = useCallback((id: number) => {
@@ -46,16 +56,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const showToast = useCallback(
     (message: string, type: ToastType = "info") => {
       const id = ++idCounterRef.current
+
       setToasts((prev) => [...prev.slice(-4), { id, message, type }])
 
       setTimeout(() => {
         setToasts((prev) => prev.filter((toastItem) => toastItem.id !== id))
       }, 4500)
     },
+
     [],
   )
 
   // Stable value: adding a toast no longer re-renders every consumer subtree.
+
   const value = useMemo(() => ({ showToast }), [showToast])
 
   return (
@@ -93,16 +106,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex-shrink-0">
                 {toast.type === "error" && (
-                  <WarningOctagon size={18} weight="fill" className="text-danger" />
+                  <WarningOctagon
+                    size={18}
+                    weight="fill"
+                    className="text-danger"
+                  />
                 )}
                 {toast.type === "success" && (
-                  <CheckCircle size={18} weight="fill" className="text-success" />
+                  <CheckCircle
+                    size={18}
+                    weight="fill"
+                    className="text-success"
+                  />
                 )}
                 {toast.type === "info" && (
                   <Info size={18} weight="duotone" className="text-primary" />
                 )}
               </div>
-              <p className="text-xs sm:text-sm font-medium leading-snug text-fg">{toast.message}</p>
+              <p className="text-xs sm:text-sm font-medium leading-snug text-fg">
+                {toast.message}
+              </p>
             </div>
 
             <button

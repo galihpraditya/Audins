@@ -12,6 +12,7 @@ interface DashboardProps {
   onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
   onRenameDocument: (id: number | string, newName: string) => void
   onDuplicateDocument: (doc: DocumentItem) => void
+  onUpdateDocument?: (doc: DocumentItem) => void
   setModal: (v: boolean) => void
   uploadCount: number
   maxUploads?: number
@@ -27,6 +28,7 @@ export default function Dashboard({
   onDeleteAudioOnly,
   onRenameDocument,
   onDuplicateDocument,
+  onUpdateDocument,
   setModal,
   uploadCount,
   maxUploads,
@@ -65,6 +67,7 @@ export default function Dashboard({
           onDeleteAudioOnly={onDeleteAudioOnly}
           onRenameDocument={onRenameDocument}
           onDuplicateDocument={onDuplicateDocument}
+          onUpdateDocument={onUpdateDocument}
         />
       </div>
     </main>

@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from "react"
+
 import { WarningCircle, ArrowClockwise } from "@phosphor-icons/react"
 
 interface ErrorBoundaryProps {
@@ -13,10 +14,8 @@ interface ErrorBoundaryState {
  * Global render-error boundary. Previously any uncaught render exception
  * (e.g. a bad regex in user search input) white-screened the whole SPA.
  */
-export default class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+
+export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false }
 
   static getDerivedStateFromError(): ErrorBoundaryState {
