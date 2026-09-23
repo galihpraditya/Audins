@@ -171,7 +171,7 @@ export default function App() {
     void loadInitialData()
   }, [user?.id, loadInitialData])
 
-  const handleUploadFile = async (file: File) => {
+  const handleUploadFile = async (file: File, knownDurationSec?: number) => {
     // Check free demo quota against the server-provided max (not a hardcoded 10).
     if (!hasCustomKey && quota.uploadCount >= quota.maxUploads) {
       setRateModalOpen(true)
@@ -195,49 +195,62 @@ export default function App() {
       },
     )
 
-    // 1. Calculate audio duration using HTML5 Audio
-    let durationSec = 30
+    // 1. Calculate audio duration using known duration or HTML5 Audio
+    let durationSec = knownDurationSec ?? 30
     let durationStr = "0m 30s"
 
-    try {
-      const audio = new Audio(blobUrl)
-      await new Promise<void>((resolve) => {
-        const applyDuration = () => {
-          durationSec = Math.floor(audio.duration)
-          const m = Math.floor(durationSec / 60)
-          const s = durationSec % 60
-          durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
-        }
-        audio.onloadedmetadata = () => {
-          if (
-            audio.duration &&
-            !isNaN(audio.duration) &&
-            audio.duration !== Infinity
-          ) {
-            applyDuration()
-            resolve()
-          } else if (audio.duration === Infinity) {
-            audio.currentTime = Number.MAX_SAFE_INTEGER
-            audio.ontimeupdate = () => {
-              audio.ontimeupdate = null
-              audio.currentTime = 0
-              if (
-                audio.duration &&
-                !isNaN(audio.duration) &&
-                audio.duration !== Infinity
-              ) {
-                applyDuration()
+    if (knownDurationSec !== undefined && knownDurationSec > 0) {
+      const m = Math.floor(durationSec / 60)
+      const s = durationSec % 60
+      durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
+    } else {
+      try {
+        const audio = new Audio(blobUrl)
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => resolve(), 1000)
+          const applyDuration = () => {
+            durationSec = Math.floor(audio.duration)
+            const m = Math.floor(durationSec / 60)
+            const s = durationSec % 60
+            durationStr = `${m}m ${s.toString().padStart(2, "0")}s`
+          }
+          audio.onloadedmetadata = () => {
+            if (
+              audio.duration &&
+              !isNaN(audio.duration) &&
+              audio.duration !== Infinity
+            ) {
+              applyDuration()
+              clearTimeout(timeout)
+              resolve()
+            } else if (audio.duration === Infinity) {
+              audio.currentTime = Number.MAX_SAFE_INTEGER
+              audio.ontimeupdate = () => {
+                audio.ontimeupdate = null
+                audio.currentTime = 0
+                if (
+                  audio.duration &&
+                  !isNaN(audio.duration) &&
+                  audio.duration !== Infinity
+                ) {
+                  applyDuration()
+                }
+                clearTimeout(timeout)
+                resolve()
               }
+            } else {
+              clearTimeout(timeout)
               resolve()
             }
-          } else {
+          }
+          audio.onerror = () => {
+            clearTimeout(timeout)
             resolve()
           }
-        }
-        audio.onerror = () => resolve()
-      })
-    } catch {
-      // Fallback duration
+        })
+      } catch {
+        // Fallback duration
+      }
     }
 
     // Temporary processing doc
@@ -324,6 +337,7 @@ export default function App() {
         showToast(t("toast_processing_started"), "info")
         startPolling(apiResult.id)
       }
+      void refreshFromServer()
       return
     } catch (err) {
       uploadControllersRef.current.delete(newId)
@@ -628,6 +642,8 @@ export default function App() {
             setLiveRecorderMinimized(false)
           }}
           onUploadFile={handleUploadFile}
+          canRecord={hasCustomKey || quota.uploadCount < quota.maxUploads}
+          onShowLimitModal={() => setRateModalOpen(true)}
         />
       )}
 

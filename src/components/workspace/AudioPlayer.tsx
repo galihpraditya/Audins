@@ -345,18 +345,6 @@ export default function AudioPlayer({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Delete Audio Button */}
-          {onDeleteAudio && !isAudioMissingOrExpired && (
-            <button
-              onClick={onDeleteAudio}
-              className="p-1.5 text-fg-tertiary hover:text-danger hover:bg-danger-dim rounded-lg transition-colors flex items-center justify-center cursor-pointer"
-              title={t("action_delete_audio")}
-              aria-label={t("action_delete_audio")}
-            >
-              <Trash size={15} weight="duotone" />
-            </button>
-          )}
-
           {/* Speed Selector */}
           <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-2 p-1 rounded-lg flex-shrink-0" role="group" aria-label="Playback speed">
             <Gauge size={13} className="text-fg-tertiary ml-0.5 sm:ml-1 hidden xs:block" />
@@ -534,6 +522,18 @@ export default function AudioPlayer({
               aria-label={t("a11y_download_audio")}
             >
               <DownloadSimple size={15} weight="duotone" />
+            </button>
+          )}
+
+          {onDeleteAudio && !isAudioMissingOrExpired && (
+            <button
+              type="button"
+              onClick={onDeleteAudio}
+              className="p-2 text-fg-tertiary hover:text-danger hover:bg-danger-dim rounded-lg transition-all cursor-pointer"
+              title={t("action_delete_audio")}
+              aria-label={t("action_delete_audio")}
+            >
+              <Trash size={15} weight="duotone" />
             </button>
           )}
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useLanguage } from "../../context/LanguageContext"
+import { useToast } from "../ui/ToastContext"
 import Modal from "../ui/Modal"
 import Alert from "../ui/Alert"
 import {
@@ -9,6 +10,7 @@ import {
   Play,
   ArrowCounterClockwise,
   UploadSimple,
+  DownloadSimple,
   X,
   Waveform,
   CheckCircle,
@@ -19,10 +21,12 @@ import {
 
 interface LiveRecorderModalProps {
   onClose: () => void
-  onUploadFile: (file: File) => void
+  onUploadFile: (file: File, durationSec?: number) => void
   isMinimized?: boolean
   onMinimize?: () => void
   onExpand?: () => void
+  canRecord?: boolean
+  onShowLimitModal?: () => void
 }
 
 type RecordingState = "idle" | "recording" | "paused" | "preview"
@@ -33,8 +37,11 @@ export default function LiveRecorderModal({
   isMinimized = false,
   onMinimize,
   onExpand,
+  canRecord = true,
+  onShowLimitModal,
 }: LiveRecorderModalProps) {
   const { t } = useLanguage()
+  const { showToast } = useToast()
   const [recordingState, setRecordingState] = useState<RecordingState>("idle")
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -181,6 +188,10 @@ export default function LiveRecorderModal({
 
   // Start recording
   const handleStartRecording = async () => {
+    if (!canRecord) {
+      if (onShowLimitModal) onShowLimitModal()
+      return
+    }
     setErrorMessage(null)
     audioChunksRef.current = []
 
@@ -297,8 +308,33 @@ export default function LiveRecorderModal({
     setRecordingState("idle")
   }
 
+  const handleDownloadAudioOnly = () => {
+    if (!recordedBlob) return
+    const filename = recordingName.trim() || "live-recording"
+    const ext = recordedBlob.type.includes("mp4")
+      ? ".mp4"
+      : recordedBlob.type.includes("ogg")
+        ? ".ogg"
+        : ".webm"
+
+    const fullFilename = filename.endsWith(ext) ? filename : `${filename}${ext}`
+    const tempUrl = URL.createObjectURL(recordedBlob)
+    const link = document.createElement("a")
+    link.href = tempUrl
+    link.download = fullFilename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(tempUrl), 1000)
+    showToast(t("toast_recording_downloaded"), "success")
+  }
+
   const handleSubmit = () => {
     if (!recordedBlob) return
+    if (!canRecord) {
+      if (onShowLimitModal) onShowLimitModal()
+      return
+    }
     const filename = recordingName.trim() || "live-recording"
     const ext = recordedBlob.type.includes("mp4")
       ? ".mp4"
@@ -310,7 +346,7 @@ export default function LiveRecorderModal({
     const file = new File([recordedBlob], fullFilename, { type: recordedBlob.type })
     if (audioUrl) URL.revokeObjectURL(audioUrl)
     setAudioUrl(null)
-    onUploadFile(file)
+    onUploadFile(file, elapsedSeconds)
     onClose()
   }
 
@@ -577,9 +613,10 @@ export default function LiveRecorderModal({
         )}
 
         {/* Recording Controls */}
-        <div className="flex items-center justify-center gap-2.5 sm:gap-3 pt-1 sm:pt-2">
+        <div className="w-full pt-1 sm:pt-2">
           {recordingState === "idle" && (
             <button
+              type="button"
               onClick={handleStartRecording}
               className="group w-full py-3 px-6 rounded-xl text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 min-h-[46px] shadow-sm hover:shadow-danger/20 cursor-pointer"
             >
@@ -589,8 +626,9 @@ export default function LiveRecorderModal({
           )}
 
           {recordingState === "recording" && (
-            <>
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
+                type="button"
                 onClick={handlePause}
                 className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg transition-all flex items-center gap-2 cursor-pointer border border-border min-h-[44px]"
               >
@@ -598,18 +636,20 @@ export default function LiveRecorderModal({
                 <span>{t("btn_pause")}</span>
               </button>
               <button
+                type="button"
                 onClick={handleStop}
                 className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer min-h-[44px]"
               >
                 <Stop size={18} weight="fill" />
                 <span>{t("btn_stop_preview")}</span>
               </button>
-            </>
+            </div>
           )}
 
           {recordingState === "paused" && (
-            <>
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
+                type="button"
                 onClick={handleResume}
                 className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover active:scale-95 text-primary-contrast transition-all flex items-center gap-2 cursor-pointer min-h-[44px]"
               >
@@ -617,32 +657,50 @@ export default function LiveRecorderModal({
                 <span>{t("btn_resume")}</span>
               </button>
               <button
+                type="button"
                 onClick={handleStop}
                 className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-danger-contrast bg-danger hover:bg-danger/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer min-h-[44px]"
               >
                 <Stop size={18} weight="fill" />
                 <span>{t("btn_stop_preview")}</span>
               </button>
-            </>
+            </div>
           )}
 
           {recordingState === "preview" && (
-            <>
+            <div className="flex flex-col gap-2.5 w-full animate-fade-in">
+              {/* Primary Action Button */}
               <button
-                onClick={handleDiscard}
-                className="group px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg transition-all flex items-center gap-1.5 cursor-pointer border border-border min-h-[44px]"
-              >
-                <ArrowCounterClockwise size={16} weight="bold" className="group-hover:-rotate-90 transition-transform duration-200" />
-                <span>{t("btn_rerecord")}</span>
-              </button>
-              <button
+                type="button"
                 onClick={handleSubmit}
-                className="flex-1 py-2.5 sm:py-3 px-4 sm:px-6 rounded-xl text-xs sm:text-sm font-semibold text-primary-contrast bg-primary hover:bg-primary-hover active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-h-[44px] shadow-sm cursor-pointer"
+                className="w-full py-3 px-6 rounded-xl text-xs sm:text-sm font-semibold text-primary-contrast bg-primary hover:bg-primary-hover active:scale-[0.99] transition-all flex items-center justify-center gap-2 min-h-[46px] shadow-sm cursor-pointer"
               >
                 <UploadSimple size={18} weight="bold" />
                 <span>{t("btn_submit_transcribe")}</span>
               </button>
-            </>
+
+              {/* Secondary Actions: 50/50 Balanced Grid */}
+              <div className="grid grid-cols-2 gap-2.5 w-full">
+                <button
+                  type="button"
+                  onClick={handleDiscard}
+                  className="group py-2.5 px-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-border min-h-[42px]"
+                  title={t("btn_rerecord")}
+                >
+                  <ArrowCounterClockwise size={15} weight="bold" className="group-hover:-rotate-90 transition-transform duration-200 flex-shrink-0" />
+                  <span className="truncate">{t("btn_rerecord")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadAudioOnly}
+                  className="group py-2.5 px-3 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 active:scale-95 text-fg-secondary hover:text-fg transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-border min-h-[42px]"
+                  title={t("btn_download_audio_only")}
+                >
+                  <DownloadSimple size={15} weight="bold" className="text-primary group-hover:scale-110 transition-transform duration-200 flex-shrink-0" />
+                  <span className="truncate">{t("btn_download_audio_only")}</span>
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
