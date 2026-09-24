@@ -430,28 +430,42 @@ export async function duplicateDocument(
 
 export async function claimGuestDocuments(
   guestSessionId: string,
-
   newUserId: string,
 ): Promise<number> {
   if (!guestSessionId || !newUserId || guestSessionId === newUserId) return 0
 
+  let totalCount = 0
+
   if (isSupabaseEnabled()) {
-    return await claimSupabaseGuestDocuments(guestSessionId, newUserId)
+    try {
+      const supabaseCount = await claimSupabaseGuestDocuments(
+        guestSessionId,
+        newUserId,
+      )
+      totalCount += supabaseCount
+    } catch (err) {
+      console.error("Supabase claim failed, checking local store:", err)
+    }
   }
 
-  let count = 0
+  let localCount = 0
 
   for (const doc of documentsStore.values()) {
     if (doc.userId === guestSessionId) {
       doc.userId = newUserId
+      localCount++
 
-      count++
+      if (isSupabaseEnabled()) {
+        // Also persist locally migrated doc to Supabase so it's safely synced to cloud
+        void saveSupabaseDocument(doc).catch(() => {})
+      }
     }
   }
 
-  if (count > 0) {
+  if (localCount > 0) {
     scheduleDbWrite()
+    totalCount += localCount
   }
 
-  return count
+  return totalCount
 }

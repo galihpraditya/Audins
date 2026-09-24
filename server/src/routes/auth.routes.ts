@@ -12,21 +12,25 @@ import {
 
 const router = Router()
 
-// POST /api/v1/auth/signup
+function getHeaderKey(
+  header: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(header)) return header[0]
+  return header
+}
 
+// POST /api/v1/auth/signup
 router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { email, password, name, guestSessionId } = req.body
 
     if (!email || typeof email !== "string") {
       res.status(400).json({ error: "Valid email is required" })
-
       return
     }
 
     if (!password || typeof password !== "string" || password.length < 6) {
       res.status(400).json({ error: "Password must be at least 6 characters" })
-
       return
     }
 
@@ -34,31 +38,36 @@ router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
 
     let claimedCount = 0
 
-    if (guestSessionId && typeof guestSessionId === "string") {
-      claimedCount = await claimGuestDocuments(guestSessionId, authRes.user.id)
+    const targetSessionId =
+      guestSessionId === null
+        ? undefined
+        : (typeof guestSessionId === "string" && guestSessionId.trim()) ||
+          getHeaderKey(req.headers["x-user-session"])
+
+    if (targetSessionId) {
+      claimedCount = await claimGuestDocuments(targetSessionId, authRes.user.id)
+      console.log(
+        `[Auth Signup] Claimed ${claimedCount} documents for user ${authRes.user.id} from session ${targetSessionId}`,
+      )
     }
 
     res.status(201).json({
       ...authRes,
-
       claimedCount,
     })
   } catch (error: any) {
     console.error("Signup error:", error)
-
     res.status(400).json({ error: error.message || "Failed to create account" })
   }
 })
 
 // POST /api/v1/auth/login
-
 router.post("/login", async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { email, password, guestSessionId } = req.body
 
     if (!email || !password) {
       res.status(400).json({ error: "Email and password are required" })
-
       return
     }
 
@@ -66,18 +75,25 @@ router.post("/login", async (req: AuthenticatedRequest, res: Response) => {
 
     let claimedCount = 0
 
-    if (guestSessionId && typeof guestSessionId === "string") {
-      claimedCount = await claimGuestDocuments(guestSessionId, authRes.user.id)
+    const targetSessionId =
+      guestSessionId === null
+        ? undefined
+        : (typeof guestSessionId === "string" && guestSessionId.trim()) ||
+          getHeaderKey(req.headers["x-user-session"])
+
+    if (targetSessionId) {
+      claimedCount = await claimGuestDocuments(targetSessionId, authRes.user.id)
+      console.log(
+        `[Auth Login] Claimed ${claimedCount} documents for user ${authRes.user.id} from session ${targetSessionId}`,
+      )
     }
 
     res.json({
       ...authRes,
-
       claimedCount,
     })
   } catch (error: any) {
     console.error("Login error:", error)
-
     res.status(401).json({ error: error.message || "Invalid credentials" })
   }
 })
@@ -108,21 +124,26 @@ router.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { guestSessionId } = req.body
+      const targetSessionId =
+        (typeof guestSessionId === "string" && guestSessionId.trim()) ||
+        getHeaderKey(req.headers["x-user-session"])
 
-      if (!guestSessionId || typeof guestSessionId !== "string") {
+      if (!targetSessionId) {
         res.status(400).json({ error: "guestSessionId is required" })
-
         return
       }
 
       const claimedCount = await claimGuestDocuments(
-        guestSessionId,
+        targetSessionId,
         req.userId!,
+      )
+
+      console.log(
+        `[Auth Claim-Session] Claimed ${claimedCount} documents for user ${req.userId} from session ${targetSessionId}`,
       )
 
       res.json({
         success: true,
-
         claimedCount,
       })
     } catch (error: any) {

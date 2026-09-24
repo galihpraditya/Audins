@@ -34,16 +34,18 @@ const app = express()
 
 // anyone can deploy to those, which previously let attacker pages call the API.
 
+const defaultAllowedOrigins = [
+  "http://localhost:8443",
+  "http://localhost:5173",
+  "http://127.0.0.1:8443",
+  "http://127.0.0.1:5173",
+  "https://audins.galihh.me",
+  "https://audins.vercel.app",
+]
+
 const allowedOrigins = new Set<string>(
   [
-    "http://localhost:8443",
-
-    "http://localhost:5173",
-
-    "http://127.0.0.1:8443",
-
-    "http://127.0.0.1:5173",
-
+    ...defaultAllowedOrigins,
     ...(process.env.FRONTEND_URL
       ? process.env.FRONTEND_URL.split(",").map((u) =>
           u.trim().replace(/\/$/, ""),
@@ -52,16 +54,33 @@ const allowedOrigins = new Set<string>(
   ].filter(Boolean),
 )
 
+function isOriginAllowed(origin: string): boolean {
+  const cleanOrigin = origin.replace(/\/$/, "").toLowerCase()
+  if (allowedOrigins.has(cleanOrigin)) return true
+  if (allowedOrigins.has("*") || process.env.FRONTEND_URL === "*") return true
+  try {
+    const parsed = new URL(cleanOrigin)
+    if (
+      parsed.hostname === "audins.galihh.me" ||
+      parsed.hostname === "galihh.me" ||
+      parsed.hostname.endsWith(".galihh.me") ||
+      parsed.hostname.endsWith(".vercel.app")
+    ) {
+      return true
+    }
+  } catch {
+    /* ignore invalid url */
+  }
+  return false
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow non-browser requests (Postman, curl, server-to-server)
-
       if (!origin) return callback(null, true)
 
-      const cleanOrigin = origin.replace(/\/$/, "")
-
-      if (allowedOrigins.has(cleanOrigin)) return callback(null, true)
+      if (isOriginAllowed(origin)) return callback(null, true)
 
       console.warn(`CORS blocked request from origin: ${origin}`)
 

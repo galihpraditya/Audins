@@ -139,6 +139,17 @@ export function getSessionId(): string {
   }
 }
 
+export function rotateSessionId(): string {
+  const newId = generateSessionId()
+  try {
+    localStorage.setItem(SESSION_KEY, newId)
+  } catch {
+    /* non-fatal */
+  }
+  ephemeralSessionId = newId
+  return newId
+}
+
 export function authHeaders(
   extra?: Record<string, string>,
 ): Record<string, string> {
@@ -526,9 +537,9 @@ export async function loginApi(
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
 
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
 
-    body: JSON.stringify({ ...creds, guestSessionId }),
+    body: JSON.stringify({ ...creds, guestSessionId: guestSessionId ?? null }),
   })
 
   if (!res.ok) throw await extractErrorMessage(res, "Login failed")
@@ -544,9 +555,9 @@ export async function registerApi(
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
 
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
 
-    body: JSON.stringify({ ...creds, guestSessionId }),
+    body: JSON.stringify({ ...creds, guestSessionId: guestSessionId ?? null }),
   })
 
   if (!res.ok) throw await extractErrorMessage(res, "Registration failed")

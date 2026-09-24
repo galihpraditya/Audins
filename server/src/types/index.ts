@@ -152,4 +152,6 @@ export interface AuthResponse {
   token: string
 
   provider: "supabase" | "local"
+
+  claimedCount?: number
 }

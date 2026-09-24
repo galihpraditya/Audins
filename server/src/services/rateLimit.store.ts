@@ -13,14 +13,17 @@ import { RateLimitRecord } from "../types/index.js"
  * the migration keep working; the middleware treats failures as fail-closed.
  */
 
+import { cleanSupabaseUrl } from "./supabase.service.js"
+
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
 let supabase: SupabaseClient | null = null
 
-if (process.env.SUPABASE_URL && supabaseKey) {
+const cleanUrl = cleanSupabaseUrl(process.env.SUPABASE_URL)
+if (cleanUrl && supabaseKey) {
   try {
-    supabase = createClient(process.env.SUPABASE_URL!, supabaseKey!)
+    supabase = createClient(cleanUrl, supabaseKey!)
   } catch {
     supabase = null
   }

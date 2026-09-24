@@ -9,16 +9,23 @@ import { FullDocument } from "../types/index.js"
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY
 
-const hasSupabaseConfig = process.env.SUPABASE_URL && supabaseKey
+export function cleanSupabaseUrl(url: string | undefined): string {
+  if (!url) return ""
+  return url.trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "")
+}
+
+const rawSupabaseUrl = process.env.SUPABASE_URL
+const cleanedSupabaseUrl = cleanSupabaseUrl(rawSupabaseUrl)
+const hasSupabaseConfig = Boolean(cleanedSupabaseUrl && supabaseKey)
 
 let supabase: SupabaseClient | null = null
 
 if (hasSupabaseConfig) {
   try {
-    supabase = createClient(process.env.SUPABASE_URL!, supabaseKey!)
+    supabase = createClient(cleanedSupabaseUrl, supabaseKey!)
 
     console.log(
-      `Supabase Client initialized successfully (${
+      `Supabase Client initialized successfully at ${cleanedSupabaseUrl} (${
         process.env.SUPABASE_SERVICE_ROLE_KEY
           ? "using Service Role Key"
           : "using Anon Key"
@@ -327,39 +334,43 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
 
 export async function claimSupabaseGuestDocuments(
   guestSessionId: string,
-
   newUserId: string,
 ): Promise<number> {
   if (!supabase || !isSupabaseEnabled()) return 0
 
   try {
     const { data, error } = await supabase
-
       .from("documents")
-
       .select("id, content")
-
+      .not("id", "like", "rate_limit_%")
       .contains("content", { userId: guestSessionId })
 
-    if (error || !data) return 0
-
-    let migrated = 0
-
-    for (const row of data) {
-      const doc = row.content as FullDocument
-
-      doc.userId = newUserId
-
-      const { error: upsertErr } = await supabase
-
-        .from("documents")
-
-        .upsert({ id: doc.id, content: doc })
-
-      if (!upsertErr) migrated++
+    if (error) {
+      console.error("Failed to query guest documents in Supabase:", error)
+      return 0
     }
 
-    return migrated
+    if (!data || data.length === 0) return 0
+
+    const rowsToUpsert = data.map((row: any) => {
+      const doc = row.content as FullDocument
+      doc.userId = newUserId
+      return { id: doc.id, content: doc }
+    })
+
+    const { error: upsertErr } = await supabase
+      .from("documents")
+      .upsert(rowsToUpsert)
+
+    if (upsertErr) {
+      console.error("Failed to batch upsert claimed documents in Supabase:", upsertErr)
+      return 0
+    }
+
+    console.log(
+      `Migrated ${rowsToUpsert.length} guest document(s) from session ${guestSessionId} to user ${newUserId} in Supabase`,
+    )
+    return rowsToUpsert.length
   } catch (error) {
     console.error("Failed to claim guest documents in Supabase:", error)
 

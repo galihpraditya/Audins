@@ -26,6 +26,7 @@ import {
   registerApi,
   fetchCurrentUserApi,
   getSessionId,
+  rotateSessionId,
 } from "../services/api"
 
 interface AuthContextType {
@@ -298,6 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     clearAuth()
+    rotateSessionId()
 
     setTokenState(null)
 
