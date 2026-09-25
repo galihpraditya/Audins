@@ -53,11 +53,13 @@ interface AuthContextType {
   login: (
     creds: LoginCredentials,
     shouldClaimGuest?: boolean,
+    documentIds?: string[],
   ) => Promise<AuthResponse>
 
   register: (
     creds: RegisterCredentials,
     shouldClaimGuest?: boolean,
+    documentIds?: string[],
   ) => Promise<AuthResponse>
 
   logout: () => void
@@ -226,10 +228,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       creds: LoginCredentials,
       shouldClaimGuest = true,
+      documentIds?: string[],
     ): Promise<AuthResponse> => {
       const guestSessionId = shouldClaimGuest ? getSessionId() : undefined
 
-      const res = await loginApi(creds, guestSessionId)
+      const res = await loginApi(
+        creds,
+        guestSessionId,
+        shouldClaimGuest ? documentIds : undefined,
+      )
 
       setAuthToken(res.token)
 
@@ -264,10 +271,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       creds: RegisterCredentials,
 
       shouldClaimGuest = true,
+      documentIds?: string[],
     ): Promise<AuthResponse> => {
       const guestSessionId = shouldClaimGuest ? getSessionId() : undefined
 
-      const res = await registerApi(creds, guestSessionId)
+      const res = await registerApi(
+        creds,
+        guestSessionId,
+        shouldClaimGuest ? documentIds : undefined,
+      )
 
       setAuthToken(res.token)
 

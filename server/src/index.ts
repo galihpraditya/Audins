@@ -1,10 +1,10 @@
+// Load configuration & environment variables first before any route or service
+import { PORT, UPLOADS_DIR, DB_FILE, verifyMediaToken } from "./config.js"
+
 import express from "express"
-
 import cors from "cors"
-
-import dotenv from "dotenv"
-
 import path from "node:path"
+import fs from "node:fs"
 
 import audioRoutes, {
   getActiveBackgroundJobCount,
@@ -12,28 +12,21 @@ import audioRoutes, {
 
 import authRoutes from "./routes/auth.routes.js"
 
-import { PORT, UPLOADS_DIR, DB_FILE, verifyMediaToken } from "./config.js"
-
 import {
   failStaleProcessingDocuments,
   cleanupExpiredAudio,
   flushDbWrites,
+  syncLocalDbToSupabase,
 } from "./services/storage.service.js"
 
 import { pruneLocalRateLimits } from "./middleware/rateLimit.middleware.js"
 
-dotenv.config()
-
 const app = express()
 
 // --- CORS ---
-
 // Strict allow-list: localhost for development plus exact FRONTEND_URL entries.
-
-// Wildcards over shared hosting domains (*.vercel.app etc.) were removed —
-
-// anyone can deploy to those, which previously let attacker pages call the API.
-
+// Wildcards over shared hosting domains (*.vercel.app etc.) are strictly disallowed
+// because any third party could deploy an attacker page on vercel.app.
 const defaultAllowedOrigins = [
   "http://localhost:8443",
   "http://localhost:5173",
@@ -63,8 +56,7 @@ function isOriginAllowed(origin: string): boolean {
     if (
       parsed.hostname === "audins.galihh.me" ||
       parsed.hostname === "galihh.me" ||
-      parsed.hostname.endsWith(".galihh.me") ||
-      parsed.hostname.endsWith(".vercel.app")
+      parsed.hostname.endsWith(".galihh.me")
     ) {
       return true
     }
@@ -255,15 +247,32 @@ server.headersTimeout = 125000 // 125 seconds header timeout
 
 // meaning expired files lingered forever on idle deployments. Run it on a
 
-// fixed interval instead, together with rate-limit store pruning.
-
 const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000 // hourly
+
+async function cleanupOrphanChunks(): Promise<void> {
+  try {
+    const chunksDir = path.join(UPLOADS_DIR, "chunks")
+    if (fs.existsSync(chunksDir)) {
+      const files = await fs.promises.readdir(chunksDir)
+      const now = Date.now()
+      for (const file of files) {
+        const filePath = path.join(chunksDir, file)
+        const stats = await fs.promises.stat(filePath).catch(() => null)
+        if (stats && now - stats.mtimeMs > 60 * 60 * 1000) {
+          await fs.promises.unlink(filePath).catch(() => {})
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to cleanup orphan chunks:", err)
+  }
+}
 
 async function runMaintenance(): Promise<void> {
   try {
     pruneLocalRateLimits()
-
     await cleanupExpiredAudio()
+    await cleanupOrphanChunks()
   } catch (error) {
     console.error("Scheduled maintenance failed:", error)
   }
@@ -276,11 +285,13 @@ maintenanceTimer.unref?.()
 // --- Boot recovery ---
 
 // Background AI jobs are in-process and die with the process; recover docs
-
 // stuck in "Processing" from a previous run so users aren't left hanging.
-
 void failStaleProcessingDocuments().catch((error) =>
   console.error("Stale processing recovery failed:", error),
+)
+void cleanupOrphanChunks().catch(() => {})
+void syncLocalDbToSupabase().catch((error) =>
+  console.error("Local DB to Supabase sync failed:", error),
 )
 
 // --- Graceful shutdown ---

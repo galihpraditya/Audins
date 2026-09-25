@@ -19,10 +19,17 @@ function getHeaderKey(
   return header
 }
 
+function isValidGuestSessionId(id: string | undefined): boolean {
+  if (!id || typeof id !== "string") return false
+  const trimmed = id.trim()
+  if (trimmed.startsWith("usr-")) return false
+  return /^[A-Za-z0-9_-]{8,64}$/.test(trimmed)
+}
+
 // POST /api/v1/auth/signup
 router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { email, password, name, guestSessionId } = req.body
+    const { email, password, name, guestSessionId, documentIds } = req.body
 
     if (!email || typeof email !== "string") {
       res.status(400).json({ error: "Valid email is required" })
@@ -44,10 +51,19 @@ router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
         : (typeof guestSessionId === "string" && guestSessionId.trim()) ||
           getHeaderKey(req.headers["x-user-session"])
 
-    if (targetSessionId) {
-      claimedCount = await claimGuestDocuments(targetSessionId, authRes.user.id)
+    const targetDocIds = Array.isArray(documentIds)
+      ? documentIds.filter((id): id is string => typeof id === "string")
+      : undefined
+
+    claimedCount = await claimGuestDocuments(
+      targetSessionId,
+      authRes.user.id,
+      targetDocIds,
+      authRes.user.email,
+    )
+    if (claimedCount > 0) {
       console.log(
-        `[Auth Signup] Claimed ${claimedCount} documents for user ${authRes.user.id} from session ${targetSessionId}`,
+        `[Auth Signup] Claimed ${claimedCount} documents for user ${authRes.user.id} (${authRes.user.email})`,
       )
     }
 
@@ -64,7 +80,7 @@ router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
 // POST /api/v1/auth/login
 router.post("/login", async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { email, password, guestSessionId } = req.body
+    const { email, password, guestSessionId, documentIds } = req.body
 
     if (!email || !password) {
       res.status(400).json({ error: "Email and password are required" })
@@ -81,10 +97,19 @@ router.post("/login", async (req: AuthenticatedRequest, res: Response) => {
         : (typeof guestSessionId === "string" && guestSessionId.trim()) ||
           getHeaderKey(req.headers["x-user-session"])
 
-    if (targetSessionId) {
-      claimedCount = await claimGuestDocuments(targetSessionId, authRes.user.id)
+    const targetDocIds = Array.isArray(documentIds)
+      ? documentIds.filter((id): id is string => typeof id === "string")
+      : undefined
+
+    claimedCount = await claimGuestDocuments(
+      targetSessionId,
+      authRes.user.id,
+      targetDocIds,
+      authRes.user.email,
+    )
+    if (claimedCount > 0) {
       console.log(
-        `[Auth Login] Claimed ${claimedCount} documents for user ${authRes.user.id} from session ${targetSessionId}`,
+        `[Auth Login] Claimed ${claimedCount} documents for user ${authRes.user.id} (${authRes.user.email})`,
       )
     }
 
@@ -123,23 +148,24 @@ router.post(
 
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { guestSessionId } = req.body
+      const { guestSessionId, documentIds } = req.body
       const targetSessionId =
         (typeof guestSessionId === "string" && guestSessionId.trim()) ||
         getHeaderKey(req.headers["x-user-session"])
 
-      if (!targetSessionId) {
-        res.status(400).json({ error: "guestSessionId is required" })
-        return
-      }
+      const targetDocIds = Array.isArray(documentIds)
+        ? documentIds.filter((id): id is string => typeof id === "string")
+        : undefined
 
       const claimedCount = await claimGuestDocuments(
         targetSessionId,
         req.userId!,
+        targetDocIds,
+        req.user?.email,
       )
 
       console.log(
-        `[Auth Claim-Session] Claimed ${claimedCount} documents for user ${req.userId} from session ${targetSessionId}`,
+        `[Auth Claim-Session] Claimed ${claimedCount} documents for user ${req.userId}`,
       )
 
       res.json({

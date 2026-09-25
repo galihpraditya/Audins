@@ -522,8 +522,6 @@ export async function duplicateSharedDocumentApi(
   )
 
   if (!res.ok)
-    throw await extractErrorMessage(res, "Failed to duplicate shared document")
-
   return (await res.json()) as DocumentItem
 }
 
@@ -531,15 +529,19 @@ export async function duplicateSharedDocumentApi(
 
 export async function loginApi(
   creds: LoginCredentials,
-
   guestSessionId?: string,
+  documentIds?: string[],
 ): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
 
     headers: authHeaders({ "Content-Type": "application/json" }),
 
-    body: JSON.stringify({ ...creds, guestSessionId: guestSessionId ?? null }),
+    body: JSON.stringify({
+      ...creds,
+      guestSessionId: guestSessionId ?? null,
+      documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
+    }),
   })
 
   if (!res.ok) throw await extractErrorMessage(res, "Login failed")
@@ -549,15 +551,19 @@ export async function loginApi(
 
 export async function registerApi(
   creds: RegisterCredentials,
-
   guestSessionId?: string,
+  documentIds?: string[],
 ): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
 
     headers: authHeaders({ "Content-Type": "application/json" }),
 
-    body: JSON.stringify({ ...creds, guestSessionId: guestSessionId ?? null }),
+    body: JSON.stringify({
+      ...creds,
+      guestSessionId: guestSessionId ?? null,
+      documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
+    }),
   })
 
   if (!res.ok) throw await extractErrorMessage(res, "Registration failed")
@@ -593,13 +599,17 @@ export async function fetchCurrentUserApi(): Promise<User | null> {
 
 export async function claimGuestSessionApi(
   guestSessionId: string,
-): Promise<{ success: boolean claimedCount: number }> {
+  documentIds?: string[],
+): Promise<{ success: boolean; claimedCount: number }> {
   const res = await fetch(`${API_BASE_URL}/auth/claim-session`, {
     method: "POST",
 
     headers: authHeaders({ "Content-Type": "application/json" }),
 
-    body: JSON.stringify({ guestSessionId }),
+    body: JSON.stringify({
+      guestSessionId,
+      documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
+    }),
   })
 
   if (!res.ok)

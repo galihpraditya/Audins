@@ -32,8 +32,6 @@ interface StoredLocalUser {
 let localUsersStore: Map<string, StoredLocalUser> = new Map()
 
 function loadLocalUsers(): void {
-  if (isSupabaseEnabled()) return
-
   if (fs.existsSync(USERS_FILE)) {
     try {
       const data = JSON.parse(fs.readFileSync(USERS_FILE, "utf8"))
@@ -54,23 +52,48 @@ function loadLocalUsers(): void {
   localUsersStore = new Map()
 }
 
+export function isLocalRegisteredUserId(id: string): boolean {
+  if (id.startsWith("usr-")) return true
+  for (const u of localUsersStore.values()) {
+    if (u.id === id) return true
+  }
+  return false
+}
+
+export function getLocalUserIdByEmail(email: string): string | null {
+  const clean = email.trim().toLowerCase()
+  const user = localUsersStore.get(clean)
+  return user?.id || null
+}
+
+export function getUserEmailByLocalId(id: string): string | null {
+  for (const u of localUsersStore.values()) {
+    if (u.id === id) return u.email
+  }
+  return null
+}
+
 let userWriteChain: Promise<void> = Promise.resolve()
 
 function scheduleUsersWrite(): void {
   if (isSupabaseEnabled()) return
 
   userWriteChain = userWriteChain
-
     .then(async () => {
       const data = JSON.stringify(Array.from(localUsersStore.values()), null, 2)
-
       const tmp = `${USERS_FILE}.tmp`
-
       await fs.promises.writeFile(tmp, data, "utf8")
-
-      await fs.promises.rename(tmp, USERS_FILE)
+      try {
+        await fs.promises.rename(tmp, USERS_FILE)
+      } catch (err: any) {
+        if (err.code === "EPERM" || err.code === "EBUSY") {
+          await fs.promises.copyFile(tmp, USERS_FILE)
+          await fs.promises.unlink(tmp).catch(() => {})
+        } else {
+          throw err
+        }
+      }
     })
-
     .catch((error) => {
       console.error("Failed to persist users.json:", error)
     })

@@ -916,6 +916,7 @@ export default function App() {
         open={authModalOpen}
         initialTab={authModalTab}
         onClose={closeAuthModal}
+        currentDocumentIds={documents.map((d) => String(d.id))}
       />
     </div>
   )

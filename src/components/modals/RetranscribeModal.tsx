@@ -25,7 +25,7 @@ const LANGUAGE_PRESETS = [
   { id: "id", labelKey: "retranscribe_lang_id", flag: "🇮🇩" },
   { id: "en", labelKey: "retranscribe_lang_en", flag: "🇺🇸" },
   { id: "auto", labelKey: "retranscribe_lang_auto", flag: "🌐" },
-  { id: "jv", labelKey: "retranscribe_lang_jv", flag: "🇮🇩" },
+  { id: "jw", labelKey: "retranscribe_lang_jv", flag: "🇮🇩" },
 ]
 
 export default function RetranscribeModal({

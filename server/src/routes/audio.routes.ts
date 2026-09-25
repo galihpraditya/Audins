@@ -40,6 +40,8 @@ import {
   calculateStorageUsed,
 } from "../services/storage.service.js"
 
+import { getLocalUserIdByEmail } from "../services/auth.service.js"
+
 import {
   transcribeAudioWithGroq,
   summarizeTranscriptWithGroq,
@@ -55,6 +57,7 @@ import {
   FullDocument,
   TranscriptEntry,
   PublicSharedDocument,
+  AISummary,
 } from "../types/index.js"
 
 import {
@@ -200,6 +203,9 @@ async function requireOwnedDocument(
 
   if (!userId) return null
 
+  const authReq = req as AuthenticatedRequest
+  const userEmail = authReq.user?.email
+
   const docId = getParamId(req.params.id)
 
   let doc: FullDocument | undefined
@@ -214,10 +220,31 @@ async function requireOwnedDocument(
     return null
   }
 
-  if (!doc || (doc.userId && doc.userId !== userId)) {
+  let localUserId: string | null = null
+  if (userEmail) {
+    localUserId = getLocalUserIdByEmail(userEmail)
+  }
+
+  if (
+    !doc ||
+    (doc.userId &&
+      doc.userId !== userId &&
+      (!localUserId || doc.userId !== localUserId))
+  ) {
     res.status(404).json({ error: "Document not found" })
 
     return null
+  }
+
+  // If document was owned by historical local user ID, auto-migrate to current authenticated ID
+  if (
+    doc.userId &&
+    localUserId &&
+    doc.userId === localUserId &&
+    doc.userId !== userId
+  ) {
+    doc.userId = userId
+    void saveDocument(doc).catch(() => {})
   }
 
   return doc
@@ -231,7 +258,10 @@ router.get("/documents", async (req: Request, res: Response) => {
 
     if (!userId) return
 
-    const docs = await getAllDocuments(userId)
+    const authReq = req as AuthenticatedRequest
+    const userEmail = authReq.user?.email
+
+    const docs = await getAllDocuments(userId, userEmail)
 
     res.json(docs)
   } catch (error) {
@@ -359,136 +389,125 @@ router.post(
         ? parseInt(req.body.durationSec, 10)
         : 0
 
-      // Signed local media URL fallback (used only when no cloud storage is
-
-      // configured). The token makes bare filename knowledge useless; expiry
-
-      // matches the 7-day media retention window plus a grace day.
-
-      let serverAudioUrl = buildSignedLocalUrl(
+      // Signed local media URL fallback. The token makes bare filename knowledge
+      // useless; expiry matches the 7-day media retention window plus a grace day.
+      const serverAudioUrl = buildSignedLocalUrl(
         path.basename(file.path),
-
         now.getTime() + 8 * 24 * 60 * 60 * 1000,
       )
 
-      let isCloudStored = false
-
-      // Cloudflare R2 Upload (Priority) -> Supabase Storage -> Local Fallback
-
-      try {
-        if (isR2Enabled()) {
-          const r2Url = await uploadAudioToR2(
-            file.path,
-
-            path.basename(file.path),
-
-            file.mimetype,
-          )
-
-          if (r2Url) {
-            serverAudioUrl = r2Url
-
-            isCloudStored = true
-
-            // File is kept local for Groq Whisper in background task
-          }
-        } else if (isSupabaseEnabled()) {
-          const supabaseUrl = await uploadAudioToSupabase(
-            file.path,
-
-            path.basename(file.path),
-
-            file.mimetype,
-          )
-
-          if (supabaseUrl) {
-            serverAudioUrl = supabaseUrl
-
-            isCloudStored = true
-
-            // File is kept local for Groq Whisper in background task
-          }
-        }
-      } catch (storageErr) {
-        console.error(
-          "Failed to upload audio to cloud storage, falling back to local file serving:",
-
-          storageErr,
-        )
-      }
-
       const newDoc: FullDocument = {
         id: docId,
-
         name: file.originalname,
-
         date: now.toLocaleDateString("en-US", {
           month: "short",
-
           day: "numeric",
-
           year: "numeric",
         }),
-
         duration: durationStr,
-
         durationSec: durationSec,
-
         status: "Processing",
-
         createdAt: now.toISOString(),
-
         audioUrl: serverAudioUrl,
-
         transcripts: [],
-
         userId: userId,
-
         sizeBytes: file.size,
       }
 
       await saveDocument(newDoc)
 
-      // Immediately return 202 Accepted to the frontend for background processing
-
+      // Immediately return 202 Accepted to the frontend for background processing.
+      // Cloud storage upload and AI transcription run asynchronously in the background.
       res.status(202).json(newDoc)
 
-      // Background AI Processing Task
-
+      // Background Processing Task (Cloud Storage + Whisper + Summary)
       activeBackgroundJobs += 1
       ;(async () => {
+        let isCloudStored = false
         try {
-          // 1. Transcribe audio with Groq Whisper
-
-          const result = await transcribeAudioWithGroq(file.path, customApiKey)
-
-          if (result.failedChunks > 0) {
-            newDoc.warnings = [
-              `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
-            ]
+          // Check if document was deleted immediately after upload
+          const initialCheck = await getDocumentById(docId)
+          if (!initialCheck) {
+            console.log(`Document ${docId} was deleted before processing started. Aborting.`)
+            await fs.promises.unlink(file.path).catch(() => {})
+            return
           }
+
+          // 1. Offload to Cloud Storage (R2 / Supabase) asynchronously
+          let cloudUrl: string | null = null
+          try {
+            if (isR2Enabled()) {
+              cloudUrl = await uploadAudioToR2(
+                file.path,
+                path.basename(file.path),
+                file.mimetype,
+              )
+              if (cloudUrl) isCloudStored = true
+            } else if (isSupabaseEnabled()) {
+              cloudUrl = await uploadAudioToSupabase(
+                file.path,
+                path.basename(file.path),
+                file.mimetype,
+              )
+              if (cloudUrl) isCloudStored = true
+            }
+          } catch (storageErr) {
+            console.warn(
+              "Background cloud upload failed, continuing with local audio file:",
+              storageErr,
+            )
+          }
+
+          if (cloudUrl) {
+            const docWithCloud = await getDocumentById(docId)
+            if (docWithCloud) {
+              docWithCloud.audioUrl = cloudUrl
+              await saveDocument(docWithCloud)
+            } else {
+              await fs.promises.unlink(file.path).catch(() => {})
+              return
+            }
+          }
+
+          // 2. Transcribe audio with Groq Whisper
+          const result = await transcribeAudioWithGroq(file.path, customApiKey)
 
           const fullText = result.entries.map((t) => t.text).join(" ")
 
-          // 2. Generate summary with Groq LLM
+          // 3. Generate summary with Groq LLM
+          let summary: AISummary | undefined
+          if (fullText.trim()) {
+            summary = await summarizeTranscriptWithGroq(
+              fullText,
+              file.originalname,
+              customApiKey,
+            )
+          }
 
-          const summary = await summarizeTranscriptWithGroq(
-            fullText,
+          // 4. Concurrency Guard: fetch latest document before saving to avoid
+          // overwriting user modifications (such as rename, share settings) or
+          // resurrecting a document deleted while processing.
+          const latestDoc = await getDocumentById(docId)
+          if (!latestDoc) {
+            console.log(
+              `Document ${docId} was deleted while AI was processing. Skipping save.`,
+            )
+            return
+          }
 
-            file.originalname,
+          latestDoc.transcripts = result.entries
+          if (summary) latestDoc.summary = summary
+          latestDoc.status = "Completed"
 
-            customApiKey,
-          )
+          if (result.failedChunks > 0) {
+            latestDoc.warnings = [
+              `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
+            ]
+          } else {
+            latestDoc.warnings = undefined
+          }
 
-          // 3. Mark completed
-
-          newDoc.transcripts = result.entries
-
-          newDoc.summary = summary
-
-          newDoc.status = "Completed"
-
-          await saveDocument(newDoc)
+          await saveDocument(latestDoc)
         } catch (error) {
           console.error(
             "Background AI processing failed for doc:",
@@ -496,14 +515,23 @@ router.post(
             error,
           )
 
-          newDoc.status = "Failed"
-
-          await saveDocument(newDoc)
+          try {
+            const latestDoc = await getDocumentById(docId)
+            if (latestDoc) {
+              latestDoc.status = "Failed"
+              latestDoc.warnings = [
+                ...(latestDoc.warnings || []),
+                error instanceof Error ? error.message : "AI processing failed",
+              ]
+              await saveDocument(latestDoc)
+            }
+          } catch (saveErr) {
+            console.error("Failed to mark document as Failed:", saveErr)
+          }
         } finally {
           activeBackgroundJobs -= 1
 
           // Only cleanup local file if it was successfully offloaded to cloud storage
-
           if (isCloudStored) {
             await fs.promises.unlink(file.path).catch(() => {})
           }
@@ -1091,39 +1119,44 @@ router.post(
         prompt,
       )
 
-      doc.transcripts = result.entries
+      const latestDoc = await getDocumentById(doc.id)
+      if (!latestDoc) {
+        res.status(404).json({ error: "Document was deleted during re-transcription" })
+        return
+      }
 
+      latestDoc.transcripts = result.entries
       if (result.failedChunks > 0) {
-        doc.warnings = [
+        latestDoc.warnings = [
           `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
         ]
       } else {
-        doc.warnings = undefined
+        latestDoc.warnings = undefined
       }
 
       // 3. Optionally regenerate summary with new transcript
-
+      let summary: AISummary | undefined
       if (regenerateSummary) {
         const fullText = result.entries
           .map((t: TranscriptEntry) => t.text)
           .join(" ")
 
         if (fullText.trim()) {
-          const summary = await summarizeTranscriptWithGroq(
+          summary = await summarizeTranscriptWithGroq(
             fullText,
-
             doc.name,
-
             customApiKey,
           )
-
-          doc.summary = summary
         }
       }
 
-      await saveDocument(doc)
+      if (summary) {
+        latestDoc.summary = summary
+      }
 
-      res.json(doc)
+      await saveDocument(latestDoc)
+
+      res.json(latestDoc)
     } catch (error: any) {
       console.error("Retranscribe error:", error)
 

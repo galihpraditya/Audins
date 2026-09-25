@@ -1,9 +1,22 @@
 import path from "node:path"
+import fs from "node:fs"
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { fileURLToPath } from "node:url"
+import dotenv from "dotenv"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// Load .env before any module reads process.env, checking server/.env and root .env
+const serverEnvPath = path.resolve(__dirname, "../.env")
+const rootEnvPath = path.resolve(__dirname, "../../.env")
+if (fs.existsSync(serverEnvPath)) {
+  dotenv.config({ path: serverEnvPath })
+} else if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath })
+} else {
+  dotenv.config()
+}
 
 export const PORT = parseInt(process.env.PORT || "3001", 10)
 
@@ -34,14 +47,26 @@ export const MAX_GLOBAL_STORAGE_BYTES = 5 * 1024 * 1024 * 1024 // 5GB global cap
 export const JWT_SECRET =
   process.env.JWT_SECRET ||
   process.env.MEDIA_SIGNING_SECRET ||
-  process.env.GROQ_API_KEY ||
-  "audin-jwt-auth-secret"
+  (() => {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "CRITICAL SECURITY WARNING: JWT_SECRET is not set in production. Using insecure default secret.",
+      )
+    }
+    return "audin-jwt-auth-secret"
+  })()
 
 // Secret used to sign local /uploads media URLs so filenames alone are useless.
 export const MEDIA_SIGNING_SECRET =
   process.env.MEDIA_SIGNING_SECRET ||
-  process.env.GROQ_API_KEY ||
-  "audin-insecure-dev-secret"
+  (() => {
+    if (process.env.NODE_ENV === "production") {
+      console.warn(
+        "CRITICAL SECURITY WARNING: MEDIA_SIGNING_SECRET is not set in production. Using insecure default secret.",
+      )
+    }
+    return "audin-insecure-dev-secret"
+  })()
 
 export function signMediaToken(fileName: string, expiresAtMs: number): string {
   return createHmac("sha256", MEDIA_SIGNING_SECRET)

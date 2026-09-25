@@ -19,7 +19,19 @@ const CHUNK_CONCURRENCY = 3
 
 function getAudioDuration(filePath: string): Promise<number> {
   return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        console.warn(`ffprobe timed out on ${filePath}`)
+        resolve(0)
+      }
+    }, 30_000)
+
     ffmpeg.ffprobe(filePath, (err, metadata) => {
+      clearTimeout(timer)
+      if (settled) return
+      settled = true
       if (err || !metadata?.format?.duration) {
         resolve(0)
       } else {
@@ -36,7 +48,17 @@ function sliceAudioChunk(
   duration: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    ffmpeg()
+    let command: any
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try {
+        command?.kill("SIGKILL")
+      } catch {}
+      reject(new Error(`FFmpeg slice timed out after 3 minutes for ${outputPath}`))
+    }, 3 * 60 * 1000)
+
+    command = ffmpeg()
       .input(inputPath)
       .inputOptions([`-ss ${startTime}`])
       .outputOptions([
@@ -50,9 +72,15 @@ function sliceAudioChunk(
       .audioBitrate("48k")
       .audioChannels(1)
       .output(outputPath)
-      .on("end", () => resolve())
-      .on("error", (err) => reject(err))
-      .run()
+      .on("end", () => {
+        clearTimeout(timer)
+        if (!timedOut) resolve()
+      })
+      .on("error", (err) => {
+        clearTimeout(timer)
+        if (!timedOut) reject(err)
+      })
+    command.run()
   })
 }
 
@@ -82,7 +110,9 @@ async function transcribeSingleFile(
 
   // Force language if specified and not "auto" to prevent Whisper from locking onto opening words
   if (language && language !== "auto") {
-    options.language = language
+    // Whisper uses "jw" for Javanese; normalize if user sent "jv"
+    const normalizedLang = language.toLowerCase() === "jv" ? "jw" : language
+    options.language = normalizedLang
   }
 
   // Pass prompt (glossary/context hint) to guide Whisper's vocabulary and spelling
@@ -152,13 +182,29 @@ function convertAudioToMp3(
   outputPath: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
+    let command: any
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try {
+        command?.kill("SIGKILL")
+      } catch {}
+      reject(new Error(`FFmpeg convert timed out after 5 minutes for ${inputPath}`))
+    }, 5 * 60 * 1000)
+
+    command = ffmpeg(inputPath)
       .toFormat("mp3")
       .audioBitrate(128)
       .output(outputPath)
-      .on("end", () => resolve())
-      .on("error", (err) => reject(err))
-      .run()
+      .on("end", () => {
+        clearTimeout(timer)
+        if (!timedOut) resolve()
+      })
+      .on("error", (err) => {
+        clearTimeout(timer)
+        if (!timedOut) reject(err)
+      })
+    command.run()
   })
 }
 
@@ -260,6 +306,16 @@ export async function transcribeAudioWithGroq(
             startTime,
             chunkDurationSec,
           )
+
+          // Guard against empty or corrupted 0-byte slice (e.g. slicing past end of audio)
+          const chunkStats = await fs.promises.stat(chunkPath).catch(() => null)
+          if (!chunkStats || chunkStats.size < 512) {
+            console.log(
+              `Chunk ${index + 1}/${numChunks} is empty (${chunkStats?.size ?? 0} bytes) — skipping transcription.`,
+            )
+            continue
+          }
+
           resultsByIndex[index] = await transcribeSingleFileWithRetry(
             groq,
             chunkPath,

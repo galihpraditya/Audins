@@ -29,6 +29,8 @@ interface AuthModalProps {
   onClose: () => void
 
   onSuccess?: () => void
+
+  currentDocumentIds?: string[]
 }
 
 export default function AuthModal({
@@ -39,6 +41,8 @@ export default function AuthModal({
   onClose,
 
   onSuccess,
+
+  currentDocumentIds,
 }: AuthModalProps) {
   const { t } = useLanguage()
 
@@ -113,6 +117,8 @@ export default function AuthModal({
           { email: email.trim(), password },
 
           claimGuestRecordings,
+
+          claimGuestRecordings ? currentDocumentIds : undefined,
         )
 
         showToast(
@@ -139,6 +145,8 @@ export default function AuthModal({
           },
 
           claimGuestRecordings,
+
+          claimGuestRecordings ? currentDocumentIds : undefined,
         )
 
         showToast(

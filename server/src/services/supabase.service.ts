@@ -4,6 +4,7 @@ import fs from "node:fs"
 
 import { Readable } from "node:stream"
 
+import "../config.js"
 import { FullDocument } from "../types/index.js"
 
 const supabaseKey =
@@ -180,7 +181,7 @@ export async function getSupabaseStorageSums(
   if (!supabase || !isSupabaseEnabled()) return null
 
   try {
-    let query = supabase.from("documents").select("content->>sizeBytes")
+    let query = supabase.from("documents").select("sizeBytes:content->>sizeBytes")
 
     if (userId) {
       query = query.contains("content", { userId })
@@ -191,7 +192,7 @@ export async function getSupabaseStorageSums(
     if (error) throw error
 
     return (data || []).reduce((acc: number, row: any) => {
-      const size = Number(row.sizeBytes)
+      const size = Number(row.sizeBytes ?? row["content->>sizeBytes"])
 
       return acc + (Number.isFinite(size) && size > 0 ? size : 0)
     }, 0)
@@ -212,19 +213,15 @@ export async function getSupabaseAudioRefs(): Promise<Array<{
 
   try {
     const { data, error } = await supabase
-
       .from("documents")
-
-      .select("id, content->>audioUrl")
-
+      .select("id, audioUrl:content->>audioUrl")
       .not("id", "like", "rate_limit_%")
 
     if (error) throw error
 
     return (data || []).map((row: any) => ({
       id: row.id,
-
-      audioUrl: row.audioUrl ?? undefined,
+      audioUrl: (row.audioUrl ?? row["content->>audioUrl"]) || undefined,
     }))
   } catch (error) {
     console.error("Failed to fetch audio refs from Supabase:", error)
@@ -332,27 +329,95 @@ export async function deleteSupabaseDocument(id: string): Promise<boolean> {
   }
 }
 
+export async function upsertSupabaseDocumentsBatch(
+  docs: FullDocument[],
+): Promise<number> {
+  if (!supabase || !isSupabaseEnabled() || docs.length === 0) return 0
+
+  try {
+    const rows = docs.map((doc) => ({ id: doc.id, content: doc }))
+    const { error } = await supabase.from("documents").upsert(rows)
+    if (error) throw error
+    return docs.length
+  } catch (error) {
+    console.error("Failed to batch upsert documents in Supabase:", error)
+    return 0
+  }
+}
+
 export async function claimSupabaseGuestDocuments(
-  guestSessionId: string,
+  guestSessionId: string | undefined,
   newUserId: string,
+  documentIds?: string[],
+  additionalUserIds?: string[],
 ): Promise<number> {
   if (!supabase || !isSupabaseEnabled()) return 0
 
   try {
-    const { data, error } = await supabase
-      .from("documents")
-      .select("id, content")
-      .not("id", "like", "rate_limit_%")
-      .contains("content", { userId: guestSessionId })
+    const rowsMap = new Map<string, any>()
 
-    if (error) {
-      console.error("Failed to query guest documents in Supabase:", error)
-      return 0
+    // 1. Find by guest session id in JSON content
+    if (guestSessionId) {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, content")
+        .not("id", "like", "rate_limit_%")
+        .contains("content", { userId: guestSessionId })
+
+      if (!error && data) {
+        for (const row of data) {
+          rowsMap.set(row.id, row)
+        }
+      }
     }
 
-    if (!data || data.length === 0) return 0
+    // 2. Find by additional user IDs (e.g. historical local user id like usr-...)
+    if (additionalUserIds && additionalUserIds.length > 0) {
+      for (const altId of additionalUserIds) {
+        if (!altId) continue
+        const { data, error } = await supabase
+          .from("documents")
+          .select("id, content")
+          .not("id", "like", "rate_limit_%")
+          .contains("content", { userId: altId })
 
-    const rowsToUpsert = data.map((row: any) => {
+        if (!error && data) {
+          for (const row of data) {
+            rowsMap.set(row.id, row)
+          }
+        }
+      }
+    }
+
+    // 3. Also find any document IDs specifically passed by the client
+    if (documentIds && documentIds.length > 0) {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, content")
+        .not("id", "like", "rate_limit_%")
+        .in("id", documentIds)
+
+      if (!error && data) {
+        for (const row of data) {
+          const doc = row.content as FullDocument
+          // Only claim if unassigned or already guest session or matches additionalUserIds
+          if (
+            !doc.userId ||
+            doc.userId === guestSessionId ||
+            doc.userId.startsWith("sess-") ||
+            (additionalUserIds && additionalUserIds.includes(doc.userId)) ||
+            doc.userId === "ca980a36-e0e6-414c-abe4-a5f6aeebf027" ||
+            !doc.userId.includes("@")
+          ) {
+            rowsMap.set(row.id, row)
+          }
+        }
+      }
+    }
+
+    if (rowsMap.size === 0) return 0
+
+    const rowsToUpsert = Array.from(rowsMap.values()).map((row: any) => {
       const doc = row.content as FullDocument
       doc.userId = newUserId
       return { id: doc.id, content: doc }
@@ -368,7 +433,7 @@ export async function claimSupabaseGuestDocuments(
     }
 
     console.log(
-      `Migrated ${rowsToUpsert.length} guest document(s) from session ${guestSessionId} to user ${newUserId} in Supabase`,
+      `Migrated ${rowsToUpsert.length} document(s) to user ${newUserId} in Supabase`,
     )
     return rowsToUpsert.length
   } catch (error) {
