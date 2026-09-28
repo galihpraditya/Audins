@@ -39,19 +39,74 @@ const SESSION_KEY = "audin_session_id"
 
 const AUTH_TOKEN_KEY = "audin_auth_token"
 
+const AUTH_REFRESH_TOKEN_KEY = "audin_refresh_token"
+
 const AUTH_USER_KEY = "audin_auth_user"
+
+const AUTH_REMEMBER_ME_KEY = "audin_remember_me"
+
+export function isRememberMe(): boolean {
+  try {
+    return localStorage.getItem(AUTH_REMEMBER_ME_KEY) !== "false"
+  } catch {
+    return true
+  }
+}
 
 export function getAuthToken(): string | null {
   try {
-    return localStorage.getItem(AUTH_TOKEN_KEY)
+    return (
+      localStorage.getItem(AUTH_TOKEN_KEY) ||
+      sessionStorage.getItem(AUTH_TOKEN_KEY)
+    )
   } catch {
     return null
   }
 }
 
-export function setAuthToken(token: string): void {
+export function getRefreshToken(): string | null {
   try {
-    localStorage.setItem(AUTH_TOKEN_KEY, token)
+    return (
+      localStorage.getItem(AUTH_REFRESH_TOKEN_KEY) ||
+      sessionStorage.getItem(AUTH_REFRESH_TOKEN_KEY)
+    )
+  } catch {
+    return null
+  }
+}
+
+export function setAuthToken(token: string, rememberMe = true): void {
+  try {
+    localStorage.setItem(AUTH_REMEMBER_ME_KEY, rememberMe ? "true" : "false")
+    if (rememberMe) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token)
+      sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    } else {
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token)
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+export function setRefreshToken(
+  refreshToken: string | undefined,
+  rememberMe = true,
+): void {
+  try {
+    if (!refreshToken) {
+      localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+      sessionStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+      return
+    }
+    if (rememberMe) {
+      localStorage.setItem(AUTH_REFRESH_TOKEN_KEY, refreshToken)
+      sessionStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+    } else {
+      sessionStorage.setItem(AUTH_REFRESH_TOKEN_KEY, refreshToken)
+      localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+    }
   } catch {
     /* non-fatal */
   }
@@ -60,6 +115,9 @@ export function setAuthToken(token: string): void {
 export function removeAuthToken(): void {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_REFRESH_TOKEN_KEY)
   } catch {
     /* non-fatal */
   }
@@ -67,7 +125,9 @@ export function removeAuthToken(): void {
 
 export function getStoredUser(): User | null {
   try {
-    const raw = localStorage.getItem(AUTH_USER_KEY)
+    const raw =
+      localStorage.getItem(AUTH_USER_KEY) ||
+      sessionStorage.getItem(AUTH_USER_KEY)
 
     return raw ? JSON.parse(raw) : null
   } catch {
@@ -75,9 +135,16 @@ export function getStoredUser(): User | null {
   }
 }
 
-export function setStoredUser(user: User): void {
+export function setStoredUser(user: User, rememberMe = true): void {
   try {
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user))
+    const serialized = JSON.stringify(user)
+    if (rememberMe) {
+      localStorage.setItem(AUTH_USER_KEY, serialized)
+      sessionStorage.removeItem(AUTH_USER_KEY)
+    } else {
+      sessionStorage.setItem(AUTH_USER_KEY, serialized)
+      localStorage.removeItem(AUTH_USER_KEY)
+    }
   } catch {
     /* non-fatal */
   }
@@ -88,6 +155,8 @@ export function clearAuth(): void {
 
   try {
     localStorage.removeItem(AUTH_USER_KEY)
+    sessionStorage.removeItem(AUTH_USER_KEY)
+    localStorage.removeItem(AUTH_REMEMBER_ME_KEY)
   } catch {
     /* non-fatal */
   }
@@ -368,7 +437,7 @@ export async function deleteDocumentApi(id: string | number): Promise<void> {
     headers: authHeaders(),
   })
 
-  if (!res.ok && res.status !== 404) {
+  if (!res.ok) {
     throw await extractErrorMessage(res, "Failed to delete document")
   }
 }
@@ -522,6 +591,8 @@ export async function duplicateSharedDocumentApi(
   )
 
   if (!res.ok)
+    throw await extractErrorMessage(res, "Failed to duplicate shared document")
+
   return (await res.json()) as DocumentItem
 }
 
@@ -571,6 +642,30 @@ export async function registerApi(
   return (await res.json()) as AuthResponse
 }
 
+export async function refreshTokenApi(
+  refreshToken: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+
+    headers: { "Content-Type": "application/json" },
+
+    body: JSON.stringify({ refreshToken }),
+  })
+
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to refresh session")
+
+  const data = (await res.json()) as AuthResponse
+  const remember = isRememberMe()
+  setAuthToken(data.token, remember)
+  if (data.refreshToken) {
+    setRefreshToken(data.refreshToken, remember)
+  }
+  setStoredUser(data.user, remember)
+
+  return data
+}
+
 export async function fetchCurrentUserApi(): Promise<User | null> {
   const token = getAuthToken()
 
@@ -583,6 +678,16 @@ export async function fetchCurrentUserApi(): Promise<User | null> {
 
     if (!res.ok) {
       if (res.status === 401) {
+        const refreshToken = getRefreshToken()
+        if (refreshToken) {
+          try {
+            const refreshed = await refreshTokenApi(refreshToken)
+            return refreshed.user
+          } catch {
+            clearAuth()
+            return null
+          }
+        }
         clearAuth()
       }
 

@@ -40,7 +40,7 @@ interface WorkspaceProps {
   onDeleteAudioOnly?: (id: number | string) => Promise<void> | void
   onRetranscribe?: (
     id: number | string,
-    options: { language: string prompt: string regenerateSummary: boolean },
+    options: { language: string; prompt: string; regenerateSummary: boolean },
   ) => Promise<void> | void
   onUpdateDocument?: (doc: DocumentItem) => void
 }
@@ -192,6 +192,11 @@ export default function Workspace({
 
   // VIEW 2: Dual Panel Studio View (Left: Player & Transcript, Right: AI Summary Editor)
   const docName = document.name
+  const summaryTitle =
+    typeof document.summary?.title === "string" ? document.summary.title.trim() : null
+  const docTitle = summaryTitle || document.name
+  const originalFileName =
+    summaryTitle && summaryTitle !== document.name ? document.name : null
   const docDate = document.date
   const transcripts = document.transcripts || []
   const hasAudio = Boolean(document.audioUrl && document.audioUrl !== "Expired")
@@ -215,9 +220,20 @@ export default function Workspace({
           {/* Active File Title & Status */}
           <div className="min-w-0 flex-1">
             <p className="text-xs sm:text-sm font-bold font-display truncate text-fg">
-              {docName}
+              {docTitle}
             </p>
             <div className="flex items-center gap-2 mt-0.5">
+              {originalFileName && (
+                <>
+                  <span
+                    className="text-[10px] sm:text-[11px] font-mono text-fg-tertiary truncate max-w-[150px] sm:max-w-[220px]"
+                    title={originalFileName}
+                  >
+                    {originalFileName}
+                  </span>
+                  <span className="text-[10px] text-fg-tertiary">&bull;</span>
+                </>
+              )}
               <span className="text-[10px] sm:text-[11px] font-mono text-fg-tertiary truncate">
                 {docDate}
               </span>

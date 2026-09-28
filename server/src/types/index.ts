@@ -151,6 +151,10 @@ export interface AuthResponse {
 
   token: string
 
+  refreshToken?: string
+
+  expiresIn?: number
+
   provider: "supabase" | "local"
 
   claimedCount?: number

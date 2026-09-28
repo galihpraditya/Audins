@@ -17,7 +17,7 @@ interface PollTimersEntry {
   attempts: number
 }
 
-type PollOutcome = { type: "finished" doc: DocumentItem } | {
+type PollOutcome = { type: "finished"; doc: DocumentItem } | {
   type: "timeout"
   docId: string | number
 }

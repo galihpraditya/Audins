@@ -113,6 +113,8 @@ interface LocalTokenPayload {
   name?: string
 
   exp: number
+
+  type?: "access" | "refresh"
 }
 
 function createLocalToken(payload: LocalTokenPayload): string {
@@ -211,6 +213,10 @@ export async function signUpUser(
 
       token: data.session?.access_token || "",
 
+      refreshToken: data.session?.refresh_token || "",
+
+      expiresIn: data.session?.expires_in || 3600,
+
       provider: "supabase",
     }
   }
@@ -255,6 +261,20 @@ export async function signUpUser(
     name: localUser.name,
 
     exp: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+
+    type: "access",
+  })
+
+  const refreshToken = createLocalToken({
+    sub: userId,
+
+    email: cleanEmail,
+
+    name: localUser.name,
+
+    exp: Date.now() + 90 * 24 * 60 * 60 * 1000, // 90 days
+
+    type: "refresh",
   })
 
   return {
@@ -269,6 +289,10 @@ export async function signUpUser(
     },
 
     token,
+
+    refreshToken,
+
+    expiresIn: 30 * 24 * 60 * 60,
 
     provider: "local",
   }
@@ -315,6 +339,10 @@ export async function signInUser(
 
       token: data.session.access_token,
 
+      refreshToken: data.session.refresh_token,
+
+      expiresIn: data.session.expires_in || 3600,
+
       provider: "supabase",
     }
   }
@@ -348,6 +376,20 @@ export async function signInUser(
     name: stored.name,
 
     exp: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+
+    type: "access",
+  })
+
+  const refreshToken = createLocalToken({
+    sub: stored.id,
+
+    email: stored.email,
+
+    name: stored.name,
+
+    exp: Date.now() + 90 * 24 * 60 * 60 * 1000, // 90 days
+
+    type: "refresh",
   })
 
   return {
@@ -363,6 +405,82 @@ export async function signInUser(
 
     token,
 
+    refreshToken,
+
+    expiresIn: 30 * 24 * 60 * 60,
+
+    provider: "local",
+  }
+}
+
+export async function refreshUserToken(
+  refreshToken: string,
+): Promise<AuthResponse> {
+  if (!refreshToken) throw new Error("Refresh token is required")
+
+  if (isSupabaseEnabled()) {
+    const supabase = getSupabaseClient()
+    if (!supabase) throw new Error("Supabase is not initialized")
+
+    const { data, error } = await supabase.auth.refreshSession({
+      refresh_token: refreshToken,
+    })
+
+    if (error || !data.user || !data.session) {
+      throw new Error(error?.message || "Failed to refresh session")
+    }
+
+    return {
+      user: {
+        id: data.user.id,
+        email: data.user.email || "",
+        name: data.user.user_metadata?.name,
+        createdAt: data.user.created_at,
+      },
+      token: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+      expiresIn: data.session.expires_in || 3600,
+      provider: "supabase",
+    }
+  }
+
+  // Local fallback
+  const payload = verifyLocalToken(refreshToken)
+  if (!payload) {
+    throw new Error("Invalid or expired refresh token")
+  }
+
+  const stored = localUsersStore.get(payload.email.toLowerCase())
+  if (!stored) {
+    throw new Error("User not found")
+  }
+
+  const newToken = createLocalToken({
+    sub: stored.id,
+    email: stored.email,
+    name: stored.name,
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    type: "access",
+  })
+
+  const newRefreshToken = createLocalToken({
+    sub: stored.id,
+    email: stored.email,
+    name: stored.name,
+    exp: Date.now() + 90 * 24 * 60 * 60 * 1000,
+    type: "refresh",
+  })
+
+  return {
+    user: {
+      id: stored.id,
+      email: stored.email,
+      name: stored.name,
+      createdAt: stored.createdAt,
+    },
+    token: newToken,
+    refreshToken: newRefreshToken,
+    expiresIn: 30 * 24 * 60 * 60,
     provider: "local",
   }
 }

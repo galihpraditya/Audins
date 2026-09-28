@@ -29,11 +29,16 @@ export default function DocCard({
   onOpen,
   actions,
 }: DocCardProps) {
+  const summaryTitle =
+    typeof doc.summary?.title === "string" ? doc.summary.title.trim() : null
+  const displayTitle = summaryTitle || doc.name
+  const hasDistinctSummary = Boolean(summaryTitle && summaryTitle !== doc.name)
+
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${openLabel} ${doc.name}`}
+      aria-label={`${openLabel} ${displayTitle}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -68,8 +73,16 @@ export default function DocCard({
         </div>
 
         <h3 className="text-sm font-bold font-display text-fg group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-          {doc.name}
+          {displayTitle}
         </h3>
+        {hasDistinctSummary && (
+          <p
+            className="text-[11px] font-mono text-fg-tertiary truncate mt-1"
+            title={doc.name}
+          >
+            {doc.name}
+          </p>
+        )}
       </div>
 
       <div className="pt-3 border-t border-border mt-4 flex items-center justify-between text-[11px] font-mono text-fg-tertiary">

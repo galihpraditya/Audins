@@ -19,6 +19,9 @@ import {
 import {
   getAuthToken,
   setAuthToken,
+  getRefreshToken,
+  setRefreshToken,
+  refreshTokenApi,
   getStoredUser,
   setStoredUser,
   clearAuth,
@@ -188,6 +191,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token])
 
+  // Periodic token refresh to keep session alive
+  useEffect(() => {
+    if (!token) return
+
+    const interval = setInterval(() => {
+      const rt = getRefreshToken()
+      if (rt) {
+        refreshTokenApi(rt)
+          .then((refreshed) => {
+            setTokenState(refreshed.token)
+            setUserState(refreshed.user)
+          })
+          .catch((err) => {
+            console.warn("Auto-refresh failed:", err)
+          })
+      }
+    }, 30 * 60 * 1000) // 30 minutes
+
+    return () => clearInterval(interval)
+  }, [token])
+
   // Cross-device sync triggers: window focus & visibility change
 
   useEffect(() => {
@@ -238,9 +262,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         shouldClaimGuest ? documentIds : undefined,
       )
 
-      setAuthToken(res.token)
+      const remember = creds.rememberMe !== false
 
-      setStoredUser(res.user)
+      setAuthToken(res.token, remember)
+
+      if (res.refreshToken) {
+        setRefreshToken(res.refreshToken, remember)
+      }
+
+      setStoredUser(res.user, remember)
 
       setTokenState(res.token)
 
@@ -281,9 +311,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         shouldClaimGuest ? documentIds : undefined,
       )
 
-      setAuthToken(res.token)
+      const remember = creds.rememberMe !== false
 
-      setStoredUser(res.user)
+      setAuthToken(res.token, remember)
+
+      if (res.refreshToken) {
+        setRefreshToken(res.refreshToken, remember)
+      }
+
+      setStoredUser(res.user, remember)
 
       setTokenState(res.token)
 

@@ -421,6 +421,26 @@ export const translations = {
 
     toast_no_transcript: "No transcript available to export",
 
+    toast_audio_delete_failed: "Failed to delete audio file: {error}",
+
+    toast_retranscribe_success: "Audio retranscription started successfully!",
+
+    toast_retranscribe_failed: "Failed to start retranscription: {error}",
+
+    btn_deleting: "Deleting...",
+
+    modal_rename_placeholder: "Enter document name...",
+
+    workspace_library_title: "Workspace Library",
+
+    error_save_failed: "Failed to save changes",
+
+    toast_summary_copied: "Summary copied to clipboard",
+
+    tab_summary: "Summary",
+
+    tab_transcripts: "Transcript",
+
     // Load error banner
 
     error_load_title: "Couldn't load your documents",
@@ -522,6 +542,8 @@ export const translations = {
     auth_name_label: "Full Name (Optional)",
 
     auth_name_placeholder: "e.g. Alex Johnson",
+
+    auth_remember_me: "Remember me on this device",
 
     auth_claim_guest_recordings:
       "Sync existing recordings on this device to your account",
@@ -1180,6 +1202,8 @@ export const translations = {
 
     auth_name_placeholder: "mis. Galih Praditya",
 
+    auth_remember_me: "Ingat saya di perangkat ini",
+
     auth_claim_guest_recordings:
       "Sinkronkan rekaman yang sudah ada di perangkat ini ke akun Anda",
 
@@ -1308,5 +1332,21 @@ export const translations = {
 
     share_public_audio_unavailable:
       "Audio tidak disertakan dalam catatan yang dibagikan ini.",
+
+    toast_audio_delete_failed: "Gagal menghapus file audio: {error}",
+
+    toast_retranscribe_success: "Transkripsi ulang audio berhasil dimulai!",
+
+    toast_retranscribe_failed: "Gagal memulai transkripsi ulang: {error}",
+
+    btn_deleting: "Menghapus...",
+
+    error_save_failed: "Gagal menyimpan perubahan",
+
+    toast_summary_copied: "Rangkuman berhasil disalin ke clipboard",
+
+    tab_summary: "Rangkuman",
+
+    tab_transcripts: "Transkrip",
   },
 }

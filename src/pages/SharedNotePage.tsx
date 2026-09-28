@@ -413,7 +413,7 @@ export default function SharedNotePage() {
                     <span>&bull;</span>
                     <span>
                       {t("share_public_view_count", {
-                        count: document.viewCount,
+                        count: String(document.viewCount),
                       })}
                     </span>
                   </>

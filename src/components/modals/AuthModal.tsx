@@ -62,6 +62,8 @@ export default function AuthModal({
 
   const [claimGuestRecordings, setClaimGuestRecordings] = useState(true)
 
+  const [rememberMe, setRememberMe] = useState(true)
+
   const [showPassword, setShowPassword] = useState(false)
 
   const [loading, setLoading] = useState(false)
@@ -114,7 +116,7 @@ export default function AuthModal({
     try {
       if (tab === "login") {
         const res = await login(
-          { email: email.trim(), password },
+          { email: email.trim(), password, rememberMe },
 
           claimGuestRecordings,
 
@@ -129,7 +131,7 @@ export default function AuthModal({
 
         if (res.claimedCount && res.claimedCount > 0) {
           showToast(
-            t("sync_claimed_toast", { count: res.claimedCount }),
+            t("sync_claimed_toast", { count: String(res.claimedCount) }),
 
             "success",
           )
@@ -142,6 +144,8 @@ export default function AuthModal({
             password,
 
             name: name.trim() || undefined,
+
+            rememberMe,
           },
 
           claimGuestRecordings,
@@ -157,7 +161,7 @@ export default function AuthModal({
 
         if (res.claimedCount && res.claimedCount > 0) {
           showToast(
-            t("sync_claimed_toast", { count: res.claimedCount }),
+            t("sync_claimed_toast", { count: String(res.claimedCount) }),
 
             "success",
           )
@@ -345,8 +349,20 @@ export default function AuthModal({
             </div>
           )}
 
-          {/* Sync guest recordings checkbox */}
-          <div className="pt-1">
+          {/* Options: Remember Me & Sync guest recordings */}
+          <div className="pt-1 space-y-2">
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs text-fg-secondary select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="rounded border-border text-primary focus:ring-primary accent-primary cursor-pointer"
+              />
+              <span className="text-[11px] font-medium leading-snug">
+                {t("auth_remember_me")}
+              </span>
+            </label>
+
             <label className="flex items-start gap-2.5 cursor-pointer text-xs text-fg-secondary select-none">
               <input
                 type="checkbox"

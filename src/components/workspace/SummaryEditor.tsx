@@ -182,9 +182,9 @@ export default function SummaryEditor({
 
     let title = baseSummary.title
 
-    const sections: { heading: string content: string[] }[] = []
+    const sections: { heading: string; content: string[] }[] = []
 
-    let currentSection: { heading: string content: string[] } | null = null
+    let currentSection: { heading: string; content: string[] } | null = null
 
     for (const line of lines) {
       if (line.startsWith("# ")) {

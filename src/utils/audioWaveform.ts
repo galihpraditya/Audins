@@ -4,33 +4,65 @@
  */
 
 // In-memory cache to avoid re-decoding the same audio repeatedly
-
 const waveformCache = new Map<string, number[]>()
+
+function getCacheKey(url: string): string {
+  try {
+    return url.split("?")[0]
+  } catch {
+    return url
+  }
+}
+
+function getStoredWaveform(key: string): number[] | null {
+  try {
+    const raw = localStorage.getItem(`audin_wf_${key}`)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function setStoredWaveform(key: string, peaks: number[]): void {
+  try {
+    localStorage.setItem(`audin_wf_${key}`, JSON.stringify(peaks))
+  } catch {
+    /* non-fatal if storage full */
+  }
+}
 
 /**
  * Extracts authentic waveform peaks from an audio URL (blob, object URL, or remote file).
  * @param audioUrl URL of the audio file to decode
  * @param barsCount Number of discrete bars to generate (default 64)
+ * @param signal Optional AbortSignal to cancel in-flight extraction
  * @returns Array of normalized peak heights (percentages between 10 and 100)
  */
-
 export async function extractWaveformPeaks(
   audioUrl: string,
-
   barsCount = 64,
+  signal?: AbortSignal,
 ): Promise<number[]> {
   if (!audioUrl) {
     return Array(barsCount).fill(20)
   }
 
-  // Return cached waveform if already decoded
+  const cleanKey = getCacheKey(audioUrl)
 
-  if (waveformCache.has(audioUrl)) {
-    return waveformCache.get(audioUrl)!
+  // 1. In-memory cache
+  if (waveformCache.has(cleanKey)) {
+    return waveformCache.get(cleanKey)!
+  }
+
+  // 2. Persistent storage cache
+  const stored = getStoredWaveform(cleanKey)
+  if (stored && stored.length === barsCount) {
+    waveformCache.set(cleanKey, stored)
+    return stored
   }
 
   try {
-    const response = await fetch(audioUrl)
+    const response = await fetch(audioUrl, { signal })
 
     if (!response.ok) {
       throw new Error(`Failed to fetch audio: ${response.statusText}`)
@@ -116,7 +148,8 @@ export async function extractWaveformPeaks(
         return Math.max(10, Math.min(100, height))
       })
 
-      waveformCache.set(audioUrl, normalized)
+      waveformCache.set(cleanKey, normalized)
+      setStoredWaveform(cleanKey, normalized)
 
       return normalized
     } finally {

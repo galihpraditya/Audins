@@ -122,6 +122,10 @@ export default function AudioPlayer({
 
   const [waveformLoading, setWaveformLoading] = useState<boolean>(false)
 
+  const [isBuffering, setIsBuffering] = useState(false)
+
+  const isSeekingRef = useRef(false)
+
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const scrubberRef = useRef<HTMLDivElement>(null)
@@ -137,7 +141,7 @@ export default function AudioPlayer({
   // Extract real audio waveform using Web Audio API
 
   useEffect(() => {
-    let isCancelled = false
+    const controller = new AbortController()
 
     if (!audioUrl || audioUrl === "Expired") {
       setWaveformPeaks([])
@@ -149,10 +153,10 @@ export default function AudioPlayer({
 
     setWaveformLoading(true)
 
-    extractWaveformPeaks(audioUrl, 64)
+    extractWaveformPeaks(audioUrl, 64, controller.signal)
 
       .then((peaks) => {
-        if (!isCancelled) {
+        if (!controller.signal.aborted) {
           setWaveformPeaks(peaks)
 
           setWaveformLoading(false)
@@ -160,15 +164,15 @@ export default function AudioPlayer({
       })
 
       .catch((err) => {
-        console.warn("Waveform extraction error:", err)
+        if (!controller.signal.aborted) {
+          console.warn("Waveform extraction error:", err)
 
-        if (!isCancelled) {
           setWaveformLoading(false)
         }
       })
 
     return () => {
-      isCancelled = true
+      controller.abort()
     }
   }, [audioUrl])
 
@@ -179,13 +183,15 @@ export default function AudioPlayer({
   }, [initialDurationSec])
 
   // Sync external currentTime prop changes to the actual audio element
-
   useEffect(() => {
     if (
       audioRef.current &&
       !isDragging &&
+      !isSeekingRef.current &&
       Math.abs(audioRef.current.currentTime - currentTime) > 1.5
     ) {
+      isSeekingRef.current = true
+      setIsBuffering(true)
       audioRef.current.currentTime = currentTime
     }
   }, [currentTime, isDragging])
@@ -239,9 +245,35 @@ export default function AudioPlayer({
   }
 
   const handleTimeUpdate = () => {
-    if (audioRef.current && !isDragging) {
+    if (audioRef.current && !isDragging && !isSeekingRef.current) {
       setCurrentTime(Math.floor(audioRef.current.currentTime))
     }
+  }
+
+  const handleSeeking = () => {
+    isSeekingRef.current = true
+    setIsBuffering(true)
+  }
+
+  const handleSeeked = () => {
+    isSeekingRef.current = false
+    setIsBuffering(false)
+    if (audioRef.current) {
+      setCurrentTime(Math.floor(audioRef.current.currentTime))
+    }
+  }
+
+  const handleWaiting = () => {
+    setIsBuffering(true)
+  }
+
+  const handleCanPlay = () => {
+    setIsBuffering(false)
+  }
+
+  const handlePlaying = () => {
+    setIsBuffering(false)
+    isSeekingRef.current = false
   }
 
   const updateScrubTime = (clientX: number, commit = false) => {
@@ -261,6 +293,8 @@ export default function AudioPlayer({
       setCurrentTime(targetTime)
 
       if (audioRef.current) {
+        isSeekingRef.current = true
+        setIsBuffering(true)
         audioRef.current.currentTime = targetTime
       }
     }
@@ -346,7 +380,9 @@ export default function AudioPlayer({
           className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors text-primary-contrast bg-primary hover:bg-primary-hover disabled:opacity-40 cursor-pointer"
           aria-label={playing ? "Pause audio" : "Play audio"}
         >
-          {playing ? (
+          {isBuffering ? (
+            <Spinner size={15} className="animate-spin" />
+          ) : playing ? (
             <Pause size={15} weight="fill" />
           ) : (
             <Play size={15} weight="fill" className="ml-0.5" />
@@ -431,7 +467,16 @@ export default function AudioPlayer({
           preload="metadata"
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={() => setPlaying(false)}
+          onSeeking={handleSeeking}
+          onSeeked={handleSeeked}
+          onWaiting={handleWaiting}
+          onCanPlay={handleCanPlay}
+          onPlaying={handlePlaying}
+          onEnded={() => {
+            setPlaying(false)
+            setIsBuffering(false)
+            isSeekingRef.current = false
+          }}
           onError={handleAudioError}
         />
       )}
@@ -540,7 +585,11 @@ export default function AudioPlayer({
 
           setCurrentTime(target)
 
-          if (audioRef.current) audioRef.current.currentTime = target
+          if (audioRef.current) {
+            isSeekingRef.current = true
+            setIsBuffering(true)
+            audioRef.current.currentTime = target
+          }
         }}
       >
         {waveformLoading && waveformPeaks.length === 0 ? (
@@ -606,7 +655,11 @@ export default function AudioPlayer({
 
             setCurrentTime(Math.floor(target))
 
-            if (audioRef.current) audioRef.current.currentTime = target
+            if (audioRef.current) {
+              isSeekingRef.current = true
+              setIsBuffering(true)
+              audioRef.current.currentTime = target
+            }
           }
         }}
       >
@@ -714,7 +767,11 @@ export default function AudioPlayer({
 
             setCurrentTime(t)
 
-            if (audioRef.current) audioRef.current.currentTime = t
+            if (audioRef.current) {
+              isSeekingRef.current = true
+              setIsBuffering(true)
+              audioRef.current.currentTime = t
+            }
           }}
           className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           aria-label={t("a11y_skip_backward")}
@@ -727,11 +784,13 @@ export default function AudioPlayer({
         <button
           disabled={!audioUrl}
           onClick={togglePlay}
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:scale-95 cursor-pointer shadow-sm"
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:scale-95 cursor-pointer shadow-sm relative"
           aria-label={playing ? t("btn_pause") : t("a11y_play_audio")}
           title={playing ? t("btn_pause") : t("a11y_play_audio")}
         >
-          {playing ? (
+          {isBuffering ? (
+            <Spinner size={20} className="animate-spin" />
+          ) : playing ? (
             <Pause size={20} weight="fill" />
           ) : (
             <Play size={20} weight="fill" className="ml-0.5" />
@@ -746,7 +805,11 @@ export default function AudioPlayer({
 
             setCurrentTime(t)
 
-            if (audioRef.current) audioRef.current.currentTime = t
+            if (audioRef.current) {
+              isSeekingRef.current = true
+              setIsBuffering(true)
+              audioRef.current.currentTime = t
+            }
           }}
           className="p-2.5 rounded-xl text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors disabled:opacity-40 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer"
           aria-label={t("a11y_skip_forward")}

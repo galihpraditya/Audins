@@ -1,6 +1,6 @@
 import { Router, Response } from "express"
 
-import { signUpUser, signInUser } from "../services/auth.service.js"
+import { signUpUser, signInUser, refreshUserToken } from "../services/auth.service.js"
 
 import { claimGuestDocuments } from "../services/storage.service.js"
 
@@ -120,6 +120,24 @@ router.post("/login", async (req: AuthenticatedRequest, res: Response) => {
   } catch (error: any) {
     console.error("Login error:", error)
     res.status(401).json({ error: error.message || "Invalid credentials" })
+  }
+})
+
+// POST /api/v1/auth/refresh
+router.post("/refresh", async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { refreshToken } = req.body
+
+    if (!refreshToken || typeof refreshToken !== "string") {
+      res.status(400).json({ error: "Refresh token is required" })
+      return
+    }
+
+    const authRes = await refreshUserToken(refreshToken.trim())
+    res.json(authRes)
+  } catch (error: any) {
+    console.error("Token refresh error:", error)
+    res.status(401).json({ error: error.message || "Failed to refresh token" })
   }
 })
 

@@ -157,6 +157,10 @@ export interface AuthResponse {
 
   token: string
 
+  refreshToken?: string
+
+  expiresIn?: number
+
   provider: "supabase" | "local"
 
   claimedCount?: number
@@ -166,6 +170,8 @@ export interface LoginCredentials {
   email: string
 
   password: string
+
+  rememberMe?: boolean
 }
 
 export interface RegisterCredentials {
@@ -174,6 +180,8 @@ export interface RegisterCredentials {
   password: string
 
   name?: string
+
+  rememberMe?: boolean
 }
 
 export type SyncStatus = "synced" | "syncing" | "offline" | "guest"

@@ -659,9 +659,27 @@ export default function RecentDocsTable({
                       <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center text-fg-tertiary group-hover:text-primary transition-colors flex-shrink-0">
                         <FileAudio size={16} weight="duotone" />
                       </div>
-                      <span className="font-semibold text-fg group-hover:text-primary transition-colors truncate max-w-sm">
-                        {doc.name}
-                      </span>
+                      <div className="min-w-0 max-w-sm">
+                        {(() => {
+                          const summaryTitle =
+                            typeof doc.summary?.title === "string"
+                              ? doc.summary.title.trim()
+                              : null
+                          const displayTitle = summaryTitle || doc.name
+                          return (
+                            <>
+                              <p className="font-semibold text-fg group-hover:text-primary transition-colors truncate">
+                                {displayTitle}
+                              </p>
+                              {summaryTitle && summaryTitle !== doc.name && (
+                                <p className="text-[11px] font-mono text-fg-tertiary truncate">
+                                  {doc.name}
+                                </p>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </div>
                     </div>
                   </td>
                   <td className="px-5 py-3.5 whitespace-nowrap text-xs font-mono text-fg-secondary">

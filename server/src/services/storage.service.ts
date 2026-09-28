@@ -266,16 +266,21 @@ async function isAudioBlobStillReferenced(
 export async function deleteDocument(id: string): Promise<boolean> {
   const doc = await getDocumentById(id)
 
-  let deleted = false
+  let supaDeleted = false
 
   if (isSupabaseEnabled()) {
-    deleted = await deleteSupabaseDocument(id)
-  } else {
-    deleted = documentsStore.delete(id)
-    if (deleted) scheduleDbWrite()
+    supaDeleted = await deleteSupabaseDocument(id)
   }
 
-  if (!deleted || !doc) return deleted
+  // Always remove from local in-memory Map and persist to db.json
+  const localDeleted = documentsStore.delete(id)
+  if (localDeleted) {
+    scheduleDbWrite()
+  }
+
+  const isDeleted = isSupabaseEnabled() ? (supaDeleted || localDeleted) : localDeleted
+
+  if (!isDeleted || !doc) return isDeleted
 
   if (doc.audioUrl && doc.audioUrl !== "Expired") {
     try {

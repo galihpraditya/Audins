@@ -112,11 +112,21 @@ app.get("/uploads/:file", (req, res) => {
     return
   }
 
-  res.sendFile(path.join(UPLOADS_DIR, file), (err) => {
-    if (err && !res.headersSent) {
-      res.status(404).json({ error: "File not found" })
-    }
-  })
+  res.setHeader("Accept-Ranges", "bytes")
+  res.setHeader("Cache-Control", "public, max-age=604800, immutable")
+
+  res.sendFile(
+    path.join(UPLOADS_DIR, file),
+    {
+      acceptRanges: true,
+      cacheControl: false, // headers manually handled above
+    },
+    (err) => {
+      if (err && !res.headersSent) {
+        res.status(404).json({ error: "File not found" })
+      }
+    },
+  )
 })
 
 // Root welcome route

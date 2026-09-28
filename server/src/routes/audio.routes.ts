@@ -225,24 +225,26 @@ async function requireOwnedDocument(
     localUserId = getLocalUserIdByEmail(userEmail)
   }
 
-  if (
-    !doc ||
-    (doc.userId &&
-      doc.userId !== userId &&
-      (!localUserId || doc.userId !== localUserId))
-  ) {
-    res.status(404).json({ error: "Document not found" })
+  const guestSession = getHeaderKey(req.headers["x-user-session"])
 
+  if (!doc) {
+    res.status(404).json({ error: "Document not found" })
     return null
   }
 
-  // If document was owned by historical local user ID, auto-migrate to current authenticated ID
-  if (
-    doc.userId &&
-    localUserId &&
-    doc.userId === localUserId &&
-    doc.userId !== userId
-  ) {
+  const isOwner =
+    !doc.userId ||
+    doc.userId === userId ||
+    (localUserId && doc.userId === localUserId) ||
+    (guestSession && doc.userId === guestSession)
+
+  if (!isOwner) {
+    res.status(404).json({ error: "Document not found" })
+    return null
+  }
+
+  // Auto-migrate document ownership to current authenticated ID if previously guest or local user ID
+  if (doc.userId !== userId && !authReq.isGuest) {
     doc.userId = userId
     void saveDocument(doc).catch(() => {})
   }
@@ -496,7 +498,19 @@ router.post(
           }
 
           latestDoc.transcripts = result.entries
-          if (summary) latestDoc.summary = summary
+          if (summary) {
+            latestDoc.summary = summary
+            if (summary.title && summary.title.trim()) {
+              const currentName = latestDoc.name.trim()
+              const isDefaultName =
+                currentName === file.originalname.trim() ||
+                currentName.startsWith("Recording-") ||
+                /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i.test(currentName)
+              if (isDefaultName) {
+                latestDoc.name = summary.title.trim()
+              }
+            }
+          }
           latestDoc.status = "Completed"
 
           if (result.failedChunks > 0) {
@@ -593,6 +607,15 @@ router.post(
       )
 
       doc.summary = summary
+      if (summary?.title && summary.title.trim()) {
+        const currentName = doc.name.trim()
+        const isDefaultName =
+          currentName.startsWith("Recording-") ||
+          /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i.test(currentName)
+        if (isDefaultName) {
+          doc.name = summary.title.trim()
+        }
+      }
 
       await saveDocument(doc)
 
@@ -1152,6 +1175,15 @@ router.post(
 
       if (summary) {
         latestDoc.summary = summary
+        if (summary.title && summary.title.trim()) {
+          const currentName = latestDoc.name.trim()
+          const isDefaultName =
+            currentName.startsWith("Recording-") ||
+            /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i.test(currentName)
+          if (isDefaultName) {
+            latestDoc.name = summary.title.trim()
+          }
+        }
       }
 
       await saveDocument(latestDoc)

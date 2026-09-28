@@ -151,7 +151,7 @@ export default function App() {
 
   const handlePollOutcome = useCallback(
     (
-      outcome: { type: "finished" doc: DocumentItem } | {
+      outcome: { type: "finished"; doc: DocumentItem } | {
         type: "timeout"
         docId: string | number
       },
