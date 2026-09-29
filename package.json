@@ -1,15 +1,20 @@
 {
   "name": "audin-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite --host 0.0.0.0\" \"npm run dev --prefix server\"",
     "build": "vite build",
     "preview": "vite preview",
+    "version:sync": "node scripts/sync-version.js",
+    "cap:sync": "npm run build && node scripts/sync-version.js && npx cap sync android",
+    "build:mobile": "npm run cap:sync",
     "format": "oxfmt"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@phosphor-icons/react": "^2.1.10",
     "@vercel/analytics": "^2.0.1",
     "react": "^19.0.0",
@@ -18,6 +23,7 @@
     "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

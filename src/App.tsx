@@ -16,6 +16,8 @@ import MobileNav from "./components/layout/MobileNav"
 
 import TopHeader from "./components/layout/TopHeader"
 
+import MobileDownloadBanner from "./components/layout/MobileDownloadBanner"
+
 import Dashboard from "./components/dashboard/Dashboard"
 
 import Workspace from "./components/workspace/Workspace"
@@ -755,6 +757,7 @@ export default function App() {
     <div className="flex flex-col md:flex-row h-dvh overflow-hidden bg-background font-sans text-fg print:block print:overflow-visible print:h-auto print:bg-white print:text-slate-950">
       {/* Top Header (mobile) */}
       <div className="md:hidden">
+        <MobileDownloadBanner />
         <TopHeader onOpenMobileNav={() => setMobileNavOpen(true)} />
       </div>
 

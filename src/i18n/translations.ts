@@ -427,6 +427,15 @@ export const translations = {
 
     toast_retranscribe_failed: "Failed to start retranscription: {error}",
 
+    mobile_app_banner_title: "Audin Android App v2.0.0",
+
+    mobile_app_banner_desc:
+      "Record audio seamlessly in the background even with your phone screen locked.",
+
+    mobile_app_btn_download: "Download APK",
+
+    mobile_app_btn_dismiss: "Later",
+
     btn_deleting: "Deleting...",
 
     modal_rename_placeholder: "Enter document name...",
@@ -1338,6 +1347,15 @@ export const translations = {
     toast_retranscribe_success: "Transkripsi ulang audio berhasil dimulai!",
 
     toast_retranscribe_failed: "Gagal memulai transkripsi ulang: {error}",
+
+    mobile_app_banner_title: "Aplikasi Android Audin v2.0.0",
+
+    mobile_app_banner_desc:
+      "Rekam audio tanpa henti di latar belakang meskipun layar HP terkunci atau membuka aplikasi lain.",
+
+    mobile_app_btn_download: "Unduh APK",
+
+    mobile_app_btn_dismiss: "Nanti",
 
     btn_deleting: "Menghapus...",
 

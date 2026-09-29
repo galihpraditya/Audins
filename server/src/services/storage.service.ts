@@ -159,16 +159,14 @@ export async function getAllDocuments(
   )
 }
 
-export async function calculateStorageUsed(userId?: string): Promise<number> {
-  if (isSupabaseEnabled()) {
-    const sums = await getSupabaseStorageSums(userId)
+export async function calculateStorageUsed(
+  userId?: string,
+  userEmail?: string,
+): Promise<number> {
+  // Use getAllDocuments to guarantee 100% parity between documents displayed on dashboard and quota calculation
+  const docs = await getAllDocuments(userId, userEmail)
 
-    if (sums !== null) return sums
-  }
-
-  const docs = await getAllDocuments(userId)
-
-  return docs.reduce((acc, doc) => acc + (doc.sizeBytes || 0), 0)
+  return docs.reduce((acc, doc) => acc + (Number(doc.sizeBytes) || 0), 0)
 }
 
 async function deleteBlobForUrl(audioUrl: string): Promise<void> {

@@ -108,13 +108,15 @@ export async function getRateLimitStatus(
   req: Request,
 ): Promise<RateLimitResponse> {
   const key = getRateLimitKey(req)
+  const authReq = req as any
+  const userEmail = authReq.user?.email
   const effectiveMaxLimit = isLocalSocket(req) ? 100 : MAX_FREE_DAILY_UPLOADS
 
   const now = new Date()
 
   const record = await readRecord(key)
 
-  const storageUsed = (await calculateStorageUsed(key)) ?? 0
+  const storageUsed = (await calculateStorageUsed(key, userEmail)) ?? 0
 
   const storageLimit = 500 * 1024 * 1024 // 500 MB
 

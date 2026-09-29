@@ -9,6 +9,12 @@ import Modal from "../ui/Modal"
 import Alert from "../ui/Alert"
 
 import {
+  isNativeMobile,
+  BackgroundAudioRecorder,
+  base64ToFile,
+} from "../../services/nativeRecorder"
+
+import {
   Microphone,
   Stop,
   Pause,
@@ -284,6 +290,31 @@ export default function LiveRecorderModal({
 
     audioChunksRef.current = []
 
+    if (isNativeMobile()) {
+      try {
+        const perm = await BackgroundAudioRecorder.requestPermission()
+        if (!perm || !perm.value) {
+          setErrorMessage(t("recorder_mic_error"))
+          setRecordingState("idle")
+          return
+        }
+
+        await BackgroundAudioRecorder.startRecording()
+        setRecordingState("recording")
+        setElapsedSeconds(0)
+
+        timerRef.current = setInterval(() => {
+          setElapsedSeconds((prev) => prev + 1)
+        }, 1000)
+        return
+      } catch (nativeErr: any) {
+        console.error("Native recording error:", nativeErr)
+        setErrorMessage(nativeErr?.message || t("recorder_mic_error"))
+        setRecordingState("idle")
+        return
+      }
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
@@ -386,7 +417,18 @@ export default function LiveRecorderModal({
     }
   }
 
-  const handlePause = () => {
+  const handlePause = async () => {
+    if (isNativeMobile() && recordingState === "recording") {
+      try {
+        await BackgroundAudioRecorder.pauseRecording()
+        setRecordingState("paused")
+        if (timerRef.current) clearInterval(timerRef.current)
+      } catch (e) {
+        console.error("Native pause error:", e)
+      }
+      return
+    }
+
     if (mediaRecorderRef.current && recordingState === "recording") {
       mediaRecorderRef.current.pause()
 
@@ -396,7 +438,20 @@ export default function LiveRecorderModal({
     }
   }
 
-  const handleResume = () => {
+  const handleResume = async () => {
+    if (isNativeMobile() && recordingState === "paused") {
+      try {
+        await BackgroundAudioRecorder.resumeRecording()
+        setRecordingState("recording")
+        timerRef.current = setInterval(() => {
+          setElapsedSeconds((prev) => prev + 1)
+        }, 1000)
+      } catch (e) {
+        console.error("Native resume error:", e)
+      }
+      return
+    }
+
     if (mediaRecorderRef.current && recordingState === "paused") {
       mediaRecorderRef.current.resume()
 
@@ -408,7 +463,35 @@ export default function LiveRecorderModal({
     }
   }
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    if (
+      isNativeMobile() &&
+      (recordingState === "recording" || recordingState === "paused")
+    ) {
+      if (timerRef.current) clearInterval(timerRef.current)
+      try {
+        const res = await BackgroundAudioRecorder.stopRecording()
+        const now = new Date()
+        const dateStr = now.toISOString().slice(0, 10)
+        const timeStr = now.toTimeString().slice(0, 5).replace(":", "")
+        const defaultName = `Recording-${dateStr}-${timeStr}`
+        setRecordingName(defaultName)
+
+        const file = base64ToFile(res.base64, `${defaultName}.m4a`, res.mimeType || "audio/mp4")
+        setRecordedBlob(file)
+        const url = URL.createObjectURL(file)
+        setAudioUrl(url)
+        setRecordingState("preview")
+        if (isMinimized && onExpand) {
+          onExpand()
+        }
+      } catch (nativeErr: any) {
+        console.error("Native stop recording error:", nativeErr)
+        setErrorMessage(nativeErr?.message || "Failed to finalize recording")
+      }
+      return
+    }
+
     if (
       mediaRecorderRef.current &&
       (recordingState === "recording" || recordingState === "paused")
@@ -425,7 +508,13 @@ export default function LiveRecorderModal({
     }
   }
 
-  const handleDiscard = () => {
+  const handleDiscard = async () => {
+    if (isNativeMobile() && (recordingState === "recording" || recordingState === "paused")) {
+      try {
+        await BackgroundAudioRecorder.stopRecording()
+      } catch {}
+    }
+
     stopTracks()
 
     releaseWakeLock()
@@ -450,8 +539,8 @@ export default function LiveRecorderModal({
 
     const filename = recordingName.trim() || "live-recording"
 
-    const ext = recordedBlob.type.includes("mp4")
-      ? ".mp4"
+    const ext = recordedBlob.type.includes("mp4") || recordedBlob.type.includes("m4a")
+      ? ".m4a"
       : recordedBlob.type.includes("ogg")
         ? ".ogg"
         : ".webm"
@@ -488,8 +577,8 @@ export default function LiveRecorderModal({
 
     const filename = recordingName.trim() || "live-recording"
 
-    const ext = recordedBlob.type.includes("mp4")
-      ? ".mp4"
+    const ext = recordedBlob.type.includes("mp4") || recordedBlob.type.includes("m4a")
+      ? ".m4a"
       : recordedBlob.type.includes("ogg")
         ? ".ogg"
         : ".webm"
@@ -735,7 +824,10 @@ export default function LiveRecorderModal({
             {/* Status Label */}
             <p className="text-xs font-mono text-fg-tertiary text-center pt-1">
               {recordingState === "idle" && t("recorder_idle_hint")}
-              {recordingState === "recording" && t("recorder_recording")}
+              {recordingState === "recording" &&
+                (isNativeMobile()
+                  ? "Perekaman latar belakang aktif (Aman kunci layar HP)"
+                  : t("recorder_recording"))}
               {recordingState === "paused" && t("recorder_paused")}
               {recordingState === "preview" && t("recorder_finished")}
             </p>
