@@ -400,14 +400,12 @@ export async function claimSupabaseGuestDocuments(
       if (!error && data) {
         for (const row of data) {
           const doc = row.content as FullDocument
-          // Only claim if unassigned or already guest session or matches additionalUserIds
+          const isDemoDoc = doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
           if (
-            !doc.userId ||
-            doc.userId === guestSessionId ||
-            doc.userId.startsWith("sess-") ||
-            (additionalUserIds && additionalUserIds.includes(doc.userId)) ||
-            doc.userId === "ca980a36-e0e6-414c-abe4-a5f6aeebf027" ||
-            !doc.userId.includes("@")
+            !isDemoDoc &&
+            (!doc.userId ||
+              (guestSessionId && doc.userId === guestSessionId) ||
+              (additionalUserIds && additionalUserIds.includes(doc.userId)))
           ) {
             rowsMap.set(row.id, row)
           }

@@ -159,14 +159,11 @@ export async function getAllDocuments(
   )
 }
 
-export async function calculateStorageUsed(userId?: string): Promise<number> {
-  if (isSupabaseEnabled()) {
-    const sums = await getSupabaseStorageSums(userId)
-
-    if (sums !== null) return sums
-  }
-
-  const docs = await getAllDocuments(userId)
+export async function calculateStorageUsed(
+  userId?: string,
+  userEmail?: string,
+): Promise<number> {
+  const docs = await getAllDocuments(userId, userEmail)
 
   return docs.reduce((acc, doc) => acc + (doc.sizeBytes || 0), 0)
 }
@@ -331,6 +328,7 @@ export async function cleanupExpiredAudio(): Promise<void> {
 
   for (const doc of docs) {
     if (!doc.audioUrl || doc.audioUrl === "Expired") continue
+    if (!doc.userId || doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3") continue
 
     const docAge = now - new Date(doc.createdAt).getTime()
 
@@ -464,6 +462,7 @@ export async function renameDocument(
 
 export async function duplicateDocument(
   id: string,
+  newUserId?: string,
 ): Promise<FullDocument | null> {
   const doc = await getDocumentById(id)
 
@@ -478,7 +477,11 @@ export async function duplicateDocument(
 
     name: `${doc.name} (Copy)`,
 
+    userId: newUserId || doc.userId,
+
     createdAt: new Date().toISOString(),
+
+    shareSettings: undefined,
   }
 
   return await saveDocument(newDoc)
@@ -546,22 +549,15 @@ export async function claimGuestDocuments(
     } else if (localUserId && doc.userId === localUserId) {
       shouldClaim = true
     } else if (requestedIds.has(doc.id)) {
+      const isDemoDoc = doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
       if (
-        !doc.userId ||
-        doc.userId === cleanGuestId ||
-        doc.userId.startsWith("sess-") ||
-        (localUserId && doc.userId === localUserId) ||
-        doc.userId === "ca980a36-e0e6-414c-abe4-a5f6aeebf027" ||
-        !doc.userId.includes("@")
+        !isDemoDoc &&
+        (!doc.userId ||
+          (cleanGuestId && doc.userId === cleanGuestId) ||
+          (localUserId && doc.userId === localUserId))
       ) {
         shouldClaim = true
       }
-    } else if (
-      cleanGuestId &&
-      doc.userId === "ca980a36-e0e6-414c-abe4-a5f6aeebf027"
-    ) {
-      // Historical guest session from previous runs on this machine
-      shouldClaim = true
     }
 
     if (shouldClaim && doc.userId !== newUserId) {

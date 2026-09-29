@@ -129,9 +129,13 @@ async function transcribeSingleFile(
     return segments.map((seg: GroqTranscriptionSegment) => {
       const actualStart = seg.start + timeOffset
 
-      const startMin = Math.floor(actualStart / 60)
+      const hours = Math.floor(actualStart / 3600)
+      const startMin = Math.floor((actualStart % 3600) / 60)
       const startSec = Math.floor(actualStart % 60)
-      const ts = `${startMin}:${startSec.toString().padStart(2, "0")}`
+      const ts =
+        hours > 0
+          ? `${hours}:${startMin.toString().padStart(2, "0")}:${startSec.toString().padStart(2, "0")}`
+          : `${startMin}:${startSec.toString().padStart(2, "0")}`
 
       return {
         ts,
@@ -414,14 +418,15 @@ export async function summarizeTranscriptWithGroq(
     )
   }
 
-  // To fit Groq Free Tier's 12,000 TPM limit for GPT-OSS 120B while preserving full narrative,
-  // we multi-window sample the transcript if it exceeds 20,000 characters (start, middle, end).
+  // When using default demo key, multi-window sample the transcript if it exceeds 40,000 characters
+  // (start, middle, end) to avoid hitting free-tier TPM limits while preserving narrative structure.
+  // When user provides customApiKey, full transcript is preserved up to model context window.
   let processedText = transcriptText
-  if (transcriptText.length > 20000) {
-    const chunkHead = transcriptText.slice(0, 7000)
-    const midStart = Math.floor(transcriptText.length / 2) - 3500
-    const chunkMid = transcriptText.slice(midStart, midStart + 7000)
-    const chunkTail = transcriptText.slice(-6000)
+  if (!customApiKey && transcriptText.length > 40000) {
+    const chunkHead = transcriptText.slice(0, 15000)
+    const midStart = Math.floor(transcriptText.length / 2) - 7500
+    const chunkMid = transcriptText.slice(midStart, midStart + 15000)
+    const chunkTail = transcriptText.slice(-10000)
     processedText = `${chunkHead}\n\n... [Bagian tengah transkrip / Middle transcript excerpt] ...\n\n${chunkMid}\n\n... [Bagian penutup transkrip / Concluding transcript excerpt] ...\n\n${chunkTail}`
   }
 

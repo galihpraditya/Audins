@@ -51,6 +51,8 @@ import {
   checkPortfolioRateLimit,
   getRateLimitStatus,
   refundRateLimit,
+  refundRateLimitByKey,
+  getRateLimitKey,
 } from "../middleware/rateLimit.middleware.js"
 
 import {
@@ -99,11 +101,12 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedExtensions = /\.(mp3|wav|m4a|mp4|webm|flac|ogg|opus|aac)$/i
 
-    const allowedMimeTypes = /^(audio\/|video\/mp4|video\/webm)/i
+    const allowedMimeTypes =
+      /^(audio\/|video\/mp4|video\/webm|application\/ogg|application\/x-ogg|application\/octet-stream)/i
 
     const extMatch = allowedExtensions.test(path.extname(file.originalname))
 
-    const mimeMatch = allowedMimeTypes.test(file.mimetype)
+    const mimeMatch = !file.mimetype || allowedMimeTypes.test(file.mimetype)
 
     if (extMatch && mimeMatch) {
       cb(null, true)
@@ -244,7 +247,16 @@ async function requireOwnedDocument(
   }
 
   // Auto-migrate document ownership to current authenticated ID if previously guest or local user ID
-  if (doc.userId !== userId && !authReq.isGuest) {
+  // (Never auto-migrate unowned/demo documents)
+  const isDemoDoc = doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+  if (
+    !isDemoDoc &&
+    doc.userId &&
+    doc.userId !== userId &&
+    !authReq.isGuest &&
+    ((localUserId && doc.userId === localUserId) ||
+      (guestSession && doc.userId === guestSession))
+  ) {
     doc.userId = userId
     void saveDocument(doc).catch(() => {})
   }
@@ -422,6 +434,8 @@ router.post(
       // Cloud storage upload and AI transcription run asynchronously in the background.
       res.status(202).json(newDoc)
 
+      const rateLimitKey = getRateLimitKey(req)
+
       // Background Processing Task (Cloud Storage + Whisper + Summary)
       activeBackgroundJobs += 1
       ;(async () => {
@@ -432,6 +446,7 @@ router.post(
           if (!initialCheck) {
             console.log(`Document ${docId} was deleted before processing started. Aborting.`)
             await fs.promises.unlink(file.path).catch(() => {})
+            if (!customApiKey) await refundRateLimitByKey(rateLimitKey)
             return
           }
 
@@ -529,6 +544,10 @@ router.post(
             error,
           )
 
+          if (!customApiKey) {
+            await refundRateLimitByKey(rateLimitKey)
+          }
+
           try {
             const latestDoc = await getDocumentById(docId)
             if (latestDoc) {
@@ -573,14 +592,32 @@ router.post(
   checkPortfolioRateLimit,
 
   async (req: Request, res: Response) => {
+    let hasRefunded = false
+    const refundOnce = async () => {
+      if (!hasRefunded) {
+        hasRefunded = true
+        await refundRateLimit(req)
+      }
+    }
+
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        void refundOnce()
+      }
+    })
+
     const doc = await requireOwnedDocument(req, res)
 
-    if (!doc) return
+    if (!doc) {
+      await refundOnce()
+      return
+    }
 
     try {
       const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
 
       if (!doc.transcripts || doc.transcripts.length === 0) {
+        await refundOnce()
         res.status(400).json({ error: "No transcript available to summarize" })
 
         return
@@ -621,6 +658,7 @@ router.post(
 
       res.json(doc)
     } catch (error) {
+      await refundOnce()
       console.error("Summarize error:", error)
 
       res.status(500).json({ error: "Failed to summarize transcript" })
@@ -695,8 +733,11 @@ router.post("/documents/:id/duplicate", async (req: Request, res: Response) => {
 
   if (!doc) return
 
+  const userId = requireUser(req, res)
+  if (!userId) return
+
   try {
-    const copy = await duplicateDocument(doc.id)
+    const copy = await duplicateDocument(doc.id, userId)
 
     if (!copy) {
       res.status(404).json({ error: "Document not found" })
@@ -1064,11 +1105,29 @@ router.post(
   checkPortfolioRateLimit,
 
   async (req: Request, res: Response) => {
+    let hasRefunded = false
+    const refundOnce = async () => {
+      if (!hasRefunded) {
+        hasRefunded = true
+        await refundRateLimit(req)
+      }
+    }
+
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        void refundOnce()
+      }
+    })
+
     const doc = await requireOwnedDocument(req, res)
 
-    if (!doc) return
+    if (!doc) {
+      await refundOnce()
+      return
+    }
 
     if (!doc.audioUrl || doc.audioUrl === "Expired") {
+      await refundOnce()
       res.status(400).json({
         error:
           "Audio file is not available. Cannot re-transcribe because the audio has been deleted.",
@@ -1190,6 +1249,7 @@ router.post(
 
       res.json(latestDoc)
     } catch (error: any) {
+      await refundOnce()
       console.error("Retranscribe error:", error)
 
       res

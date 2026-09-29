@@ -184,39 +184,67 @@ export async function signUpUser(
 
     if (!supabase) throw new Error("Supabase is not initialized")
 
-    const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
+    let dataUser: any = null
+    let sessionData: any = null
 
-      password: pass,
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const { data: adminUser, error: adminErr } =
+          await supabase.auth.admin.createUser({
+            email: cleanEmail,
+            password: pass,
+            email_confirm: true,
+            user_metadata: { name: name || cleanEmail.split("@")[0] },
+          })
+        if (adminErr) {
+          throw adminErr
+        }
+        dataUser = adminUser?.user
+      } catch (err: any) {
+        if (err.message && err.message.toLowerCase().includes("already")) {
+          throw err
+        }
+      }
+    }
 
-      options: {
-        data: { name: name || cleanEmail.split("@")[0] },
-      },
-    })
+    if (!dataUser) {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: pass,
+        options: {
+          data: { name: name || cleanEmail.split("@")[0] },
+        },
+      })
 
-    if (error) throw new Error(error.message)
+      if (error) throw new Error(error.message)
+      if (!data.user) throw new Error("Registration failed")
+      dataUser = data.user
+      sessionData = data.session
+    }
 
-    if (!data.user) throw new Error("Registration failed")
+    if (!sessionData) {
+      const { data: signInData, error: signInErr } =
+        await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: pass,
+        })
+      if (!signInErr && signInData.session) {
+        sessionData = signInData.session
+      }
+    }
 
     const user: User = {
-      id: data.user.id,
-
-      email: data.user.email || cleanEmail,
-
-      name: data.user.user_metadata?.name || name,
-
-      createdAt: data.user.created_at,
+      id: dataUser.id,
+      email: dataUser.email || cleanEmail,
+      name: dataUser.user_metadata?.name || name,
+      createdAt: dataUser.created_at,
     }
 
     return {
       user,
-
-      token: data.session?.access_token || "",
-
-      refreshToken: data.session?.refresh_token || "",
-
-      expiresIn: data.session?.expires_in || 3600,
-
+      token: sessionData?.access_token || "",
+      refreshToken: sessionData?.refresh_token || "",
+      expiresIn: sessionData?.expires_in || 3600,
       provider: "supabase",
     }
   }
@@ -420,27 +448,29 @@ export async function refreshUserToken(
 
   if (isSupabaseEnabled()) {
     const supabase = getSupabaseClient()
-    if (!supabase) throw new Error("Supabase is not initialized")
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.refreshSession({
+          refresh_token: refreshToken,
+        })
 
-    const { data, error } = await supabase.auth.refreshSession({
-      refresh_token: refreshToken,
-    })
-
-    if (error || !data.user || !data.session) {
-      throw new Error(error?.message || "Failed to refresh session")
-    }
-
-    return {
-      user: {
-        id: data.user.id,
-        email: data.user.email || "",
-        name: data.user.user_metadata?.name,
-        createdAt: data.user.created_at,
-      },
-      token: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      expiresIn: data.session.expires_in || 3600,
-      provider: "supabase",
+        if (!error && data.user && data.session) {
+          return {
+            user: {
+              id: data.user.id,
+              email: data.user.email || "",
+              name: data.user.user_metadata?.name,
+              createdAt: data.user.created_at,
+            },
+            token: data.session.access_token,
+            refreshToken: data.session.refresh_token,
+            expiresIn: data.session.expires_in || 3600,
+            provider: "supabase",
+          }
+        }
+      } catch {
+        /* proceed to local fallback check */
+      }
     }
   }
 
@@ -493,24 +523,24 @@ export async function getUserFromToken(token: string): Promise<User | null> {
   if (isSupabaseEnabled()) {
     const supabase = getSupabaseClient()
 
-    if (!supabase) return null
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.getUser(token)
 
-    try {
-      const { data, error } = await supabase.auth.getUser(token)
+        if (!error && data.user) {
+          return {
+            id: data.user.id,
 
-      if (error || !data.user) return null
+            email: data.user.email || "",
 
-      return {
-        id: data.user.id,
+            name: data.user.user_metadata?.name,
 
-        email: data.user.email || "",
-
-        name: data.user.user_metadata?.name,
-
-        createdAt: data.user.created_at,
+            createdAt: data.user.created_at,
+          }
+        }
+      } catch {
+        /* proceed to local fallback check */
       }
-    } catch {
-      return null
     }
   }
 

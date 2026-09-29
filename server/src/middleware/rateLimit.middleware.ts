@@ -108,20 +108,23 @@ export async function getRateLimitStatus(
   req: Request,
 ): Promise<RateLimitResponse> {
   const key = getRateLimitKey(req)
+  const authReq = req as any
+  const userEmail = authReq.user?.email
+  const effectiveMaxLimit = MAX_FREE_DAILY_UPLOADS
 
   const now = new Date()
 
   const record = await readRecord(key)
 
-  const storageUsed = (await calculateStorageUsed(key)) ?? 0
+  const storageUsed = (await calculateStorageUsed(key, userEmail)) ?? 0
 
   const storageLimit = 500 * 1024 * 1024 // 500 MB
 
   if (!record || now > record.resetTime) {
     return {
-      remaining: MAX_FREE_DAILY_UPLOADS,
+      remaining: effectiveMaxLimit,
 
-      maxLimit: MAX_FREE_DAILY_UPLOADS,
+      maxLimit: effectiveMaxLimit,
 
       resetTime: new Date(now.getTime() + ROLLING_WINDOW_MS).toISOString(),
 
@@ -134,9 +137,9 @@ export async function getRateLimitStatus(
   }
 
   return {
-    remaining: Math.max(0, MAX_FREE_DAILY_UPLOADS - record.count),
+    remaining: Math.max(0, effectiveMaxLimit - record.count),
 
-    maxLimit: MAX_FREE_DAILY_UPLOADS,
+    maxLimit: effectiveMaxLimit,
 
     resetTime: record.resetTime.toISOString(),
 
@@ -178,7 +181,7 @@ export async function checkPortfolioRateLimit(
 
     const key = getRateLimitKey(req)
 
-    const effectiveMaxLimit = isLocalSocket(req) ? 100 : MAX_FREE_DAILY_UPLOADS
+    const effectiveMaxLimit = MAX_FREE_DAILY_UPLOADS
 
     const now = new Date()
 
@@ -293,22 +296,9 @@ export async function checkPortfolioRateLimit(
   }
 }
 
-/** Best-effort decrement after aborted/failed uploads. */
-
-export async function refundRateLimit(req: Request): Promise<void> {
+/** Best-effort decrement for a specific rate limit key. */
+export async function refundRateLimitByKey(key: string): Promise<void> {
   try {
-    const customApiKey = req.headers["x-groq-api-key"]
-
-    if (
-      customApiKey &&
-      typeof customApiKey === "string" &&
-      customApiKey.trim().length > 0
-    ) {
-      return
-    }
-
-    const key = getRateLimitKey(req)
-
     if (isSupabaseRateLimitEnabled()) {
       const record = await getSupabaseRateLimit(key)
 
@@ -328,6 +318,27 @@ export async function refundRateLimit(req: Request): Promise<void> {
     if (record && record.count > 0) {
       record.count -= 1
     }
+  } catch (error) {
+    console.error(`Failed to refund rate limit for key ${key}:`, error)
+  }
+}
+
+/** Best-effort decrement after aborted/failed uploads. */
+
+export async function refundRateLimit(req: Request): Promise<void> {
+  try {
+    const customApiKey = req.headers["x-groq-api-key"]
+
+    if (
+      customApiKey &&
+      typeof customApiKey === "string" &&
+      customApiKey.trim().length > 0
+    ) {
+      return
+    }
+
+    const key = getRateLimitKey(req)
+    await refundRateLimitByKey(key)
   } catch (error) {
     console.error("Failed to refund rate limit:", error)
   }

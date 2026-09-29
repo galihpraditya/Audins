@@ -30,8 +30,12 @@ const app = express()
 const defaultAllowedOrigins = [
   "http://localhost:8443",
   "http://localhost:5173",
+  "http://localhost:4173",
+  "http://localhost:3000",
   "http://127.0.0.1:8443",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:3000",
   "https://audins.galihh.me",
   "https://audins.vercel.app",
 ]
@@ -53,6 +57,12 @@ function isOriginAllowed(origin: string): boolean {
   if (allowedOrigins.has("*") || process.env.FRONTEND_URL === "*") return true
   try {
     const parsed = new URL(cleanOrigin)
+    if (
+      process.env.NODE_ENV !== "production" &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    ) {
+      return true
+    }
     if (
       parsed.hostname === "audins.galihh.me" ||
       parsed.hostname === "galihh.me" ||
@@ -273,8 +283,22 @@ async function cleanupOrphanChunks(): Promise<void> {
         }
       }
     }
+
+    if (fs.existsSync(UPLOADS_DIR)) {
+      const rootFiles = await fs.promises.readdir(UPLOADS_DIR)
+      const now = Date.now()
+      for (const file of rootFiles) {
+        if (file.startsWith("temp-retranscribe-") || file.endsWith("-converted.mp3")) {
+          const filePath = path.join(UPLOADS_DIR, file)
+          const stats = await fs.promises.stat(filePath).catch(() => null)
+          if (stats && now - stats.mtimeMs > 60 * 60 * 1000) {
+            await fs.promises.unlink(filePath).catch(() => {})
+          }
+        }
+      }
+    }
   } catch (err) {
-    console.error("Failed to cleanup orphan chunks:", err)
+    console.error("Failed to cleanup orphan chunks and temp files:", err)
   }
 }
 
