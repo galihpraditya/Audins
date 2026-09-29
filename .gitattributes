@@ -123,6 +123,7 @@
 # Build Artifacts & Packages
 # ---------------------------------------------------------------------------
 *.jar                filter=lfs diff=lfs merge=lfs -text
+gradle-wrapper.jar   -filter -diff -merge -text
 *.war                filter=lfs diff=lfs merge=lfs -text
 *.ear                filter=lfs diff=lfs merge=lfs -text
 *.apk                filter=lfs diff=lfs merge=lfs -text
