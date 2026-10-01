@@ -22,6 +22,8 @@ import {
   DeviceMobile,
   Minus,
   CornersOut,
+  Sparkle,
+  CaretDown,
 } from "@phosphor-icons/react"
 
 interface LiveRecorderModalProps {
@@ -74,6 +76,12 @@ export default function LiveRecorderModal({
   const [recordingName, setRecordingName] = useState("")
 
   const [isScreenAwake, setIsScreenAwake] = useState(false)
+
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
+
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("")
+
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 
@@ -146,6 +154,40 @@ export default function LiveRecorderModal({
       setIsScreenAwake(false)
     }
   }
+
+  const loadAudioDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+
+      const audioInputs = devices.filter((d) => d.kind === "audioinput")
+
+      setAudioDevices(audioInputs)
+    } catch (e) {
+      console.warn("Could not enumerate audio devices:", e)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAudioDevices()
+
+    const handleDeviceChange = () => {
+      loadAudioDevices()
+    }
+
+    navigator.mediaDevices?.addEventListener?.(
+      "devicechange",
+      handleDeviceChange,
+    )
+
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.(
+        "devicechange",
+        handleDeviceChange,
+      )
+    }
+  }, [loadAudioDevices])
 
   // Draw real-time audio visualizer on canvas
 
@@ -285,15 +327,37 @@ export default function LiveRecorderModal({
     audioChunksRef.current = []
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+
+        noiseSuppression: noiseSuppressionEnabled,
+
+        autoGainControl: true,
+
+        channelCount: 1,
+
+        sampleRate: 48000,
+      }
+
+      if (selectedDeviceId) {
+        audioConstraints.deviceId = { exact: selectedDeviceId }
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: audioConstraints,
+      })
 
       streamRef.current = stream
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-          ? "audio/mp4"
-          : ""
+      loadAudioDevices()
+
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : MediaRecorder.isTypeSupported("audio/mp4")
+            ? "audio/mp4"
+            : ""
 
       if (!mimeType || typeof MediaRecorder === "undefined") {
         stopTracks()
@@ -312,14 +376,23 @@ export default function LiveRecorderModal({
       let mediaRecorder: MediaRecorder
 
       try {
-        mediaRecorder = new MediaRecorder(stream, { mimeType })
+        mediaRecorder = new MediaRecorder(stream, {
+          mimeType,
+
+          audioBitsPerSecond: 128000,
+        })
       } catch (mimeErr) {
         console.warn(
-          `MediaRecorder init failed with mimeType "${mimeType}", fallback to browser default`,
+          `MediaRecorder init failed with 128k bitrate, fallback to mimeType`,
+
           mimeErr,
         )
 
-        mediaRecorder = new MediaRecorder(stream)
+        try {
+          mediaRecorder = new MediaRecorder(stream, { mimeType })
+        } catch {
+          mediaRecorder = new MediaRecorder(stream)
+        }
       }
 
       mediaRecorderRef.current = mediaRecorder
@@ -636,7 +709,6 @@ export default function LiveRecorderModal({
             >
               {t("recorder_title")}
             </h2>
-            <p className="text-xs text-fg-tertiary">{t("recorder_desc")}</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -764,6 +836,73 @@ export default function LiveRecorderModal({
             </div>
           )}
         </div>
+
+        {/* Settings controls: Microphone & Noise Reduction (Idle state) */}
+        {recordingState === "idle" && (
+          <div className="space-y-3 pt-1 animate-fade-in">
+            {/* Microphone Selector */}
+            {audioDevices.length > 0 && (
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="recorder-mic-select"
+                  className="block text-xs font-mono font-semibold text-fg-secondary uppercase tracking-wider"
+                >
+                  {t("recorder_mic_select")}
+                </label>
+                <div className="relative">
+                  <select
+                    id="recorder-mic-select"
+                    value={selectedDeviceId}
+                    onChange={(e) => setSelectedDeviceId(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2.5 rounded-xl text-xs bg-surface-2 border border-border text-fg appearance-none focus:outline-none focus:border-primary transition-colors cursor-pointer truncate"
+                  >
+                    <option value="">{t("recorder_mic_default")}</option>
+                    {audioDevices.map((device, idx) => (
+                      <option
+                        key={device.deviceId || idx}
+                        value={device.deviceId}
+                      >
+                        {device.label ||
+                          `${t("recorder_mic_select")} ${idx + 1}`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-fg-tertiary">
+                    <CaretDown size={14} weight="bold" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Noise Suppression Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border">
+              <div className="space-y-0.5 pr-2">
+                <div className="text-xs font-semibold text-fg flex items-center gap-1.5">
+                  <Sparkle size={14} weight="fill" className="text-primary" />
+                  <span>{t("recorder_noise_suppression")}</span>
+                </div>
+                <p className="text-[11px] text-fg-tertiary leading-tight">
+                  {t("recorder_noise_suppression_hint")}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={noiseSuppressionEnabled}
+                onClick={() => setNoiseSuppressionEnabled((prev) => !prev)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  noiseSuppressionEnabled ? "bg-primary" : "bg-surface-3"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    noiseSuppressionEnabled ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Preview Form: Name input */}
         {recordingState === "preview" && (

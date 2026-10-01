@@ -1,107 +1,160 @@
-# Audins - Audio Insight
+# Audins — Audio Insight
 
-Audins is an open-source web application and audio intelligence studio designed to transcribe, summarize, and analyze audio and video recordings. Powered by Groq using Whisper Large v3 and GPT-OSS models, it turns lectures, meetings, interviews, and live recordings into structured, actionable summaries and interactive, searchable transcripts.
+[![React](https://img.shields.io/badge/React_19-20232A?style=flat-square&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite_8-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_v4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white)](https://expressjs.com/)
+[![Groq](https://img.shields.io/badge/Groq_Whisper_%26_LLM-F55036?style=flat-square)](https://groq.com/)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-007808?style=flat-square&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-Live Demo: [audins.vercel.app](https://audins.vercel.app)
+Audins is an open-source audio intelligence studio and web application built to record, transcribe, summarize, and analyze audio files. Powered by Groq using Whisper Large v3 and GPT-OSS models, Audins transforms lectures, meetings, interviews, and live voice notes into structured summaries and interactive, searchable transcripts.
+
+🔗 **Live Demo:** [audins.galihh.me](https://audins.galihh.me)
 
 ---
 
-> **The Story Behind Audins**
-> 
-> This project was built to solve a real, everyday struggle: **taking notes during fast-paced university lectures and dense meetings.**
-> 
-> Instead of frantically trying to type everything down, Audins allows you to record or upload the audio and let the AI do the heavy lifting — generating clean, structured summaries and extracting key action items.
-> 
-> When you need to review a specific moment in the conversation, you don't have to guess or scrub blindly through a long timeline. Simply search for a keyword in the interactive transcript, click the segment, and the player immediately jumps to the exact second it was spoken.
+## Background & Motivation
+
+Taking thorough notes during fast-paced university lectures or dense corporate meetings is challenging. Typing frantically often causes you to miss crucial explanations, while raw audio recordings are cumbersome to review.
+
+Audins solves this by:
+1. **Capturing or accepting audio** without manual note-taking stress.
+2. **Generating structured AI summaries** with executive briefs, key takeaways, and action items.
+3. **Synchronizing audio with transcripts**, allowing you to search keywords and click any sentence to jump the audio player straight to that exact second.
 
 ---
 
 ## Key Features
 
-* **In-Browser Live Audio Recording:** Record meetings, interviews, or lectures directly from your microphone with a real-time waveform canvas visualizer, timer, pause/resume, and instant submission for transcription.
-* **High-Speed Audio & Video Transcription:** Transcribes media files (up to 500MB) with high accuracy using Groq Whisper (`whisper-large-v3`).
-* **Authentic Waveform & Interactive Audio Player:** Real-time Web Audio API peak analysis with a 64-bar waveform, smooth scrubbing, hover timestamp preview, speed controls (0.75x – 2x), 5-second skips, and audio download.
-* **Interactive Transcript with Timestamp Sync:** Click any transcribed segment to immediately jump audio playback to that exact second. Includes instant keyword search with match counter and one-click copy.
-* **Dynamic AI Summarization:** Automatically transforms transcripts into contextual summaries with structured sections, takeaways, and action items using `openai/gpt-oss-120b` (with automated fallback to `openai/gpt-oss-20b`).
-* **Custom AI Guidelines & Presets:** Guide the summary output using prompt presets (*Indonesian Translation*, *Action Items & Decisions*, *Detailed Study Notes*, *Executive Brief*) or provide custom instructions.
-* **Summary Markdown Editor:** Edit and refine generated summaries directly in the workspace with live Markdown preview and formatted section copying.
-* **Print-Ready PDF Export:** Export structured summaries to styled, multi-page PDFs with automated naming (`[DocName]_Summary_Audins.pdf`), consistent headers/footers, and clean typography.
-* **Bilingual Support (i18n):** Full internationalization with instant switching between **English** and **Indonesian (Bahasa Indonesia)**.
-* **Monochromatic Theme System:** Sleek, high-contrast dark and light themes with system preference detection.
-* **Flexible API Key & Free Tier:** Generous free tier (10 uploads/day) with dynamic reset countdown, or bring your own Groq API Key for unlimited processing.
+### Live Recording & Audio DSP
+* **Hardware/Browser Noise Suppression:** Built-in acoustic echo cancellation, noise suppression filter, and auto gain control (AGC) in mono 48kHz for clear voice capture.
+* **Microphone Selector:** Choose between internal laptop microphones and external USB/headset microphones (`enumerateDevices`) with automatic device change detection.
+* **High-Bitrate Opus Recording:** Encodes directly in browser at 128kbps (`audio/webm;codecs=opus` with MP4 fallback) to prevent watery compression artifacts.
+* **Floating Background Recording:** Minimize active recordings into a compact floating bar with live timer, pause/resume, and stop controls while browsing documents.
+* **Screen Wake Lock API:** Prevents mobile devices and laptops from sleeping or dimming during extended recordings.
+* **Canvas Waveform Visualizer:** 60fps real-time frequency bar visualizer during active capture.
+
+### Speech Transcription & Audio Pipeline
+* **Groq Whisper Large v3:** High-speed speech-to-text with word-accurate timestamps and multilingual support (auto-detect or manual language selection including Indonesian and Javanese).
+* **Vocabulary Prompts & Hints:** Feed context hints (names, technical jargon, acronyms) to steer Whisper spelling accuracy.
+* **Intelligent FFmpeg Chunking:** Audio files exceeding 24MB are automatically split into 30-minute chunks at 128kbps mono with bounded concurrency (`concurrency: 3`), bypassing API upload limits while preserving continuous timestamps.
+* **Format Transcoding:** Automatically converts `.aac` and unsupported formats into standard MP3 via FFmpeg before processing.
+* **Re-transcription:** Re-run transcription on saved audio with updated language options, custom glossary prompts, or personal Groq API keys.
+
+### Interactive Waveform & Synchronized Transcript
+* **Authentic Peak Waveform:** 64-bar Web Audio API peak analysis with scrubbing, hover timestamp tooltips, and variable playback speeds (0.75x – 2.0x).
+* **Click-to-Seek Synchronization:** Click any transcribed line or timestamp to immediately seek audio playback to that exact second.
+* **Keyword Search & Highlight:** Real-time search across transcripts with occurrence counters and highlight navigation.
+* **Multi-Format Export:** Export transcripts to Plain Text (`.txt`), Timestamped Text (`.txt`), SubRip Subtitles (`.srt`), WebVTT (`.vtt`), and Markdown (`.md`), or copy all text to clipboard.
+
+### AI Summarization & Actionable Insights
+* **Structured Markdown Notes:** Automatically generates executive summaries, core topics, takeaways, and action items using `openai/gpt-oss-120b` with automated fallback to `openai/gpt-oss-20b`.
+* **Prompt Injection Defense:** Strict boundary tags and sanitizers protect summary generation against malicious instructions hidden in audio transcripts.
+* **Preset & Custom Prompts:** Choose from pre-configured prompt presets (*Indonesian Translation*, *Action Items & Decisions*, *Detailed Study Notes*, *Executive Brief*) or enter custom instructions.
+* **Summary Editor & PDF Export:** Edit summaries directly in the browser and export print-ready PDFs with document metadata, clean typography, and headers/footers.
+
+### Workspace, Sharing & Privacy
+* **Public Note Sharing:** Create read-only shareable links (`/share/:shareId`) with audio playback and full transcript inspection.
+* **Audio-Only Deletion:** Remove heavy audio recordings after review to reclaim disk space while permanently retaining transcripts and summaries.
+* **Raw Audio Download:** Download recordings or uploaded audio directly from the player preview.
+* **Bilingual Support (i18n):** Complete user interface available in both **English** and **Indonesian (Bahasa Indonesia)**.
+* **Monochromatic Themes:** Clean dark and light themes with system theme auto-detection.
 
 ---
 
-## Advanced AI & Processing Pipeline — Under the Hood
+## Architecture & Processing Pipeline
 
-To handle large media files, rate limits, and edge cases gracefully, Audins implements an intelligent backend processing pipeline:
+```text
+[ Microphone / Media File ]
+           │
+           ▼
+[ Client DSP & MediaRecorder ] (Noise suppression, AGC, 128kbps Opus)
+           │
+           ▼
+[ Express API Server ] ─── (HMAC Tokenized Media Access)
+           │
+           ├─► Audio <= 24MB ──────────────────────┐
+           │                                        ▼
+           └─► Audio > 24MB  ──► [ FFmpeg 30-min Slices @ 128k ]
+                                                    │
+                                                    ▼
+                                       [ Groq Whisper Large v3 ]
+                                                    │
+                                                    ▼
+                                          [ Full Transcript ]
+                                                    │
+                                                    ▼
+                                    [ Groq GPT-OSS 120B / 20B ]
+                                 (Prompt Defense + Summarization)
+                                                    │
+                                                    ▼
+                                   [ Structured Summary & Actions ]
+```
 
-| Feature | Mechanism | Purpose |
+| Step | Technique | Purpose |
 | :--- | :--- | :--- |
-| **30-Minute Audio Chunking** | Automatically splits files `>24MB` into 30-minute segments (1800s) using FFmpeg with bounded concurrency (`CHUNK_CONCURRENCY = 3`). | Bypasses Whisper's 25MB file size limit while maintaining exact timestamp continuity. |
-| **Format Transcoding** | Converts formats like `.aac` to `.mp3` automatically using FFmpeg before processing. | Guarantees audio compatibility with the Groq API. |
-| **Resilient Model Fallback** | Automatically falls back from `openai/gpt-oss-120b` to `openai/gpt-oss-20b` upon hitting TPM or rate limits. | Prevents request failures and ensures reliable summary generation. |
-| **Context Window Optimization** | Condenses transcripts exceeding 20,000 characters (~6,500 tokens) using head/tail sampling. | Stays within model context limits while retaining crucial context. |
-| **Authentic Waveform Extraction** | Decodes audio buffers in the browser via Web Audio API using downsampled stride sampling across 64 visual peaks. | Delivers authentic, lightweight audio waveform visualization without server overhead. |
-| **Secure Tokenized Media Serving** | Signs local audio media URLs with HMAC-SHA256 time-expiring tokens (`?v=<expiry>&t=<token>`). | Prevents unauthorized file access while allowing audio playback and downloads. |
-
----
-
-## Infrastructure, Storage, and Security
-
-* **Database & Row Level Security:** Supabase PostgreSQL stores metadata, transcripts, and summaries with Row Level Security (RLS) policies.
-* **Cloud Storage & Data Retention:** Uploaded audio/video files are stored in Cloudflare R2 (or Supabase Storage) with a 500MB quota per user. Media files are automatically cleaned up after 7 days to optimize storage, while text transcripts and summaries remain permanently accessible.
-* **Rate Limiting Engine:** Dual-layer rate limiter (Supabase SQL store with in-memory fallback) enforces a 10-upload daily limit for free tier users, featuring a live countdown to reset.
-* **Client-Side API Key Storage:** Bring-your-own-key (BYOK) Groq API keys are stored solely in the user's browser `localStorage` and sent over HTTPS headers to bypass server-side rate limits.
+| **Audio Capture** | WebRTC constraints (`noiseSuppression`, `echoCancellation`, `autoGainControl`) | Eliminates room reverb, fan drone, and background noise at capture time. |
+| **FFmpeg Slicing** | 30-minute chunks at 128kbps mono (`libmp3lame`) with 3 concurrent workers | Bypasses Whisper 25MB file limit while preserving phonetic clarity. |
+| **Speech Recognition** | Groq Whisper Large v3 (`verbose_json`) | Produces millisecond-accurate segments and timestamps. |
+| **Model Fallback** | Primary: `openai/gpt-oss-120b` &bull; Fallback: `openai/gpt-oss-20b` | Prevents summarization failure if TPM or context limit is reached. |
+| **Media Security** | HMAC-SHA256 signed media tokens (`?v=<expiry>&t=<token>`) | Protects uploaded media files from unauthorized enumeration. |
 
 ---
 
 ## Tech Stack
 
 ### Frontend
-* **Core:** React 19, TypeScript, Vite
-* **Styling:** Tailwind CSS v4, Custom CSS Variables
-* **Audio & Visuals:** Web Audio API (Waveform Analysis & Live Recording), HTML5 Audio
-* **Icons & Markdown:** `@phosphor-icons/react`, `react-markdown`
-* **Routing & State:** React Router DOM v7, React Contexts (`LanguageContext`, `ThemeContext`, `ToastContext`)
+* **Core:** React 19, TypeScript, Vite 8
+* **Styling:** Tailwind CSS v4, Monochromatic CSS Variables
+* **Audio & Visualization:** Web Audio API, HTML5 Audio, Canvas 2D
+* **Icons & Content:** `@phosphor-icons/react`, `react-markdown`
+* **Routing & Contexts:** React Router DOM v7, `LanguageContext`, `ThemeContext`, `ToastContext`, `AuthContext`
 
 ### Backend
-* **Runtime:** Node.js, Express, TypeScript (`tsx` for development)
-* **File Uploads:** Multer (Memory / Temp storage)
+* **Runtime:** Node.js, Express, TypeScript (`tsx` for dev, `tsc` for prod)
 * **Audio Processing:** `fluent-ffmpeg`, `@ffmpeg-installer/ffmpeg`, `@ffprobe-installer/ffprobe`
-* **AI Provider:** `groq-sdk` (Whisper Large v3, OpenAI GPT-OSS 120B & 20B)
-* **Databases & Storage:** Supabase (`@supabase/supabase-js`), Cloudflare R2 (`@aws-sdk/client-s3`)
+* **AI Provider:** `groq-sdk` (Whisper Large v3, GPT-OSS 120B & 20B)
+* **Storage & Persistence:** Local JSON store (`db.json`, `users.json`, `/uploads`), optional Cloudflare R2 (`@aws-sdk/client-s3`) & Supabase (`@supabase/supabase-js`)
 
 ---
 
 ## Project Structure
 
 ```text
-├── server/                         # Backend Node.js/Express application
-│   ├── migrations/                 # SQL migration scripts (Rate limiting tables)
+├── server/                         # Backend Express application
+│   ├── migrations/                 # SQL migration scripts
 │   ├── src/
-│   │   ├── config.ts               # Environment variables & constants
-│   │   ├── middleware/             # Rate limiter & upload middlewares
-│   │   ├── routes/                 # Express API routes (audio processing, documents)
-│   │   ├── services/               # Groq AI, FFmpeg chunking, R2 & Supabase services
+│   │   ├── config.ts               # Env variables, constants & HMAC token signing
+│   │   ├── index.ts                # Express setup, CORS & graceful shutdown
+│   │   ├── middleware/             # JWT auth & daily rate limiter
+│   │   ├── routes/                 # Audio pipeline & authentication routes
+│   │   ├── services/               # Groq AI, FFmpeg, R2, Supabase & storage engine
 │   │   └── types/                  # Backend TypeScript interfaces
-│   └── package.json
+│   ├── package.json
+│   └── tsconfig.json
 │
 ├── src/                            # Frontend React application
 │   ├── components/
 │   │   ├── dashboard/              # UploadZone, DocCard, RecentDocsTable, FreeTierBar
-│   │   ├── layout/                 # Sidebar, TopHeader, MobileNav, Logo
-│   │   ├── modals/                 # SettingsModal, RateLimitModal
-│   │   ├── recording/              # LiveRecorderModal (Microphone & Web Audio visualizer)
-│   │   ├── ui/                     # Alert, Modal, EmptyState, Toast, ErrorBoundary
+│   │   ├── layout/                 # Sidebar, TopHeader, MobileNav, UserDropdown
+│   │   ├── modals/                 # AuthModal, ShareModal, RetranscribeModal, SettingsModal
+│   │   ├── recording/              # LiveRecorderModal (DSP constraints, device selector)
+│   │   ├── ui/                     # Alert, Modal, EmptyState, ToastContext, ErrorBoundary
 │   │   └── workspace/              # AudioPlayer (Waveform), TranscriptPanel, SummaryEditor
-│   ├── context/                    # LanguageContext (i18n), ThemeContext (Dark/Light)
+│   ├── context/                    # AuthContext, LanguageContext (i18n), ThemeContext
 │   ├── hooks/                      # useApiKey, useQuota, useDocumentPolling
-│   ├── i18n/                       # Translation dictionaries (English & Indonesian)
-│   ├── utils/                      # audioWaveform peak extraction utilities
-│   ├── App.tsx                     # Main application layout and document controller
-│   └── index.css                   # Tailwind CSS v4 design tokens and theme rules
-└── package.json
+│   ├── i18n/                       # English & Indonesian translations
+│   ├── pages/                      # SharedNotePage (Public view), Settings
+│   ├── utils/                      # audioWaveform peak extraction & transcript export
+│   ├── App.tsx                     # Main dashboard and workspace router
+│   ├── index.css                   # Tailwind CSS v4 design tokens and theme rules
+│   └── main.tsx                    # React root entry point
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
 ```
 
 ---
@@ -109,63 +162,73 @@ To handle large media files, rate limits, and edge cases gracefully, Audins impl
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18 or higher recommended.
-- A [Groq API Key](https://console.groq.com/) (optional for demo/free tier, required for unlimited usage).
+* **Node.js** 18.0.0 or higher
+* **npm** or **pnpm**
+* A [Groq API Key](https://console.groq.com/) (free tier available)
 
-### Installation
+### 1. Clone Repository
+```bash
+git clone https://github.com/galihpraditya/Audin.git
+cd Audin
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/audins.git
-   cd audins
-   ```
+### 2. Install Dependencies
+```bash
+# Install frontend dependencies
+npm install
 
-2. **Install all dependencies**
-   ```bash
-   # Install root & frontend dependencies
-   npm install
+# Install backend dependencies
+cd server && npm install && cd ..
+```
 
-   # Install backend dependencies
-   cd server
-   npm install
-   cd ..
-   ```
+### 3. Environment Configuration
+Create a `.env` file in `server/.env` (or repository root):
+```env
+PORT=3001
+BASE_URL=http://localhost:3001
+FRONTEND_URL=http://localhost:8443
 
-3. **Configure Environment Variables**
-   Create a `.env` file in the `server` directory:
-   ```env
-   PORT=3001
-   BASE_URL=http://localhost:3001
-   FRONTEND_URL=http://localhost:8443
+# Groq Cloud API Key (Required for transcription and summary)
+GROQ_API_KEY=gsk_your_groq_api_key_here
 
-   # Groq AI
-   GROQ_API_KEY=your_groq_api_key_here
+# Security Secrets
+JWT_SECRET=your-random-jwt-secret-key
+MEDIA_SIGNING_SECRET=your-random-media-signing-secret
 
-   # Rate Limiting
-   MAX_FREE_DAILY_UPLOADS=10
+# Free Tier Rate Limiting
+MAX_FREE_DAILY_UPLOADS=10
 
-   # Supabase (Optional for cloud persistence)
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# Optional Cloud Storage (defaults to local disk storage if omitted)
+# SUPABASE_URL=https://your-project.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+# R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
+# R2_ACCESS_KEY_ID=your_r2_access_key
+# R2_SECRET_ACCESS_KEY=your_r2_secret_key
+# R2_BUCKET_NAME=your_r2_bucket_name
+```
 
-   # Cloudflare R2 (Optional for cloud storage)
-   R2_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
-   R2_ACCESS_KEY_ID=your_r2_access_key
-   R2_SECRET_ACCESS_KEY=your_r2_secret_key
-   R2_BUCKET_NAME=your_bucket_name
-   ```
+### 4. Run Development Servers
+From the repository root:
+```bash
+npm run dev
+```
+* **Frontend:** `http://localhost:8443`
+* **Backend API:** `http://localhost:3001`
 
-4. **Start Development Servers**
-   From the **root directory**, run:
-   ```bash
-   npm run dev
-   ```
-   This will start both:
-   * **Frontend (Vite):** `http://localhost:8443`
-   * **Backend (Express):** `http://localhost:3001`
+### 5. Production Build
+```bash
+# Build frontend
+npm run build
+
+# Build backend
+npm run build --prefix server
+
+# Start backend in production
+npm run start --prefix server
+```
 
 ---
 
 ## License
 
-This project is open-source and available under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

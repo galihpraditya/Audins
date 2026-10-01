@@ -111,6 +111,15 @@ export const translations = {
 
     recorder_minimized_hint: "Recording in background",
 
+    recorder_mic_select: "Microphone",
+
+    recorder_mic_default: "Default Microphone",
+
+    recorder_noise_suppression: "Noise Reduction",
+
+    recorder_noise_suppression_hint:
+      "Filter out background hum & ambient noise",
+
     // Document Table & Actions
 
     col_document: "DOCUMENT",
@@ -641,6 +650,7 @@ export const translations = {
       "Are you sure? The current link will immediately stop working.",
 
     share_quick_social: "Quick Share",
+
     share_btn_system_dialog: "Open Share Dialog...",
 
     share_toast_updated: "Share settings updated",
@@ -780,6 +790,15 @@ export const translations = {
     recorder_expand: "Perbesar rekaman",
 
     recorder_minimized_hint: "Merekam di latar belakang",
+
+    recorder_mic_select: "Mikrofon",
+
+    recorder_mic_default: "Mikrofon Bawaan",
+
+    recorder_noise_suppression: "Peredam Kebisingan",
+
+    recorder_noise_suppression_hint:
+      "Filter dengung & bising lingkungan latar belakang",
 
     // Document Table & Actions
 
@@ -1305,6 +1324,7 @@ export const translations = {
       "Apakah Anda yakin? Tautan saat ini akan langsung tidak berlaku.",
 
     share_quick_social: "Bagikan Cepat",
+
     share_btn_system_dialog: "Buka Dialog Berbagi...",
 
     share_toast_updated: "Pengaturan berbagi diperbarui",

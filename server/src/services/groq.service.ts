@@ -1,9 +1,15 @@
 import Groq, { toFile } from "groq-sdk"
+
 import fs from "node:fs"
+
 import path from "node:path"
+
 import ffmpeg from "fluent-ffmpeg"
+
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg"
+
 import ffprobeInstaller from "@ffprobe-installer/ffprobe"
+
 import {
   TranscriptEntry,
   TranscriptionResult,
@@ -11,27 +17,36 @@ import {
 } from "../types/index.js"
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
+
 ffmpeg.setFfprobePath(ffprobeInstaller.path)
 
 // How many chunk slice+transcribe tasks run concurrently. Bounds FFmpeg CPU
+
 // usage while still overlapping disk work with Groq HTTP round-trips.
+
 const CHUNK_CONCURRENCY = 3
 
 function getAudioDuration(filePath: string): Promise<number> {
   return new Promise((resolve) => {
     let settled = false
+
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true
+
         console.warn(`ffprobe timed out on ${filePath}`)
+
         resolve(0)
       }
     }, 30_000)
 
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       clearTimeout(timer)
+
       if (settled) return
+
       settled = true
+
       if (err || !metadata?.format?.duration) {
         resolve(0)
       } else {
@@ -43,79 +58,120 @@ function getAudioDuration(filePath: string): Promise<number> {
 
 function sliceAudioChunk(
   inputPath: string,
+
   outputPath: string,
+
   startTime: number,
+
   duration: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let command: any
+
     let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      try {
-        command?.kill("SIGKILL")
-      } catch {}
-      reject(new Error(`FFmpeg slice timed out after 3 minutes for ${outputPath}`))
-    }, 3 * 60 * 1000)
+
+    const timer = setTimeout(
+      () => {
+        timedOut = true
+
+        try {
+          command?.kill("SIGKILL")
+        } catch {}
+
+        reject(
+          new Error(`FFmpeg slice timed out after 3 minutes for ${outputPath}`),
+        )
+      },
+      3 * 60 * 1000,
+    )
 
     command = ffmpeg()
+
       .input(inputPath)
+
       .inputOptions([`-ss ${startTime}`])
+
       .outputOptions([
         `-t ${duration}`,
+
         "-vn",
+
         "-sn",
+
         "-dn",
+
         "-map_metadata -1",
       ])
+
       .audioCodec("libmp3lame")
-      .audioBitrate("48k")
+
+      .audioBitrate("128k")
+
       .audioChannels(1)
+
       .output(outputPath)
+
       .on("end", () => {
         clearTimeout(timer)
+
         if (!timedOut) resolve()
       })
+
       .on("error", (err) => {
         clearTimeout(timer)
+
         if (!timedOut) reject(err)
       })
+
     command.run()
   })
 }
 
 interface GroqTranscriptionSegment {
   start: number
+
   end: number
+
   text: string
 }
 
 interface GroqVerboseJsonTranscription {
   segments?: GroqTranscriptionSegment[]
+
   text: string
 }
 
 async function transcribeSingleFile(
   groq: Groq,
+
   filePath: string,
+
   timeOffset = 0,
+
   language?: string,
+
   prompt?: string,
 ): Promise<TranscriptEntry[]> {
   const options: Parameters<typeof groq.audio.transcriptions.create>[0] = {
     file: await toFile(fs.createReadStream(filePath), path.basename(filePath)),
+
     model: "whisper-large-v3",
+
     response_format: "verbose_json",
   }
 
   // Force language if specified and not "auto" to prevent Whisper from locking onto opening words
+
   if (language && language !== "auto") {
     // Whisper uses "jw" for Javanese; normalize if user sent "jv"
+
     const normalizedLang = language.toLowerCase() === "jv" ? "jw" : language
+
     options.language = normalizedLang
   }
 
   // Pass prompt (glossary/context hint) to guide Whisper's vocabulary and spelling
+
   if (prompt && prompt.trim()) {
     options.prompt = prompt.trim().slice(0, 500)
   }
@@ -124,14 +180,19 @@ async function transcribeSingleFile(
 
   const verboseTranscription =
     transcription as unknown as GroqVerboseJsonTranscription
+
   const segments = verboseTranscription.segments || []
+
   if (segments.length > 0) {
     return segments.map((seg: GroqTranscriptionSegment) => {
       const actualStart = seg.start + timeOffset
 
       const hours = Math.floor(actualStart / 3600)
+
       const startMin = Math.floor((actualStart % 3600) / 60)
+
       const startSec = Math.floor(actualStart % 60)
+
       const ts =
         hours > 0
           ? `${hours}:${startMin.toString().padStart(2, "0")}:${startSec.toString().padStart(2, "0")}`
@@ -139,7 +200,9 @@ async function transcribeSingleFile(
 
       return {
         ts,
+
         seconds: Math.floor(actualStart),
+
         text: seg.text.trim(),
       }
     })
@@ -148,7 +211,9 @@ async function transcribeSingleFile(
   return [
     {
       ts: "0:00",
+
       seconds: 0,
+
       text: verboseTranscription.text || "Audio could not be transcribed.",
     },
   ]
@@ -156,66 +221,106 @@ async function transcribeSingleFile(
 
 async function transcribeSingleFileWithRetry(
   groq: Groq,
+
   filePath: string,
+
   timeOffset = 0,
+
   maxRetries = 2,
+
   language?: string,
+
   prompt?: string,
 ): Promise<TranscriptEntry[]> {
   let lastError: unknown
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await transcribeSingleFile(groq, filePath, timeOffset, language, prompt)
+      return await transcribeSingleFile(
+        groq,
+        filePath,
+        timeOffset,
+        language,
+        prompt,
+      )
     } catch (err) {
       lastError = err
+
       if (attempt < maxRetries) {
         const delayMs = (attempt + 1) * 1500
+
         console.warn(
           `Transcribe attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`,
+
           err,
         )
+
         await new Promise((r) => setTimeout(r, delayMs))
       }
     }
   }
+
   throw lastError
 }
 
 function convertAudioToMp3(
   inputPath: string,
+
   outputPath: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let command: any
+
     let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      try {
-        command?.kill("SIGKILL")
-      } catch {}
-      reject(new Error(`FFmpeg convert timed out after 5 minutes for ${inputPath}`))
-    }, 5 * 60 * 1000)
+
+    const timer = setTimeout(
+      () => {
+        timedOut = true
+
+        try {
+          command?.kill("SIGKILL")
+        } catch {}
+
+        reject(
+          new Error(
+            `FFmpeg convert timed out after 5 minutes for ${inputPath}`,
+          ),
+        )
+      },
+      5 * 60 * 1000,
+    )
 
     command = ffmpeg(inputPath)
+
       .toFormat("mp3")
+
       .audioBitrate(128)
+
       .output(outputPath)
+
       .on("end", () => {
         clearTimeout(timer)
+
         if (!timedOut) resolve()
       })
+
       .on("error", (err) => {
         clearTimeout(timer)
+
         if (!timedOut) reject(err)
       })
+
     command.run()
   })
 }
 
 export async function transcribeAudioWithGroq(
   filePath: string,
+
   customApiKey?: string,
+
   language?: string,
+
   prompt?: string,
 ): Promise<TranscriptionResult> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
@@ -227,16 +332,21 @@ export async function transcribeAudioWithGroq(
   }
 
   let targetFilePath = filePath
+
   let tempConvertedFile: string | null = null
 
   // If file is .aac, transcode to standard MP3 using FFmpeg first
+
   if (path.extname(filePath).toLowerCase() === ".aac") {
     tempConvertedFile = filePath.replace(/\.aac$/i, "-converted.mp3")
+
     console.log(
       `AAC file detected. Converting to MP3 via FFmpeg: ${filePath} -> ${tempConvertedFile}`,
     )
+
     try {
       await convertAudioToMp3(filePath, tempConvertedFile)
+
       targetFilePath = tempConvertedFile
     } catch (convErr) {
       console.warn("AAC to MP3 conversion error:", convErr)
@@ -245,30 +355,43 @@ export async function transcribeAudioWithGroq(
 
   try {
     const groq = new Groq({ apiKey })
+
     const stats = await fs.promises.stat(targetFilePath)
+
     const fileSizeInMB = stats.size / (1024 * 1024)
 
     // If file is <= 24MB, transcribe directly in one request
+
     if (fileSizeInMB <= 24) {
       const entries = await transcribeSingleFileWithRetry(
         groq,
+
         targetFilePath,
+
         0,
+
         2,
+
         language,
+
         prompt,
       )
+
       return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
     // File > 24MB: Auto-chunking using FFmpeg with 30-minute chunks
+
     console.log(
       `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio (30-minute segments)...`,
     )
+
     const totalDuration = await getAudioDuration(targetFilePath)
 
     // 30 minutes (1800s) per chunk for maximum efficiency and minimum API overhead
+
     const chunkDurationSec = 1800
+
     const numChunks =
       totalDuration > 0
         ? Math.ceil(totalDuration / chunkDurationSec)
@@ -281,58 +404,80 @@ export async function transcribeAudioWithGroq(
     }
 
     const chunksDir = path.join(path.dirname(targetFilePath), "chunks")
+
     if (!fs.existsSync(chunksDir)) {
       fs.mkdirSync(chunksDir, { recursive: true })
     }
 
     const ext = ".mp3" // ALWAYS use .mp3 for chunks to minimize size and ensure Groq compatibility
+
     const baseName = path.basename(targetFilePath, path.extname(targetFilePath))
 
     const resultsByIndex: TranscriptEntry[][] = new Array(numChunks)
+
     let nextChunk = 0
+
     let failedChunks = 0
 
     const runWorker = async (): Promise<void> => {
       while (true) {
         const index = nextChunk++
+
         if (index >= numChunks) return
 
         const startTime = index * chunkDurationSec
+
         const chunkPath = path.join(
           chunksDir,
+
           `${baseName}_chunk_${index}${ext}`,
         )
 
         try {
           await sliceAudioChunk(
             targetFilePath,
+
             chunkPath,
+
             startTime,
+
             chunkDurationSec,
           )
 
           // Guard against empty or corrupted 0-byte slice (e.g. slicing past end of audio)
+
           const chunkStats = await fs.promises.stat(chunkPath).catch(() => null)
+
           if (!chunkStats || chunkStats.size < 512) {
             console.log(
               `Chunk ${index + 1}/${numChunks} is empty (${chunkStats?.size ?? 0} bytes) — skipping transcription.`,
             )
+
             continue
           }
 
           resultsByIndex[index] = await transcribeSingleFileWithRetry(
             groq,
+
             chunkPath,
+
             startTime,
+
             2,
+
             language,
+
             prompt,
           )
+
           console.log(`Transcribed chunk ${index + 1}/${numChunks}`)
         } catch (chunkErr) {
           // Track failures explicitly so partial transcripts can be surfaced
+
           // to the user instead of silently passing as complete.
+
           failedChunks += 1
+
           console.warn(`Chunk ${index + 1} processing warning:`, chunkErr)
         } finally {
           if (fs.existsSync(chunkPath)) {
@@ -346,8 +491,10 @@ export async function transcribeAudioWithGroq(
 
     const workers = Array.from(
       { length: Math.min(CHUNK_CONCURRENCY, numChunks) },
+
       () => runWorker(),
     )
+
     await Promise.all(workers)
 
     const allEntries = resultsByIndex.filter(Boolean).flat()
@@ -370,22 +517,35 @@ export async function transcribeAudioWithGroq(
  * Sanitizes user-provided guidance to prevent prompt injection, delimiter smuggling,
  * and data exfiltration patterns.
  */
+
 function sanitizeUserPrompt(raw?: string): string {
   if (!raw || typeof raw !== "string") return ""
+
   let sanitized = raw.trim()
+
   if (!sanitized) return ""
 
   // 1. Bound maximum length to 1000 characters
+
   if (sanitized.length > 1000) {
     sanitized = sanitized.slice(0, 1000)
   }
 
   // 2. Strip system/boundary delimiter tags to prevent tag smuggling/escaping
+
   sanitized = sanitized
-    .replace(/<\/?(?:transcript_data|user_guidelines|system|instruction|prompt)[^>]*>/gi, "")
+
+    .replace(
+      /<\/?(?:transcript_data|user_guidelines|system|instruction|prompt)[^>]*>/gi,
+      "",
+    )
+
     // Strip markdown image injection patterns (e.g. ![leak](https://attacker.com/...))
+
     .replace(/!\[.*?\]\([a-z0-9+.-]+:[^\s)]+\)/gi, "[image-removed]")
+
     // Strip script and iframe tags
+
     .replace(/<\/?(?:script|iframe|object|embed)[^>]*>/gi, "")
 
   return sanitized.trim()
@@ -394,20 +554,32 @@ function sanitizeUserPrompt(raw?: string): string {
 /**
  * Sanitizes model-generated output defensively to prevent stored XSS or markdown phishing.
  */
+
 function sanitizeModelText(text: string): string {
   if (!text || typeof text !== "string") return ""
-  return text
-    // Neutralize dangerous raw html tags
-    .replace(/<\/?(?:script|iframe|object|embed|style|base|meta)[^>]*>/gi, "")
-    // Neutralize markdown image tags to prevent unauthorized tracking pixels
-    .replace(/!\[(.*?)\]\([a-z0-9+.-]+:[^\s)]+\)/gi, "$1")
+
+  return (
+    text
+
+      // Neutralize dangerous raw html tags
+
+      .replace(/<\/?(?:script|iframe|object|embed|style|base|meta)[^>]*>/gi, "")
+
+      // Neutralize markdown image tags to prevent unauthorized tracking pixels
+
+      .replace(/!\[(.*?)\]\([a-z0-9+.-]+:[^\s)]+\)/gi, "$1")
+  )
 }
 
 export async function summarizeTranscriptWithGroq(
   transcriptText: string,
+
   fileName: string,
+
   customApiKey?: string,
+
   model = "openai/gpt-oss-120b",
+
   userCustomPrompt?: string,
 ): Promise<AISummary> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
@@ -419,14 +591,22 @@ export async function summarizeTranscriptWithGroq(
   }
 
   // When using default demo key, multi-window sample the transcript if it exceeds 40,000 characters
+
   // (start, middle, end) to avoid hitting free-tier TPM limits while preserving narrative structure.
+
   // When user provides customApiKey, full transcript is preserved up to model context window.
+
   let processedText = transcriptText
+
   if (!customApiKey && transcriptText.length > 40000) {
     const chunkHead = transcriptText.slice(0, 15000)
+
     const midStart = Math.floor(transcriptText.length / 2) - 7500
+
     const chunkMid = transcriptText.slice(midStart, midStart + 15000)
+
     const chunkTail = transcriptText.slice(-10000)
+
     processedText = `${chunkHead}\n\n... [Bagian tengah transkrip / Middle transcript excerpt] ...\n\n${chunkMid}\n\n... [Bagian penutup transkrip / Concluding transcript excerpt] ...\n\n${chunkTail}`
   }
 
@@ -507,21 +687,27 @@ Analyze the transcript enclosed within <transcript_data> and output valid JSON o
 
   const messages: Array<{ role: "system" | "user"; content: string }> = [
     { role: "system", content: systemPrompt },
+
     { role: "user", content: userContent },
   ]
 
   let usedModel = model
+
   let completion
 
   try {
     completion = await groq.chat.completions.create({
       messages,
+
       model: usedModel,
+
       response_format: { type: "json_object" },
     })
   } catch (error: unknown) {
     const err = error as any
+
     // Fallback to openai/gpt-oss-20b if 120B model fails due to TPM limit or request size
+
     if (
       err?.message?.includes("TPM") ||
       err?.message?.includes("too large") ||
@@ -530,21 +716,30 @@ Analyze the transcript enclosed within <transcript_data> and output valid JSON o
       console.warn(
         `Primary model ${usedModel} hit TPM limit. Falling back to openai/gpt-oss-20b...`,
       )
+
       usedModel = "openai/gpt-oss-20b"
+
       try {
         completion = await groq.chat.completions.create({
           messages,
+
           model: usedModel,
+
           response_format: { type: "json_object" },
         })
       } catch (fallbackError) {
-        console.error("Groq GPT-OSS Fallback Summarization error:", fallbackError)
+        console.error(
+          "Groq GPT-OSS Fallback Summarization error:",
+          fallbackError,
+        )
+
         throw new Error(
           `Failed to summarize transcript: ${(fallbackError as Error).message}`,
         )
       }
     } else {
       console.error("Groq GPT-OSS Summarization error:", error)
+
       throw new Error(
         `Failed to summarize transcript: ${(error as Error).message}`,
       )
@@ -554,7 +749,9 @@ Analyze the transcript enclosed within <transcript_data> and output valid JSON o
   const content = completion.choices[0]?.message?.content || "{}"
 
   // Model output is untrusted JSON — parse defensively.
+
   let parsed: any
+
   try {
     parsed = JSON.parse(content)
   } catch {
@@ -565,15 +762,23 @@ Analyze the transcript enclosed within <transcript_data> and output valid JSON o
 
   return {
     title: sanitizeModelText(parsed.title || `Summary: ${fileName}`),
+
     sections: Array.isArray(parsed.sections)
       ? parsed.sections.map((s: any) => ({
-          heading: sanitizeModelText(typeof s?.heading === "string" ? s.heading : "Section"),
+          heading: sanitizeModelText(
+            typeof s?.heading === "string" ? s.heading : "Section",
+          ),
+
           content: Array.isArray(s?.content)
-            ? s.content.map((c: any) => sanitizeModelText(typeof c === "string" ? c : String(c)))
+            ? s.content.map((c: any) =>
+                sanitizeModelText(typeof c === "string" ? c : String(c)),
+              )
             : [],
         }))
       : [],
+
     modelUsed: usedModel,
+
     createdAt: new Date().toISOString(),
   }
 }
