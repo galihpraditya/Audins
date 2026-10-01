@@ -380,17 +380,17 @@ export async function transcribeAudioWithGroq(
       return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
-    // File > 24MB: Auto-chunking using FFmpeg with 30-minute chunks
+    // File > 24MB: Auto-chunking using FFmpeg with 25-minute chunks
 
     console.log(
-      `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio (30-minute segments)...`,
+      `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio (25-minute segments)...`,
     )
 
     const totalDuration = await getAudioDuration(targetFilePath)
 
-    // 30 minutes (1800s) per chunk for maximum efficiency and minimum API overhead
+    // 25 minutes (1500s) per chunk for maximum efficiency and minimum API overhead
 
-    const chunkDurationSec = 1800
+    const chunkDurationSec = 1500
 
     const numChunks =
       totalDuration > 0

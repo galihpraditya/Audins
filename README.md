@@ -40,7 +40,7 @@ Audins solves this by:
 ### Speech Transcription & Audio Pipeline
 * **Groq Whisper Large v3:** High-speed speech-to-text with word-accurate timestamps and multilingual support (auto-detect or manual language selection including Indonesian and Javanese).
 * **Vocabulary Prompts & Hints:** Feed context hints (names, technical jargon, acronyms) to steer Whisper spelling accuracy.
-* **Intelligent FFmpeg Chunking:** Audio files exceeding 24MB are automatically split into 30-minute chunks at 128kbps mono with bounded concurrency (`concurrency: 3`), bypassing API upload limits while preserving continuous timestamps.
+* **Intelligent FFmpeg Chunking:** Audio files exceeding 24MB are automatically split into 25-minute chunks at 128kbps mono with bounded concurrency (`concurrency: 3`), bypassing API upload limits while preserving continuous timestamps.
 * **Format Transcoding:** Automatically converts `.aac` and unsupported formats into standard MP3 via FFmpeg before processing.
 * **Re-transcription:** Re-run transcription on saved audio with updated language options, custom glossary prompts, or personal Groq API keys.
 
@@ -78,7 +78,7 @@ Audins solves this by:
            │
            ├─► Audio <= 24MB ──────────────────────┐
            │                                        ▼
-           └─► Audio > 24MB  ──► [ FFmpeg 30-min Slices @ 128k ]
+           └─► Audio > 24MB  ──► [ FFmpeg 25-min Slices @ 128k ]
                                                     │
                                                     ▼
                                        [ Groq Whisper Large v3 ]
@@ -97,7 +97,7 @@ Audins solves this by:
 | Step | Technique | Purpose |
 | :--- | :--- | :--- |
 | **Audio Capture** | WebRTC constraints (`noiseSuppression`, `echoCancellation`, `autoGainControl`) | Eliminates room reverb, fan drone, and background noise at capture time. |
-| **FFmpeg Slicing** | 30-minute chunks at 128kbps mono (`libmp3lame`) with 3 concurrent workers | Bypasses Whisper 25MB file limit while preserving phonetic clarity. |
+| **FFmpeg Slicing** | 25-minute chunks at 128kbps mono (`libmp3lame`) with 3 concurrent workers | Bypasses Whisper 25MB file limit while preserving phonetic clarity. |
 | **Speech Recognition** | Groq Whisper Large v3 (`verbose_json`) | Produces millisecond-accurate segments and timestamps. |
 | **Model Fallback** | Primary: `openai/gpt-oss-120b` &bull; Fallback: `openai/gpt-oss-20b` | Prevents summarization failure if TPM or context limit is reached. |
 | **Media Security** | HMAC-SHA256 signed media tokens (`?v=<expiry>&t=<token>`) | Protects uploaded media files from unauthorized enumeration. |
