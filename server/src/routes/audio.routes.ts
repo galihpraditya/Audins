@@ -450,44 +450,54 @@ router.post(
             return
           }
 
-          // 1. Offload to Cloud Storage (R2 / Supabase) asynchronously
-          let cloudUrl: string | null = null
-          try {
-            if (isR2Enabled()) {
-              cloudUrl = await uploadAudioToR2(
-                file.path,
-                path.basename(file.path),
-                file.mimetype,
+          // 1. Concurrently offload to Cloud Storage and transcribe with Groq Whisper
+          const cloudUploadPromise = (async (): Promise<string | null> => {
+            try {
+              if (isR2Enabled()) {
+                const url = await uploadAudioToR2(
+                  file.path,
+                  path.basename(file.path),
+                  file.mimetype,
+                )
+                if (url) return url
+              } else if (isSupabaseEnabled()) {
+                const url = await uploadAudioToSupabase(
+                  file.path,
+                  path.basename(file.path),
+                  file.mimetype,
+                )
+                if (url) return url
+              }
+            } catch (storageErr) {
+              console.warn(
+                "Background cloud upload failed, continuing with local audio file:",
+                storageErr,
               )
-              if (cloudUrl) isCloudStored = true
-            } else if (isSupabaseEnabled()) {
-              cloudUrl = await uploadAudioToSupabase(
-                file.path,
-                path.basename(file.path),
-                file.mimetype,
-              )
-              if (cloudUrl) isCloudStored = true
             }
-          } catch (storageErr) {
-            console.warn(
-              "Background cloud upload failed, continuing with local audio file:",
-              storageErr,
-            )
-          }
+            return null
+          })()
+
+          const transcriptionPromise = transcribeAudioWithGroq(
+            file.path,
+            customApiKey,
+            undefined,
+            undefined,
+            durationSec,
+          )
+
+          const [cloudUrl, result] = await Promise.all([
+            cloudUploadPromise,
+            transcriptionPromise,
+          ])
 
           if (cloudUrl) {
+            isCloudStored = true
             const docWithCloud = await getDocumentById(docId)
             if (docWithCloud) {
               docWithCloud.audioUrl = cloudUrl
               await saveDocument(docWithCloud)
-            } else {
-              await fs.promises.unlink(file.path).catch(() => {})
-              return
             }
           }
-
-          // 2. Transcribe audio with Groq Whisper
-          const result = await transcribeAudioWithGroq(file.path, customApiKey)
 
           const fullText = result.entries.map((t) => t.text).join(" ")
 
@@ -1199,6 +1209,8 @@ router.post(
         language,
 
         prompt,
+
+        doc.durationSec,
       )
 
       const latestDoc = await getDocumentById(doc.id)

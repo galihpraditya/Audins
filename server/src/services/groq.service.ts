@@ -21,12 +21,17 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 ffmpeg.setFfprobePath(ffprobeInstaller.path)
 
 // How many chunk slice+transcribe tasks run concurrently. Bounds FFmpeg CPU
-
 // usage while still overlapping disk work with Groq HTTP round-trips.
+const CHUNK_CONCURRENCY = 4
 
-const CHUNK_CONCURRENCY = 3
+function getAudioDuration(
+  filePath: string,
+  knownDurationSec?: number,
+): Promise<number> {
+  if (knownDurationSec && knownDurationSec > 0) {
+    return Promise.resolve(knownDurationSec)
+  }
 
-function getAudioDuration(filePath: string): Promise<number> {
   return new Promise((resolve) => {
     let settled = false
 
@@ -47,11 +52,32 @@ function getAudioDuration(filePath: string): Promise<number> {
 
       settled = true
 
-      if (err || !metadata?.format?.duration) {
+      if (err) {
         resolve(0)
-      } else {
-        resolve(metadata.format.duration)
+        return
       }
+
+      const rawDur = metadata?.format?.duration
+      const parsedDur =
+        typeof rawDur === "number" ? rawDur : parseFloat(String(rawDur || ""))
+
+      if (!isNaN(parsedDur) && parsedDur > 0) {
+        resolve(parsedDur)
+        return
+      }
+
+      // Check audio streams if format duration is missing or "N/A" (e.g. browser WebM)
+      const streamDur = metadata?.streams?.find(
+        (s: any) => s.duration && !isNaN(parseFloat(String(s.duration))),
+      )?.duration
+      const parsedStream = parseFloat(String(streamDur || ""))
+
+      if (!isNaN(parsedStream) && parsedStream > 0) {
+        resolve(parsedStream)
+        return
+      }
+
+      resolve(0)
     })
   })
 }
@@ -93,20 +119,14 @@ function sliceAudioChunk(
 
       .outputOptions([
         `-t ${duration}`,
-
         "-vn",
-
         "-sn",
-
         "-dn",
-
         "-map_metadata -1",
+        "-ar 16000",
       ])
-
       .audioCodec("libmp3lame")
-
-      .audioBitrate("128k")
-
+      .audioBitrate("96k")
       .audioChannels(1)
 
       .output(outputPath)
@@ -155,7 +175,7 @@ async function transcribeSingleFile(
   const options: Parameters<typeof groq.audio.transcriptions.create>[0] = {
     file: await toFile(fs.createReadStream(filePath), path.basename(filePath)),
 
-    model: "whisper-large-v3",
+    model: "whisper-large-v3-turbo",
 
     response_format: "verbose_json",
   }
@@ -322,6 +342,8 @@ export async function transcribeAudioWithGroq(
   language?: string,
 
   prompt?: string,
+
+  knownDurationSec?: number,
 ): Promise<TranscriptionResult> {
   const apiKey = customApiKey || process.env.GROQ_API_KEY
 
@@ -360,37 +382,29 @@ export async function transcribeAudioWithGroq(
 
     const fileSizeInMB = stats.size / (1024 * 1024)
 
-    // If file is <= 24MB, transcribe directly in one request
-
-    if (fileSizeInMB <= 24) {
+    // If file is <= 20MB, transcribe directly in one request
+    if (fileSizeInMB <= 20) {
       const entries = await transcribeSingleFileWithRetry(
         groq,
-
         targetFilePath,
-
         0,
-
         2,
-
         language,
-
         prompt,
       )
 
       return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
-    // File > 24MB: Auto-chunking using FFmpeg with 25-minute chunks
-
+    // File > 20MB: Auto-chunking using FFmpeg with 20-minute chunks
     console.log(
-      `File size is ${fileSizeInMB.toFixed(1)}MB (> 24MB). Auto-chunking audio (25-minute segments)...`,
+      `File size is ${fileSizeInMB.toFixed(1)}MB (> 20MB). Auto-chunking audio (20-minute segments)...`,
     )
 
-    const totalDuration = await getAudioDuration(targetFilePath)
+    const totalDuration = await getAudioDuration(targetFilePath, knownDurationSec)
 
-    // 25 minutes (1500s) per chunk for maximum efficiency and minimum API overhead
-
-    const chunkDurationSec = 1500
+    // 20 minutes (1200s) per chunk for maximum efficiency and minimum API overhead
+    const chunkDurationSec = 1200
 
     const numChunks =
       totalDuration > 0
@@ -418,6 +432,8 @@ export async function transcribeAudioWithGroq(
     let nextChunk = 0
 
     let failedChunks = 0
+
+    let lastChunkError: unknown = null
 
     const runWorker = async (): Promise<void> => {
       while (true) {
@@ -478,6 +494,8 @@ export async function transcribeAudioWithGroq(
 
           failedChunks += 1
 
+          lastChunkError = chunkErr
+
           console.warn(`Chunk ${index + 1} processing warning:`, chunkErr)
         } finally {
           if (fs.existsSync(chunkPath)) {
@@ -500,7 +518,12 @@ export async function transcribeAudioWithGroq(
     const allEntries = resultsByIndex.filter(Boolean).flat()
 
     if (allEntries.length === 0 && failedChunks > 0) {
-      throw new Error("Failed to process any audio chunks.")
+      const errMsg =
+        lastChunkError instanceof Error
+          ? lastChunkError.message
+          : String(lastChunkError || "Failed to process any audio chunks.")
+
+      throw new Error(`Failed to transcribe audio chunks: ${errMsg}`)
     }
 
     return { entries: allEntries, failedChunks, totalChunks: numChunks }
@@ -709,9 +732,8 @@ Analyze the transcript enclosed within <transcript_data> and output valid JSON o
     // Fallback to openai/gpt-oss-20b if 120B model fails due to TPM limit or request size
 
     if (
-      err?.message?.includes("TPM") ||
-      err?.message?.includes("too large") ||
-      err?.status === 429
+      err?.status === 429 ||
+      /rate.*limit|tpm|too large/i.test(err?.message || "")
     ) {
       console.warn(
         `Primary model ${usedModel} hit TPM limit. Falling back to openai/gpt-oss-20b...`,
