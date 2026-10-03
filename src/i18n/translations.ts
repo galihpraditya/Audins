@@ -416,6 +416,14 @@ export const translations = {
 
     toast_audio_not_found: "Audio file not found or has been deleted.",
 
+    doc_not_found_title: "Document Not Found",
+
+    doc_not_found_desc: "The document you are looking for does not exist or has been removed.",
+
+    btn_back_to_library: "Back to Library",
+
+    loading_document: "Loading document...",
+
     toast_downloading: 'Downloading "{name}"...',
 
     toast_download_done: 'Downloaded "{name}" successfully',
@@ -1097,6 +1105,14 @@ export const translations = {
     audio_not_found_desc: "Audio tidak ditemukan atau telah dihapus.",
 
     toast_audio_not_found: "File audio tidak ditemukan atau telah dihapus.",
+
+    doc_not_found_title: "Dokumen Tidak Ditemukan",
+
+    doc_not_found_desc: "Dokumen yang Anda cari tidak ditemukan atau telah dihapus.",
+
+    btn_back_to_library: "Kembali ke Ruang Kerja",
+
+    loading_document: "Memuat dokumen...",
 
     toast_downloading: 'Mengunduh "{name}"...',
 

@@ -324,9 +324,11 @@ void failStaleProcessingDocuments().catch((error) =>
   console.error("Stale processing recovery failed:", error),
 )
 void cleanupOrphanChunks().catch(() => {})
-void syncLocalDbToSupabase().catch((error) =>
-  console.error("Local DB to Supabase sync failed:", error),
-)
+if (process.env.SYNC_LOCAL_DB === "true") {
+  void syncLocalDbToSupabase().catch((error) =>
+    console.error("Local DB to Supabase sync failed:", error),
+  )
+}
 
 // --- Graceful shutdown ---
 

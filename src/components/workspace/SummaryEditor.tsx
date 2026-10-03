@@ -567,7 +567,6 @@ export default function SummaryEditor({
 
               {/* Partial transcription warning (backend pipeline notes) */}
               {!isProcessing &&
-                document.status !== "Failed" &&
                 document.warnings &&
                 document.warnings.length > 0 && (
                   <div className="no-print" role="status">
@@ -646,17 +645,30 @@ export default function SummaryEditor({
                     </div>
                   )}
                 </div>
-              ) : document.status === "Failed" ? (
+              ) : (!editableSummary?.sections || editableSummary.sections.length === 0) && document.status === "Failed" ? (
                 <div
-                  className="p-8 rounded-xl bg-danger-dim border-l-[3px] border-danger border-y border-r border-y-border border-r-border text-center space-y-2 no-print"
+                  className="p-8 rounded-xl bg-danger-dim border-l-[3px] border-danger border-y border-r border-y-border border-r-border text-center space-y-4 no-print"
                   role="alert"
                 >
-                  <p className="text-sm font-bold text-danger">
-                    {t("status_failed_title")}
-                  </p>
-                  <p className="text-xs text-danger/80">
-                    {t("status_failed_desc")}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-danger">
+                      {t("status_failed_title")}
+                    </p>
+                    <p className="text-xs text-danger/80">
+                      {t("status_failed_desc")}
+                    </p>
+                  </div>
+                  {document.transcripts && document.transcripts.length > 0 && onReSummarize && (
+                    <div className="pt-1">
+                      <button
+                        onClick={() => onReSummarize(document.id)}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer shadow-sm"
+                      >
+                        <Sparkle size={14} weight="duotone" />
+                        <span>{t("btn_run_analysis")}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* Continuous document — Notion-like flowing sections */
@@ -708,10 +720,21 @@ export default function SummaryEditor({
                       </section>
                     ))
                   ) : (
-                    <div className="py-12 text-center no-print">
+                    <div className="py-12 text-center no-print space-y-3">
                       <p className="text-xs text-fg-tertiary">
                         {t("summary_empty_sections")}
                       </p>
+                      {document.transcripts && document.transcripts.length > 0 && onReSummarize && (
+                        <div>
+                          <button
+                            onClick={() => onReSummarize(document.id)}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer shadow-sm"
+                          >
+                            <Sparkle size={14} weight="duotone" />
+                            <span>{t("btn_run_analysis")}</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

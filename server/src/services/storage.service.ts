@@ -93,67 +93,68 @@ loadDb()
 
 // --- Exported Async CRUD API ---
 
+/**
+ * Normalizes document state and self-heals documents that logically completed
+ * (have both transcripts and summary sections) but were left with status "Failed"
+ * due to unhandled promise rejections or missing status updates in earlier versions.
+ */
+export function normalizeDocument(doc: FullDocument): FullDocument {
+  if (
+    doc.status === "Failed" &&
+    Array.isArray(doc.transcripts) &&
+    doc.transcripts.length > 0 &&
+    doc.summary &&
+    Array.isArray(doc.summary.sections) &&
+    doc.summary.sections.length > 0
+  ) {
+    doc.status = "Completed"
+    doc.warnings = undefined
+    // Persist normalized status asynchronously
+    void saveDocument(doc).catch(() => {})
+  }
+  return doc
+}
+
 export async function getAllDocuments(
   userId?: string,
   userEmail?: string,
 ): Promise<FullDocument[]> {
-  let supaDocs: FullDocument[] = []
   if (isSupabaseEnabled()) {
     const docs = await getSupabaseAllDocuments(userId)
     if (docs !== null) {
-      supaDocs = docs
+      // Keep documentsStore aligned with authoritative Supabase truth:
+      // Prune documents that were deleted from Supabase so they don't linger in cache
+      const supaIds = new Set(docs.map((d) => d.id))
+      for (const [id, d] of documentsStore.entries()) {
+        if (!userId || d.userId === userId) {
+          if (!supaIds.has(id)) {
+            documentsStore.delete(id)
+          }
+        }
+      }
+      for (const doc of docs) {
+        documentsStore.set(doc.id, doc)
+      }
+      return docs
+        .map(normalizeDocument)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
     }
   }
 
-  if (!isSupabaseEnabled()) {
-    const allLocalDocs = Array.from(documentsStore.values())
-    if (userId) {
-      return allLocalDocs.filter((d) => !d.userId || d.userId === userId)
-    }
+  // Fallback to local documentsStore when Supabase is disabled or unreachable
+  const allLocalDocs = Array.from(documentsStore.values()).map(normalizeDocument)
+  if (userId) {
     return allLocalDocs
+      .filter((d) => !d.userId || d.userId === userId)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
   }
-
-  // Supabase is enabled: merge Supabase docs with matching local docs
-  let localUserId: string | null = null
-  if (userEmail) {
-    localUserId = getLocalUserIdByEmail(userEmail)
-  }
-
-  const combinedMap = new Map<string, FullDocument>()
-
-  for (const doc of supaDocs) {
-    combinedMap.set(doc.id, doc)
-    documentsStore.set(doc.id, doc)
-  }
-
-  const docsToUpsertToSupabase: FullDocument[] = []
-
-  for (const doc of documentsStore.values()) {
-    if (!combinedMap.has(doc.id)) {
-      let isMatch = false
-      if (!userId) {
-        isMatch = true
-      } else if (doc.userId === userId) {
-        isMatch = true
-      } else if (localUserId && doc.userId === localUserId) {
-        // Automatically migrate local user doc to authenticated Supabase user ID
-        doc.userId = userId
-        scheduleDbWrite()
-        docsToUpsertToSupabase.push(doc)
-        isMatch = true
-      }
-
-      if (isMatch) {
-        combinedMap.set(doc.id, doc)
-      }
-    }
-  }
-
-  if (docsToUpsertToSupabase.length > 0) {
-    void upsertSupabaseDocumentsBatch(docsToUpsertToSupabase).catch(() => {})
-  }
-
-  return Array.from(combinedMap.values()).sort(
+  return allLocalDocs.sort(
     (a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
@@ -271,9 +272,7 @@ export async function deleteDocument(id: string): Promise<boolean> {
 
   // Always remove from local in-memory Map and persist to db.json
   const localDeleted = documentsStore.delete(id)
-  if (localDeleted) {
-    scheduleDbWrite()
-  }
+  scheduleDbWrite()
 
   const isDeleted = isSupabaseEnabled() ? (supaDeleted || localDeleted) : localDeleted
 
@@ -386,33 +385,38 @@ export async function failStaleProcessingDocuments(): Promise<number> {
 export async function getDocumentById(
   id: string,
 ): Promise<FullDocument | undefined> {
+  let doc: FullDocument | undefined
   if (isSupabaseEnabled()) {
-    const doc = await getSupabaseDocumentById(id)
-
-    if (doc !== null) return doc
+    const supaDoc = await getSupabaseDocumentById(id)
+    if (supaDoc !== null) doc = supaDoc
   }
 
-  return documentsStore.get(id)
+  if (!doc) {
+    doc = documentsStore.get(id)
+  }
+
+  return doc ? normalizeDocument(doc) : undefined
 }
 
 export async function getDocumentByShareId(
   shareId: string,
 ): Promise<FullDocument | undefined> {
+  let doc: FullDocument | undefined
   if (isSupabaseEnabled()) {
-    const doc = await getSupabaseDocumentByShareId(shareId)
-
-    if (doc !== null) return doc
-
-    return undefined
+    const supaDoc = await getSupabaseDocumentByShareId(shareId)
+    if (supaDoc !== null) doc = supaDoc
   }
 
-  for (const doc of documentsStore.values()) {
-    if (doc.shareSettings?.shareId === shareId) {
-      return doc
+  if (!doc) {
+    for (const d of documentsStore.values()) {
+      if (d.shareSettings?.shareId === shareId) {
+        doc = d
+        break
+      }
     }
   }
 
-  return undefined
+  return doc ? normalizeDocument(doc) : undefined
 }
 
 export async function incrementShareViewCount(shareId: string): Promise<void> {
@@ -586,7 +590,8 @@ export async function claimGuestDocuments(
  * linking any historical local user accounts (usr-...) to their matching Supabase user IDs.
  */
 export async function syncLocalDbToSupabase(): Promise<void> {
-  if (!isSupabaseEnabled()) return
+  // Only run when explicitly enabled via environment variable to prevent resurrecting deleted documents
+  if (!isSupabaseEnabled() || process.env.SYNC_LOCAL_DB !== "true") return
 
   try {
     const supaDocs = await getSupabaseAllDocuments()

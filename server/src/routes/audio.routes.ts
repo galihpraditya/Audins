@@ -77,6 +77,10 @@ router.use(authenticate)
 
 let activeBackgroundJobs = 0
 
+// In-memory registry of document IDs currently undergoing transcription or re-transcription
+// to prevent duplicate parallel processing of the same audio file.
+const activeProcessingDocIds = new Set<string>()
+
 export function getActiveBackgroundJobCount(): number {
   return activeBackgroundJobs
 }
@@ -438,6 +442,7 @@ router.post(
 
       // Background Processing Task (Cloud Storage + Whisper + Summary)
       activeBackgroundJobs += 1
+      activeProcessingDocIds.add(docId)
       ;(async () => {
         let isCloudStored = false
         try {
@@ -501,14 +506,24 @@ router.post(
 
           const fullText = result.entries.map((t) => t.text).join(" ")
 
-          // 3. Generate summary with Groq LLM
+          // 3. Generate summary with Groq LLM (isolated so transcription is preserved)
           let summary: AISummary | undefined
+          let summaryError: string | undefined
           if (fullText.trim()) {
-            summary = await summarizeTranscriptWithGroq(
-              fullText,
-              file.originalname,
-              customApiKey,
-            )
+            try {
+              summary = await summarizeTranscriptWithGroq(
+                fullText,
+                file.originalname,
+                customApiKey,
+              )
+            } catch (sumErr) {
+              console.error(
+                `Summary generation failed for doc ${docId}, preserving transcript:`,
+                sumErr,
+              )
+              summaryError =
+                sumErr instanceof Error ? sumErr.message : "Failed to generate summary"
+            }
           }
 
           // 4. Concurrency Guard: fetch latest document before saving to avoid
@@ -538,13 +553,19 @@ router.post(
           }
           latestDoc.status = "Completed"
 
+          const warnings: string[] = []
           if (result.failedChunks > 0) {
-            latestDoc.warnings = [
+            warnings.push(
               `${result.failedChunks} of ${result.totalChunks} audio segments failed to transcribe; this transcript may be incomplete.`,
-            ]
-          } else {
-            latestDoc.warnings = undefined
+            )
           }
+          if (summaryError) {
+            warnings.push(
+              `Summary generation could not complete: ${summaryError}. You can re-generate the summary anytime.`,
+            )
+          }
+
+          latestDoc.warnings = warnings.length > 0 ? warnings : undefined
 
           await saveDocument(latestDoc)
         } catch (error) {
@@ -573,6 +594,7 @@ router.post(
           }
         } finally {
           activeBackgroundJobs -= 1
+          activeProcessingDocIds.delete(docId)
 
           // Only cleanup local file if it was successfully offloaded to cloud storage
           if (isCloudStored) {
@@ -663,6 +685,9 @@ router.post(
           doc.name = summary.title.trim()
         }
       }
+
+      doc.status = "Completed"
+      doc.warnings = undefined
 
       await saveDocument(doc)
 
@@ -1146,6 +1171,19 @@ router.post(
       return
     }
 
+    if (activeProcessingDocIds.has(doc.id) || doc.status === "Processing") {
+      await refundOnce()
+      res.status(409).json({
+        error:
+          "Document is currently being processed or re-transcribed. Please wait.",
+      })
+      return
+    }
+
+    activeProcessingDocIds.add(doc.id)
+    doc.status = "Processing"
+    await saveDocument(doc)
+
     const customApiKey = getHeaderKey(req.headers["x-groq-api-key"])
 
     const { language, prompt, regenerateSummary = true } = req.body || {}
@@ -1257,6 +1295,8 @@ router.post(
         }
       }
 
+      latestDoc.status = "Completed"
+
       await saveDocument(latestDoc)
 
       res.json(latestDoc)
@@ -1264,10 +1304,23 @@ router.post(
       await refundOnce()
       console.error("Retranscribe error:", error)
 
+      try {
+        const errorDoc = await getDocumentById(doc.id)
+        if (errorDoc && errorDoc.status === "Processing") {
+          errorDoc.status = "Failed"
+          errorDoc.warnings = [
+            ...(errorDoc.warnings || []),
+            error?.message || "Failed to re-transcribe audio",
+          ]
+          await saveDocument(errorDoc)
+        }
+      } catch {}
+
       res
         .status(500)
         .json({ error: error?.message || "Failed to re-transcribe audio" })
     } finally {
+      activeProcessingDocIds.delete(doc.id)
       if (isTempFile && workingFilePath && fs.existsSync(workingFilePath)) {
         await fs.promises.unlink(workingFilePath).catch(() => {})
       }

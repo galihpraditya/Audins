@@ -21,6 +21,7 @@ import {
   Sparkle,
   HardDrives,
   ShareNetwork,
+  FileAudio,
 } from "@phosphor-icons/react"
 import RetranscribeModal from "../modals/RetranscribeModal"
 import ShareModal from "../modals/ShareModal"
@@ -147,7 +148,48 @@ export default function Workspace({
     }
   }
 
-  // VIEW 1: Audio Library Hub (when no document is selected in studio)
+  // If a document ID was specified in route (/workspace/:id) but not matched
+  if (id && !document) {
+    if (isLoading) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center bg-background p-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="w-9 h-9 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-mono font-medium text-fg-secondary">
+              {t("loading_document")}
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center p-6 bg-background animate-fade-in">
+        <div className="max-w-md w-full bg-surface border border-border rounded-2xl p-8 text-center shadow-card space-y-4">
+          <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto text-fg-tertiary">
+            <FileAudio size={28} weight="duotone" />
+          </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-bold font-display text-fg">
+              {t("doc_not_found_title")}
+            </h2>
+            <p className="text-xs text-fg-secondary mt-1.5 leading-relaxed">
+              {t("doc_not_found_desc")}
+            </p>
+          </div>
+          <button
+            onClick={() => navigate("/workspace")}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 border border-border text-fg transition-colors cursor-pointer"
+          >
+            <ArrowLeft size={14} weight="bold" />
+            <span>{t("btn_back_to_library")}</span>
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  // VIEW 1: Audio Library Hub (when no document ID is selected in studio)
   if (!document) {
     return (
       <main className="flex-1 overflow-y-auto bg-background p-4 sm:p-6 lg:p-8 animate-fade-in">

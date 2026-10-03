@@ -20,9 +20,9 @@ ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
 ffmpeg.setFfprobePath(ffprobeInstaller.path)
 
-// How many chunk slice+transcribe tasks run concurrently. Bounds FFmpeg CPU
-// usage while still overlapping disk work with Groq HTTP round-trips.
-const CHUNK_CONCURRENCY = 4
+// How many chunk slice+transcribe tasks run concurrently. Bounded to 2 to avoid
+// overwhelming Groq rate limits (RPM/TPM) and socket connection limits.
+const CHUNK_CONCURRENCY = 2
 
 function getAudioDuration(
   filePath: string,
@@ -82,6 +82,103 @@ function getAudioDuration(
   })
 }
 
+interface AudioChunkInfo {
+  chunkPath: string
+  startTime: number
+  index: number
+}
+
+/**
+ * Segments an audio file into fixed-duration MP3 chunks in a SINGLE streaming pass
+ * using FFmpeg's native segment muxer (-f segment).
+ *
+ * Why this is dramatically superior to seeking:
+ * - Avoids opening and demuxing the source file N times from scratch.
+ * - Works reliably on variable bitrate, unindexed WebM, MP4, and AAC recordings.
+ * - Single-pass linear encoding takes ~10-25s on Render (0.1 vCPU) instead of 8x 3-minute timeouts.
+ */
+function segmentAudioIntoChunks(
+  inputPath: string,
+  outputDir: string,
+  baseName: string,
+  segmentDurationSec: number,
+): Promise<AudioChunkInfo[]> {
+  const pattern = path.join(outputDir, `${baseName}_chunk_%03d.mp3`)
+
+  return new Promise((resolve, reject) => {
+    let command: any
+    let timedOut = false
+    const timeoutMs = 10 * 60 * 1000 // 10 minutes total for single-pass conversion
+
+    const timer = setTimeout(() => {
+      timedOut = true
+      try {
+        command?.kill()
+      } catch {}
+      reject(
+        new Error(
+          `FFmpeg single-pass audio segmentation timed out after 10 minutes for ${inputPath}`,
+        ),
+      )
+    }, timeoutMs)
+
+    command = ffmpeg(inputPath)
+      .outputOptions([
+        "-vn",
+        "-sn",
+        "-dn",
+        "-map_metadata -1",
+        "-ar 16000",
+        "-ac 1",
+        "-c:a libmp3lame",
+        "-b:a 96k",
+        "-f segment",
+        `-segment_time ${segmentDurationSec}`,
+        "-reset_timestamps 1",
+      ])
+      .output(pattern)
+      .on("end", async () => {
+        clearTimeout(timer)
+        if (timedOut) return
+
+        try {
+          const files = await fs.promises.readdir(outputDir)
+          const prefix = `${baseName}_chunk_`
+          const chunkFiles = files
+            .filter((f) => f.startsWith(prefix) && f.endsWith(".mp3"))
+            .sort()
+
+          const chunks: AudioChunkInfo[] = []
+          for (let i = 0; i < chunkFiles.length; i++) {
+            const chunkPath = path.join(outputDir, chunkFiles[i])
+            const stats = await fs.promises.stat(chunkPath).catch(() => null)
+            // Filter out tiny trailing boundary artifacts (< 4KB, less than 0.3s of audio)
+            if (stats && stats.size >= 4096) {
+              chunks.push({
+                chunkPath,
+                startTime: i * segmentDurationSec,
+                index: chunks.length,
+              })
+            } else if (stats && stats.size < 4096) {
+              // Clean up trailing artifact immediately
+              await fs.promises.unlink(chunkPath).catch(() => {})
+            }
+          }
+
+          resolve(chunks)
+        } catch (readErr) {
+          reject(readErr)
+        }
+      })
+      .on("error", (err) => {
+        clearTimeout(timer)
+        if (!timedOut) reject(err)
+      })
+
+    command.run()
+  })
+}
+
 function sliceAudioChunk(
   inputPath: string,
 
@@ -101,14 +198,14 @@ function sliceAudioChunk(
         timedOut = true
 
         try {
-          command?.kill("SIGKILL")
+          command?.kill()
         } catch {}
 
         reject(
-          new Error(`FFmpeg slice timed out after 3 minutes for ${outputPath}`),
+          new Error(`FFmpeg slice timed out after 5 minutes for ${outputPath}`),
         )
       },
-      3 * 60 * 1000,
+      5 * 60 * 1000,
     )
 
     command = ffmpeg()
@@ -246,7 +343,7 @@ async function transcribeSingleFileWithRetry(
 
   timeOffset = 0,
 
-  maxRetries = 2,
+  maxRetries = 3,
 
   language?: string,
 
@@ -263,16 +360,20 @@ async function transcribeSingleFileWithRetry(
         language,
         prompt,
       )
-    } catch (err) {
+    } catch (err: any) {
       lastError = err
 
       if (attempt < maxRetries) {
-        const delayMs = (attempt + 1) * 1500
+        // Exponential backoff with 2s base (2s, 4s, 6s) to allow Groq rate limits or socket recovery
+        const delayMs = (attempt + 1) * 2000
+        const isConnError =
+          err?.code === "ECONNRESET" ||
+          err?.message?.includes("socket hang up") ||
+          err?.message?.includes("Connection error") ||
+          err?.status === 429
 
         console.warn(
-          `Transcribe attempt ${attempt + 1} failed, retrying in ${delayMs}ms...`,
-
-          err,
+          `Transcribe attempt ${attempt + 1}/${maxRetries + 1} failed (${isConnError ? "connection/rate-limit error" : err?.message || err}), retrying in ${delayMs}ms...`,
         )
 
         await new Promise((r) => setTimeout(r, delayMs))
@@ -396,20 +497,21 @@ export async function transcribeAudioWithGroq(
       return { entries, failedChunks: 0, totalChunks: 1 }
     }
 
-    // File > 20MB: Auto-chunking using FFmpeg with 20-minute chunks
+    // File > 20MB: Auto-chunking using FFmpeg with 8-minute chunks
     console.log(
-      `File size is ${fileSizeInMB.toFixed(1)}MB (> 20MB). Auto-chunking audio (20-minute segments)...`,
+      `File size is ${fileSizeInMB.toFixed(1)}MB (> 20MB). Auto-chunking audio (8-minute segments)...`,
     )
 
     const totalDuration = await getAudioDuration(targetFilePath, knownDurationSec)
 
-    // 20 minutes (1200s) per chunk for maximum efficiency and minimum API overhead
-    const chunkDurationSec = 1200
+    // 8 minutes (480s) per chunk ensures Groq HTTP requests stay well within edge proxy
+    // timeout windows (typically 60-90s) and keeps chunk sizes ~5-6MB for maximum reliability.
+    const chunkDurationSec = 480
 
     const numChunks =
       totalDuration > 0
         ? Math.ceil(totalDuration / chunkDurationSec)
-        : Math.ceil(fileSizeInMB / 20)
+        : Math.ceil(fileSizeInMB / 8)
 
     if (totalDuration <= 0) {
       console.warn(
@@ -427,7 +529,49 @@ export async function transcribeAudioWithGroq(
 
     const baseName = path.basename(targetFilePath, path.extname(targetFilePath))
 
-    const resultsByIndex: TranscriptEntry[][] = new Array(numChunks)
+    // Step 1: Pre-generate all 8-minute MP3 chunks in a SINGLE linear FFmpeg pass
+    let chunks: AudioChunkInfo[] = []
+    try {
+      console.log(
+        `Starting single-pass FFmpeg audio segmentation for ${fileSizeInMB.toFixed(1)}MB file...`,
+      )
+      chunks = await segmentAudioIntoChunks(
+        targetFilePath,
+        chunksDir,
+        baseName,
+        chunkDurationSec,
+      )
+      console.log(
+        `Single-pass segmentation succeeded: created ${chunks.length} chunks.`,
+      )
+    } catch (segErr) {
+      console.warn(
+        "Single-pass FFmpeg segmentation failed, falling back to sequential slicing:",
+        segErr,
+      )
+      chunks = []
+      for (let i = 0; i < numChunks; i++) {
+        const startTime = i * chunkDurationSec
+        const chunkPath = path.join(chunksDir, `${baseName}_chunk_${i}${ext}`)
+        try {
+          await sliceAudioChunk(
+            targetFilePath,
+            chunkPath,
+            startTime,
+            chunkDurationSec,
+          )
+          const chunkStats = await fs.promises.stat(chunkPath).catch(() => null)
+          if (chunkStats && chunkStats.size >= 512) {
+            chunks.push({ chunkPath, startTime, index: i })
+          }
+        } catch (sliceErr) {
+          console.warn(`Fallback slice failed for chunk ${i}:`, sliceErr)
+        }
+      }
+    }
+
+    const totalChunks = Math.max(chunks.length, numChunks, 1)
+    const resultsByIndex: TranscriptEntry[][] = new Array(totalChunks)
 
     let nextChunk = 0
 
@@ -435,49 +579,33 @@ export async function transcribeAudioWithGroq(
 
     let lastChunkError: unknown = null
 
+    // Step 2: Transcribe pre-generated chunks with bounded HTTP concurrency
     const runWorker = async (): Promise<void> => {
       while (true) {
-        const index = nextChunk++
+        const workIndex = nextChunk++
 
-        if (index >= numChunks) return
+        if (workIndex >= chunks.length) return
 
-        const startTime = index * chunkDurationSec
-
-        const chunkPath = path.join(
-          chunksDir,
-
-          `${baseName}_chunk_${index}${ext}`,
-        )
+        const chunk = chunks[workIndex]
 
         try {
-          await sliceAudioChunk(
-            targetFilePath,
-
-            chunkPath,
-
-            startTime,
-
-            chunkDurationSec,
-          )
-
           // Guard against empty or corrupted 0-byte slice (e.g. slicing past end of audio)
-
-          const chunkStats = await fs.promises.stat(chunkPath).catch(() => null)
+          const chunkStats = await fs.promises.stat(chunk.chunkPath).catch(() => null)
 
           if (!chunkStats || chunkStats.size < 512) {
             console.log(
-              `Chunk ${index + 1}/${numChunks} is empty (${chunkStats?.size ?? 0} bytes) — skipping transcription.`,
+              `Chunk ${chunk.index + 1}/${totalChunks} is empty (${chunkStats?.size ?? 0} bytes) — skipping transcription.`,
             )
 
             continue
           }
 
-          resultsByIndex[index] = await transcribeSingleFileWithRetry(
+          resultsByIndex[chunk.index] = await transcribeSingleFileWithRetry(
             groq,
 
-            chunkPath,
+            chunk.chunkPath,
 
-            startTime,
+            chunk.startTime,
 
             2,
 
@@ -486,21 +614,19 @@ export async function transcribeAudioWithGroq(
             prompt,
           )
 
-          console.log(`Transcribed chunk ${index + 1}/${numChunks}`)
+          console.log(`Transcribed chunk ${chunk.index + 1}/${totalChunks}`)
         } catch (chunkErr) {
           // Track failures explicitly so partial transcripts can be surfaced
-
           // to the user instead of silently passing as complete.
-
           failedChunks += 1
 
           lastChunkError = chunkErr
 
-          console.warn(`Chunk ${index + 1} processing warning:`, chunkErr)
+          console.warn(`Chunk ${chunk.index + 1} processing warning:`, chunkErr)
         } finally {
-          if (fs.existsSync(chunkPath)) {
+          if (fs.existsSync(chunk.chunkPath)) {
             try {
-              await fs.promises.unlink(chunkPath)
+              await fs.promises.unlink(chunk.chunkPath)
             } catch {}
           }
         }
@@ -508,7 +634,7 @@ export async function transcribeAudioWithGroq(
     }
 
     const workers = Array.from(
-      { length: Math.min(CHUNK_CONCURRENCY, numChunks) },
+      { length: Math.min(CHUNK_CONCURRENCY, Math.max(chunks.length, 1)) },
 
       () => runWorker(),
     )
@@ -526,13 +652,27 @@ export async function transcribeAudioWithGroq(
       throw new Error(`Failed to transcribe audio chunks: ${errMsg}`)
     }
 
-    return { entries: allEntries, failedChunks, totalChunks: numChunks }
+    return { entries: allEntries, failedChunks, totalChunks }
   } finally {
     if (tempConvertedFile && fs.existsSync(tempConvertedFile)) {
       try {
         await fs.promises.unlink(tempConvertedFile)
       } catch {}
     }
+
+    // Clean up any remaining chunk files matching baseName in chunksDir
+    try {
+      const chunksDir = path.join(path.dirname(targetFilePath), "chunks")
+      if (fs.existsSync(chunksDir)) {
+        const baseName = path.basename(targetFilePath, path.extname(targetFilePath))
+        const remaining = await fs.promises.readdir(chunksDir)
+        for (const file of remaining) {
+          if (file.startsWith(`${baseName}_chunk_`)) {
+            await fs.promises.unlink(path.join(chunksDir, file)).catch(() => {})
+          }
+        }
+      }
+    } catch {}
   }
 }
 

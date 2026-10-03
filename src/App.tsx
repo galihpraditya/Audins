@@ -160,7 +160,7 @@ export default function App() {
         const updated = outcome.doc
 
         setDocuments((prev) =>
-          prev.map((d) => (d.id === updated.id ? updated : d)),
+          prev.map((d) => (String(d.id) === String(updated.id) ? updated : d)),
         )
 
         if (updated.status === "Completed") {
@@ -183,7 +183,9 @@ export default function App() {
 
         setDocuments((prev) =>
           prev.map((d) =>
-            d.id === outcome.docId ? { ...d, status: "Failed" as const } : d,
+            String(d.id) === String(outcome.docId)
+              ? { ...d, status: "Failed" as const }
+              : d,
           ),
         )
 
@@ -236,14 +238,23 @@ export default function App() {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )
 
-      setDocuments(sortedDocs)
+      setDocuments((prev) => {
+        // Merge server docs with any local in-flight or actively uploading docs so
+        // focus/sync events do not wipe out active uploads or in-progress transcriptions
+        const serverDocIds = new Set(sortedDocs.map((d) => String(d.id)))
+        const inFlightLocal = prev.filter(
+          (d) =>
+            !serverDocIds.has(String(d.id)) &&
+            (typeof d.id === "number" ||
+              d.status === "Processing" ||
+              (d.uploadProgress !== undefined && d.uploadProgress < 100)),
+        )
+        return [...inFlightLocal, ...sortedDocs]
+      })
 
       // Resume status tracking for jobs that were still running server-side
-
       // (e.g. the user refreshed mid-processing) — otherwise the badge spins
-
       // forever even after the backend finishes.
-
       sortedDocs.forEach((d) => {
         if (d.status === "Processing") startPolling(d.id)
       })
@@ -477,7 +488,7 @@ export default function App() {
       }
 
       setDocuments((prev) =>
-        prev.map((d) => (d.id === newId ? processingDoc : d)),
+        prev.map((d) => (String(d.id) === String(newId) ? processingDoc : d)),
       )
 
       // The backend owns the media now — release our local preview copy.
@@ -523,7 +534,9 @@ export default function App() {
       rollbackUploadCount()
 
       setDocuments((prev) =>
-        prev.map((d) => (d.id === newId ? { ...newDoc, status: "Failed" } : d)),
+        prev.map((d) =>
+          String(d.id) === String(newId) ? { ...newDoc, status: "Failed" } : d,
+        ),
       )
 
       if (!hasCustomKey && isQuotaError(err)) {
@@ -549,10 +562,12 @@ export default function App() {
     }
 
     const previousStatus =
-      documents.find((d) => d.id === id)?.status ?? "Completed"
+      documents.find((d) => String(d.id) === String(id))?.status ?? "Completed"
 
     setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "Processing" } : d)),
+      prev.map((d) =>
+        String(d.id) === String(id) ? { ...d, status: "Processing" } : d,
+      ),
     )
 
     bumpUploadCount()
@@ -560,12 +575,16 @@ export default function App() {
     try {
       const updatedDoc = await reSummarizeApi(id, userApiKey, customPrompt)
 
-      setDocuments((prev) => prev.map((d) => (d.id === id ? updatedDoc : d)))
+      setDocuments((prev) =>
+        prev.map((d) => (String(d.id) === String(id) ? updatedDoc : d)),
+      )
     } catch (err) {
       // Restore the REAL prior status instead of hardcoding "Completed".
 
       setDocuments((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, status: previousStatus } : d)),
+        prev.map((d) =>
+          String(d.id) === String(id) ? { ...d, status: previousStatus } : d,
+        ),
       )
 
       rollbackUploadCount()
@@ -585,7 +604,7 @@ export default function App() {
   }
 
   const handleDeleteDocument = async (id: number | string) => {
-    const doc = documents.find((d) => d.id === id)
+    const doc = documents.find((d) => String(d.id) === String(id))
 
     try {
       await deleteDocumentApi(id)
@@ -594,7 +613,7 @@ export default function App() {
 
       revokeTempBlob(id)
 
-      setDocuments((prev) => prev.filter((doc) => doc.id !== id))
+      setDocuments((prev) => prev.filter((d) => String(d.id) !== String(id)))
 
       if (doc) showToast(t("toast_deleted", { name: doc.name }), "success")
 
@@ -614,7 +633,7 @@ export default function App() {
       revokeTempBlob(id)
 
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
+        prev.map((doc) => (String(doc.id) === String(id) ? updatedDoc : doc)),
       )
 
       showToast(t("toast_audio_deleted"), "success")
@@ -634,26 +653,28 @@ export default function App() {
 
     options: RetranscribeOptions,
   ) => {
-    const previousDoc = documents.find((d) => d.id === id)
+    const previousDoc = documents.find((d) => String(d.id) === String(id))
 
     if (!previousDoc) return
 
     setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "Processing" } : d)),
+      prev.map((d) => (String(d.id) === String(id) ? { ...d, status: "Processing" } : d)),
     )
 
     try {
       const updatedDoc = await retranscribeDocumentApi(id, options, userApiKey)
 
       setDocuments((prev) =>
-        prev.map((doc) => (doc.id === id ? updatedDoc : doc)),
+        prev.map((doc) => (String(doc.id) === String(id) ? updatedDoc : doc)),
       )
 
       showToast(t("toast_retranscribe_success"), "success")
 
       void refreshFromServer()
     } catch (err) {
-      setDocuments((prev) => prev.map((d) => (d.id === id ? previousDoc : d)))
+      setDocuments((prev) =>
+        prev.map((d) => (String(d.id) === String(id) ? previousDoc : d)),
+      )
 
       showToast(
         t("toast_retranscribe_failed", { error: (err as Error).message }),

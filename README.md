@@ -40,7 +40,7 @@ Audins solves this by:
 ### Speech Transcription & Audio Pipeline
 * **Groq Whisper Large v3 Turbo:** Ultra-fast speech-to-text (~216x real-time inference on Groq LPU) with word-accurate timestamps and multilingual support (auto-detect or manual language selection including Indonesian and Javanese).
 * **Vocabulary Prompts & Hints:** Feed context hints (names, technical jargon, acronyms) to steer Whisper spelling accuracy.
-* **Intelligent FFmpeg Chunking:** Audio files exceeding 20MB are automatically split into 20-minute chunks at 96kbps 16kHz mono with bounded concurrency (`concurrency: 4`), keeping chunk sizes under ~14MB (well below Groq's 25MB limit) while preserving continuous timestamps.
+* **Intelligent FFmpeg Chunking:** Audio files exceeding 20MB are automatically split into 8-minute chunks at 96kbps 16kHz mono with bounded concurrency (`concurrency: 2`), keeping chunk sizes under ~5.7MB (well below Groq's 25MB limit and HTTP proxy gateway timeouts) while preserving continuous timestamps and automatic retries with exponential backoff.
 * **Format Transcoding:** Automatically converts `.aac` and unsupported formats into standard MP3 via FFmpeg before processing.
 * **Re-transcription:** Re-run transcription on saved audio with updated language options, custom glossary prompts, or personal Groq API keys.
 
@@ -57,8 +57,9 @@ Audins solves this by:
 * **Summary Editor & PDF Export:** Edit summaries directly in the browser and export print-ready PDFs with document metadata, clean typography, and headers/footers.
 
 ### Workspace, Sharing & Privacy
+* **Protected Studio Routing & In-Flight State:** Resilient `/workspace/:id` routing with in-flight upload preservation and dedicated loading states, preventing accidental drops to the library hub during background sync.
 * **Public Note Sharing:** Create read-only shareable links (`/share/:shareId`) with audio playback and full transcript inspection.
-* **Audio-Only Deletion:** Remove heavy audio recordings after review to reclaim disk space while permanently retaining transcripts and summaries.
+* **Audio-Only & Document Deletion:** Permanently delete documents or audio-only files with reliable single-source-of-truth syncing across Supabase and local storage without resurrection loops.
 * **Raw Audio Download:** Download recordings or uploaded audio directly from the player preview.
 * **Bilingual Support (i18n):** Complete user interface available in both **English** and **Indonesian (Bahasa Indonesia)**.
 * **Monochromatic Themes:** Clean dark and light themes with system theme auto-detection.
@@ -78,7 +79,7 @@ Audins solves this by:
            │
            ├─► Audio <= 20MB ──────────────────────┐
            │                                        ▼
-           └─► Audio > 20MB  ──► [ FFmpeg 20-min Slices @ 96k/16kHz ]
+           └─► Audio > 20MB  ──► [ FFmpeg 8-min Slices @ 96k/16kHz ]
                                                     │
                                                     ▼
                                     [ Groq Whisper Large v3 Turbo ]
@@ -98,7 +99,7 @@ Audins solves this by:
 | :--- | :--- | :--- |
 | **Audio Capture** | WebRTC constraints (`noiseSuppression`, `echoCancellation`, `autoGainControl`) | Eliminates room reverb, fan drone, and background noise at capture time. |
 | **Concurrent Offload** | `Promise.all` with Cloud Storage and local Whisper pipeline | Eliminates cloud storage wait time, reducing end-to-end latency by 5–15 seconds. |
-| **FFmpeg Slicing** | 20-minute chunks at 96kbps 16kHz mono (`libmp3lame`) with 4 concurrent workers | Produces ~14MB chunks (far below Groq's 25MB limit) matching Whisper's native audio rate. |
+| **FFmpeg Slicing** | 8-minute chunks at 96kbps 16kHz mono (`libmp3lame`) with 2 concurrent workers | Produces ~5.7MB chunks preventing Groq gateway HTTP timeouts while matching Whisper's native audio rate. |
 | **Speech Recognition** | Groq Whisper Large v3 Turbo (`verbose_json`) | Delivers 2x faster inference and millisecond-accurate segments and timestamps. |
 | **Model Fallback** | Primary: `openai/gpt-oss-120b` &bull; Fallback: `openai/gpt-oss-20b` | Prevents summarization failure if TPM or context limit is reached. |
 | **Media Security** | HMAC-SHA256 signed media tokens (`?v=<expiry>&t=<token>`) | Protects uploaded media files from unauthorized enumeration. |
@@ -206,6 +207,9 @@ MAX_FREE_DAILY_UPLOADS=10
 # R2_ACCESS_KEY_ID=your_r2_access_key
 # R2_SECRET_ACCESS_KEY=your_r2_secret_key
 # R2_BUCKET_NAME=your_r2_bucket_name
+
+# Data Migration (Set to true only for one-time manual migration from local db.json to Supabase)
+# SYNC_LOCAL_DB=false
 ```
 
 ### 4. Run Development Servers
