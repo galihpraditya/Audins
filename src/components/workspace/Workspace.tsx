@@ -10,8 +10,11 @@ import Modal from "../ui/Modal"
 import { useToast } from "../ui/ToastContext"
 import { useLanguage } from "../../context/LanguageContext"
 import { downloadAudioFile } from "../../services/download"
+import { fetchDocumentByIdApi } from "../../services/api"
 import {
   ArrowLeft,
+  ArrowClockwise,
+  WarningCircle,
   DotsThreeVertical,
   PencilSimple,
   DownloadSimple,
@@ -29,6 +32,8 @@ import ShareModal from "../modals/ShareModal"
 interface WorkspaceProps {
   documents: DocumentItem[]
   isLoading?: boolean
+  loadError?: boolean
+  onDocumentLoaded?: (doc: DocumentItem) => void
   onReSummarize: (id: string | number, customPrompt?: string) => void
   onDeleteDocument: (id: number | string) => void
   onRenameDocument: (id: number | string, newName: string) => void
@@ -49,6 +54,8 @@ interface WorkspaceProps {
 export default function Workspace({
   documents,
   isLoading = false,
+  loadError = false,
+  onDocumentLoaded,
   onReSummarize,
   onDeleteDocument,
   onRenameDocument,
@@ -69,6 +76,12 @@ export default function Workspace({
   const [activeTab, setActiveTab] = useState<"transcript" | "summary">(
     "transcript",
   )
+
+  // Direct fetch fallback state for direct links or page refresh
+  const [isFetchingDirect, setIsFetchingDirect] = useState(false)
+  const [directFetchError, setDirectFetchError] = useState<string | null>(null)
+  const [isNotFound, setIsNotFound] = useState(false)
+  const [retryTrigger, setRetryTrigger] = useState(0)
 
   // Studio Action Menu & Modal States
   const [studioMenuOpen, setStudioMenuOpen] = useState(false)
@@ -97,8 +110,59 @@ export default function Workspace({
   // Active document selected by route param
   const document = useMemo(() => {
     if (!id) return null
-    return documents.find((d) => String(d.id) === String(id)) || null
+    return (
+      documents.find(
+        (d) =>
+          String(d.id) === String(id) ||
+          String(d.id) === decodeURIComponent(id),
+      ) || null
+    )
   }, [id, documents])
+
+  // Direct fetch fallback if the document is not present in documents array
+  useEffect(() => {
+    if (!id || document) {
+      setIsFetchingDirect(false)
+      setDirectFetchError(null)
+      setIsNotFound(false)
+      return
+    }
+
+    // If initial loading is still in progress, wait for it
+    if (isLoading) return
+
+    let active = true
+    setIsFetchingDirect(true)
+    setDirectFetchError(null)
+    setIsNotFound(false)
+
+    fetchDocumentByIdApi(id)
+      .then((doc) => {
+        if (!active) return
+        if (doc) {
+          onDocumentLoaded?.(doc)
+          setIsNotFound(false)
+        } else {
+          setIsNotFound(true)
+        }
+      })
+      .catch((err) => {
+        if (!active) return
+        console.error("Direct document fetch failed:", err)
+        setDirectFetchError(
+          (err as Error).message || "Failed to load document",
+        )
+      })
+      .finally(() => {
+        if (active) {
+          setIsFetchingDirect(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [id, document, isLoading, onDocumentLoaded, retryTrigger])
 
   // Playback belongs to the document — reset when switching files
   useEffect(() => {
@@ -150,7 +214,7 @@ export default function Workspace({
 
   // If a document ID was specified in route (/workspace/:id) but not matched
   if (id && !document) {
-    if (isLoading) {
+    if (isLoading || isFetchingDirect) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center bg-background p-6">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -163,6 +227,44 @@ export default function Workspace({
       )
     }
 
+    // Network error / server error (or loadError from App.tsx without not-found confirmed)
+    if (directFetchError || (loadError && !isNotFound)) {
+      return (
+        <main className="flex-1 flex flex-col items-center justify-center p-6 bg-background animate-fade-in">
+          <div className="max-w-md w-full bg-surface border border-border rounded-2xl p-8 text-center shadow-card space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+              <WarningCircle size={28} weight="duotone" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold font-display text-fg">
+                {t("error_load_title")}
+              </h2>
+              <p className="text-xs text-fg-secondary mt-1.5 leading-relaxed">
+                {directFetchError || t("error_load_desc")}
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setRetryTrigger((c) => c + 1)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer shadow-sm"
+              >
+                <ArrowClockwise size={14} weight="bold" />
+                <span>{t("btn_retry")}</span>
+              </button>
+              <button
+                onClick={() => navigate("/workspace")}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-surface-2 hover:bg-surface-3 border border-border text-fg transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={14} weight="bold" />
+                <span>{t("btn_back_to_library")}</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      )
+    }
+
+    // Genuine 404 Not Found
     return (
       <main className="flex-1 flex flex-col items-center justify-center p-6 bg-background animate-fade-in">
         <div className="max-w-md w-full bg-surface border border-border rounded-2xl p-8 text-center shadow-card space-y-4">

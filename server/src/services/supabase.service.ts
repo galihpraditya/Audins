@@ -5,6 +5,7 @@ import fs from "node:fs"
 import { Readable } from "node:stream"
 
 import "../config.js"
+
 import { FullDocument } from "../types/index.js"
 
 const supabaseKey =
@@ -12,11 +13,17 @@ const supabaseKey =
 
 export function cleanSupabaseUrl(url: string | undefined): string {
   if (!url) return ""
-  return url.trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/+$/, "")
+
+  return url
+    .trim()
+    .replace(/\/rest\/v1\/?$/i, "")
+    .replace(/\/+$/, "")
 }
 
 const rawSupabaseUrl = process.env.SUPABASE_URL
+
 const cleanedSupabaseUrl = cleanSupabaseUrl(rawSupabaseUrl)
+
 const hasSupabaseConfig = Boolean(cleanedSupabaseUrl && supabaseKey)
 
 let supabase: SupabaseClient | null = null
@@ -98,7 +105,9 @@ export async function uploadAudioToSupabase(
     const buffer = await fs.promises.readFile(filePath)
 
     const { error } = await supabase.storage
+
       .from(bucketName)
+
       .upload(fileName, buffer, {
         contentType: mimeType,
 
@@ -115,7 +124,9 @@ export async function uploadAudioToSupabase(
   }
 
   const { data: urlData } = supabase.storage
+
     .from(bucketName)
+
     .getPublicUrl(fileName)
 
   return urlData.publicUrl
@@ -128,7 +139,9 @@ export async function deleteAudioFromSupabase(
 
   try {
     const { error } = await supabase.storage
+
       .from("audin-audio")
+
       .remove([fileName])
 
     if (error) throw error
@@ -143,8 +156,90 @@ export async function deleteAudioFromSupabase(
 
 // --- Database API ---
 
+const emailToSupabaseIdCache: Map<string, string> = new Map()
+
+const supabaseIdToEmailCache: Map<string, string> = new Map()
+
+export function setSupabaseUserCache(id: string, email: string): void {
+  if (!id || !email) return
+
+  const cleanEmail = email.trim().toLowerCase()
+
+  emailToSupabaseIdCache.set(cleanEmail, id)
+
+  supabaseIdToEmailCache.set(id, cleanEmail)
+}
+
+export async function getSupabaseUserIdByEmail(
+  email: string,
+): Promise<string | null> {
+  if (!email || !supabase || !isSupabaseEnabled()) return null
+
+  const cleanEmail = email.trim().toLowerCase()
+
+  if (emailToSupabaseIdCache.has(cleanEmail)) {
+    return emailToSupabaseIdCache.get(cleanEmail) || null
+  }
+
+  try {
+    const { data, error } = await supabase.auth.admin.listUsers()
+
+    if (error) {
+      console.error("Failed to list users from Supabase admin:", error)
+
+      return null
+    }
+
+    for (const u of data?.users || []) {
+      if (u.email && u.id) {
+        setSupabaseUserCache(u.id, u.email)
+      }
+    }
+
+    return emailToSupabaseIdCache.get(cleanEmail) || null
+  } catch (err) {
+    console.error("Error looking up Supabase user by email:", err)
+
+    return null
+  }
+}
+
+export async function getSupabaseUserEmailById(
+  id: string,
+): Promise<string | null> {
+  if (!id || !supabase || !isSupabaseEnabled()) return null
+
+  if (supabaseIdToEmailCache.has(id)) {
+    return supabaseIdToEmailCache.get(id) || null
+  }
+
+  try {
+    const { data, error } = await supabase.auth.admin.listUsers()
+
+    if (error) {
+      console.error("Failed to list users from Supabase admin:", error)
+
+      return null
+    }
+
+    for (const u of data?.users || []) {
+      if (u.email && u.id) {
+        setSupabaseUserCache(u.id, u.email)
+      }
+    }
+
+    return supabaseIdToEmailCache.get(id) || null
+  } catch (err) {
+    console.error("Error looking up Supabase user by ID:", err)
+
+    return null
+  }
+}
+
 export async function getSupabaseAllDocuments(
-  userId?: string,
+  userIdsOrUserId?: string | string[],
+
+  additionalUserIds?: string[],
 ): Promise<FullDocument[] | null> {
   if (!supabase || !isSupabaseEnabled()) return null
 
@@ -157,8 +252,34 @@ export async function getSupabaseAllDocuments(
 
       .not("id", "like", "rate_limit_%")
 
-    if (userId) {
-      query = query.contains("content", { userId })
+    const userIds = new Set<string>()
+
+    if (Array.isArray(userIdsOrUserId)) {
+      for (const u of userIdsOrUserId) {
+        if (u) userIds.add(u)
+      }
+    } else if (userIdsOrUserId) {
+      userIds.add(userIdsOrUserId)
+    }
+
+    if (additionalUserIds) {
+      for (const alt of additionalUserIds) {
+        if (alt) userIds.add(alt)
+      }
+    }
+
+    if (userIds.size > 0) {
+      const orConditions = ["id.in.(doc-1,doc-2,doc-3)"]
+
+      for (const uid of userIds) {
+        const cleanUid = uid.replace(/[,()]/g, "").trim()
+
+        if (cleanUid) {
+          orConditions.push(`content->>userId.eq.${cleanUid}`)
+        }
+      }
+
+      query = query.or(orConditions.join(","))
     }
 
     const { data, error } = await query
@@ -176,15 +297,29 @@ export async function getSupabaseAllDocuments(
 /** Fetches only sizeBytes values instead of full transcript payloads. */
 
 export async function getSupabaseStorageSums(
-  userId?: string,
+  userIdsOrUserId?: string | string[],
 ): Promise<number | null> {
   if (!supabase || !isSupabaseEnabled()) return null
 
   try {
-    let query = supabase.from("documents").select("sizeBytes:content->>sizeBytes")
+    let query = supabase
+      .from("documents")
+      .select("sizeBytes:content->>sizeBytes")
 
-    if (userId) {
-      query = query.contains("content", { userId })
+    const userIds = Array.isArray(userIdsOrUserId)
+      ? userIdsOrUserId.filter(Boolean)
+      : userIdsOrUserId
+        ? [userIdsOrUserId]
+        : []
+
+    if (userIds.length === 1) {
+      query = query.contains("content", { userId: userIds[0] })
+    } else if (userIds.length > 1) {
+      const orConds = userIds.map(
+        (uid) => `content->>userId.eq.${uid.replace(/[,()]/g, "").trim()}`,
+      )
+
+      query = query.or(orConds.join(","))
     }
 
     const { data, error } = await query
@@ -207,20 +342,25 @@ export async function getSupabaseStorageSums(
 
 export async function getSupabaseAudioRefs(): Promise<Array<{
   id: string
+
   audioUrl?: string
 }> | null> {
   if (!supabase || !isSupabaseEnabled()) return null
 
   try {
     const { data, error } = await supabase
+
       .from("documents")
+
       .select("id, audioUrl:content->>audioUrl")
+
       .not("id", "like", "rate_limit_%")
 
     if (error) throw error
 
     return (data || []).map((row: any) => ({
       id: row.id,
+
       audioUrl: (row.audioUrl ?? row["content->>audioUrl"]) || undefined,
     }))
   } catch (error) {
@@ -286,6 +426,7 @@ export async function getSupabaseDocumentByShareId(
   } catch (error) {
     console.error(
       `Failed to fetch document by shareId ${shareId} from Supabase:`,
+
       error,
     )
 
@@ -300,7 +441,9 @@ export async function saveSupabaseDocument(
 
   try {
     const { error } = await supabase
+
       .from("documents")
+
       .upsert({ id: doc.id, content: doc })
 
     if (error) throw error
@@ -336,19 +479,26 @@ export async function upsertSupabaseDocumentsBatch(
 
   try {
     const rows = docs.map((doc) => ({ id: doc.id, content: doc }))
+
     const { error } = await supabase.from("documents").upsert(rows)
+
     if (error) throw error
+
     return docs.length
   } catch (error) {
     console.error("Failed to batch upsert documents in Supabase:", error)
+
     return 0
   }
 }
 
 export async function claimSupabaseGuestDocuments(
   guestSessionId: string | undefined,
+
   newUserId: string,
+
   documentIds?: string[],
+
   additionalUserIds?: string[],
 ): Promise<number> {
   if (!supabase || !isSupabaseEnabled()) return 0
@@ -357,11 +507,16 @@ export async function claimSupabaseGuestDocuments(
     const rowsMap = new Map<string, any>()
 
     // 1. Find by guest session id in JSON content
+
     if (guestSessionId) {
       const { data, error } = await supabase
+
         .from("documents")
+
         .select("id, content")
+
         .not("id", "like", "rate_limit_%")
+
         .contains("content", { userId: guestSessionId })
 
       if (!error && data) {
@@ -372,13 +527,19 @@ export async function claimSupabaseGuestDocuments(
     }
 
     // 2. Find by additional user IDs (e.g. historical local user id like usr-...)
+
     if (additionalUserIds && additionalUserIds.length > 0) {
       for (const altId of additionalUserIds) {
         if (!altId) continue
+
         const { data, error } = await supabase
+
           .from("documents")
+
           .select("id, content")
+
           .not("id", "like", "rate_limit_%")
+
           .contains("content", { userId: altId })
 
         if (!error && data) {
@@ -390,17 +551,25 @@ export async function claimSupabaseGuestDocuments(
     }
 
     // 3. Also find any document IDs specifically passed by the client
+
     if (documentIds && documentIds.length > 0) {
       const { data, error } = await supabase
+
         .from("documents")
+
         .select("id, content")
+
         .not("id", "like", "rate_limit_%")
+
         .in("id", documentIds)
 
       if (!error && data) {
         for (const row of data) {
           const doc = row.content as FullDocument
-          const isDemoDoc = doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+
+          const isDemoDoc =
+            doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+
           if (
             !isDemoDoc &&
             (!doc.userId ||
@@ -417,22 +586,31 @@ export async function claimSupabaseGuestDocuments(
 
     const rowsToUpsert = Array.from(rowsMap.values()).map((row: any) => {
       const doc = row.content as FullDocument
+
       doc.userId = newUserId
+
       return { id: doc.id, content: doc }
     })
 
     const { error: upsertErr } = await supabase
+
       .from("documents")
+
       .upsert(rowsToUpsert)
 
     if (upsertErr) {
-      console.error("Failed to batch upsert claimed documents in Supabase:", upsertErr)
+      console.error(
+        "Failed to batch upsert claimed documents in Supabase:",
+        upsertErr,
+      )
+
       return 0
     }
 
     console.log(
       `Migrated ${rowsToUpsert.length} document(s) to user ${newUserId} in Supabase`,
     )
+
     return rowsToUpsert.length
   } catch (error) {
     console.error("Failed to claim guest documents in Supabase:", error)

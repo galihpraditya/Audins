@@ -11,7 +11,13 @@ import { v4 as uuidv4 } from "uuid"
 
 import { USERS_FILE, JWT_SECRET } from "../config.js"
 
-import { isSupabaseEnabled, getSupabaseClient } from "./supabase.service.js"
+import {
+  isSupabaseEnabled,
+  getSupabaseClient,
+  getSupabaseUserIdByEmail,
+  getSupabaseUserEmailById,
+  setSupabaseUserCache,
+} from "./supabase.service.js"
 
 import { User, AuthResponse } from "../types/index.js"
 
@@ -71,6 +77,38 @@ export function getUserEmailByLocalId(id: string): string | null {
     if (u.id === id) return u.email
   }
   return null
+}
+
+export async function getAllUserIdentities(
+  userId?: string,
+  userEmail?: string,
+  guestSessionId?: string,
+): Promise<string[]> {
+  const ids = new Set<string>()
+  if (userId) ids.add(userId)
+  if (guestSessionId) ids.add(guestSessionId)
+
+  let email = userEmail?.trim().toLowerCase()
+  if (!email && userId && userId.startsWith("usr-")) {
+    const localEmail = getUserEmailByLocalId(userId)
+    if (localEmail) email = localEmail.trim().toLowerCase()
+  }
+  if (!email && userId && isSupabaseEnabled()) {
+    const supaEmail = await getSupabaseUserEmailById(userId)
+    if (supaEmail) email = supaEmail.trim().toLowerCase()
+  }
+
+  if (email) {
+    const localId = getLocalUserIdByEmail(email)
+    if (localId) ids.add(localId)
+
+    if (isSupabaseEnabled()) {
+      const supaId = await getSupabaseUserIdByEmail(email)
+      if (supaId) ids.add(supaId)
+    }
+  }
+
+  return Array.from(ids).filter(Boolean)
 }
 
 let userWriteChain: Promise<void> = Promise.resolve()
@@ -233,6 +271,8 @@ export async function signUpUser(
       }
     }
 
+    setSupabaseUserCache(dataUser.id, dataUser.email || cleanEmail)
+
     const user: User = {
       id: dataUser.id,
       email: dataUser.email || cleanEmail,
@@ -342,36 +382,43 @@ export async function signInUser(
   if (isSupabaseEnabled()) {
     const supabase = getSupabaseClient()
 
-    if (!supabase) throw new Error("Supabase is not initialized")
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
+          password: pass,
+        })
 
-      password: pass,
-    })
+        if (!error && data?.user && data?.session) {
+          setSupabaseUserCache(data.user.id, data.user.email || cleanEmail)
 
-    if (error) throw new Error(error.message)
+          return {
+            user: {
+              id: data.user.id,
 
-    if (!data.user || !data.session) throw new Error("Invalid credentials")
+              email: data.user.email || cleanEmail,
 
-    return {
-      user: {
-        id: data.user.id,
+              name: data.user.user_metadata?.name,
 
-        email: data.user.email || cleanEmail,
+              createdAt: data.user.created_at,
+            },
 
-        name: data.user.user_metadata?.name,
+            token: data.session.access_token,
 
-        createdAt: data.user.created_at,
-      },
+            refreshToken: data.session.refresh_token,
 
-      token: data.session.access_token,
+            expiresIn: data.session.expires_in || 3600,
 
-      refreshToken: data.session.refresh_token,
-
-      expiresIn: data.session.expires_in || 3600,
-
-      provider: "supabase",
+            provider: "supabase",
+          }
+        }
+      } catch (supabaseErr) {
+        console.warn(
+          "Supabase signIn failed, checking local credentials:",
+          supabaseErr,
+        )
+      }
     }
   }
 
@@ -528,6 +575,8 @@ export async function getUserFromToken(token: string): Promise<User | null> {
         const { data, error } = await supabase.auth.getUser(token)
 
         if (!error && data.user) {
+          setSupabaseUserCache(data.user.id, data.user.email || "")
+
           return {
             id: data.user.id,
 

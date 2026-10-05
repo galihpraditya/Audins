@@ -24,10 +24,12 @@ import {
 } from "./supabase.service.js"
 
 import { isR2Enabled, deleteAudioFromR2 } from "./r2.service.js"
+
 import {
   isLocalRegisteredUserId,
   getLocalUserIdByEmail,
   getUserEmailByLocalId,
+  getAllUserIdentities,
 } from "./auth.service.js"
 
 // --- Local JSON Fallback DB ---
@@ -61,21 +63,27 @@ let dbWriteChain: Promise<void> = Promise.resolve()
 
 function scheduleDbWrite(): void {
   dbWriteChain = dbWriteChain
+
     .then(async () => {
       const data = JSON.stringify(Array.from(documentsStore.values()), null, 2)
+
       const tmp = `${DB_FILE}.tmp`
+
       await fs.promises.writeFile(tmp, data, "utf8")
+
       try {
         await fs.promises.rename(tmp, DB_FILE)
       } catch (err: any) {
         if (err.code === "EPERM" || err.code === "EBUSY") {
           await fs.promises.copyFile(tmp, DB_FILE)
+
           await fs.promises.unlink(tmp).catch(() => {})
         } else {
           throw err
         }
       }
     })
+
     .catch((error) => {
       console.error("Failed to persist db.json", error)
     })
@@ -98,6 +106,7 @@ loadDb()
  * (have both transcripts and summary sections) but were left with status "Failed"
  * due to unhandled promise rejections or missing status updates in earlier versions.
  */
+
 export function normalizeDocument(doc: FullDocument): FullDocument {
   if (
     doc.status === "Failed" &&
@@ -108,35 +117,81 @@ export function normalizeDocument(doc: FullDocument): FullDocument {
     doc.summary.sections.length > 0
   ) {
     doc.status = "Completed"
+
     doc.warnings = undefined
+
     // Persist normalized status asynchronously
+
     void saveDocument(doc).catch(() => {})
   }
+
   return doc
 }
 
 export async function getAllDocuments(
   userId?: string,
+
   userEmail?: string,
+
+  guestSessionId?: string,
 ): Promise<FullDocument[]> {
+  const allUserIds = await getAllUserIdentities(
+    userId,
+    userEmail,
+    guestSessionId,
+  )
+
   if (isSupabaseEnabled()) {
-    const docs = await getSupabaseAllDocuments(userId)
+    const docs = await getSupabaseAllDocuments(allUserIds)
+
     if (docs !== null) {
       // Keep documentsStore aligned with authoritative Supabase truth:
-      // Prune documents that were deleted from Supabase so they don't linger in cache
+
+      // Prune documents that were deleted from Supabase so they don't linger in cache.
+
+      // NEVER delete demo documents (doc-1, doc-2, doc-3).
+
       const supaIds = new Set(docs.map((d) => d.id))
+
+      const userIdsSet = new Set(allUserIds)
+
       for (const [id, d] of documentsStore.entries()) {
-        if (!userId || d.userId === userId) {
+        const isDemo = id === "doc-1" || id === "doc-2" || id === "doc-3"
+
+        if (isDemo) continue
+
+        if (allUserIds.length === 0 || (d.userId && userIdsSet.has(d.userId))) {
           if (!supaIds.has(id)) {
             documentsStore.delete(id)
           }
         }
       }
+
       for (const doc of docs) {
         documentsStore.set(doc.id, doc)
       }
-      return docs
+
+      // Ensure any local demo docs in documentsStore (from db.json) are included if missing
+
+      const resultDocIds = new Set(docs.map((d) => d.id))
+
+      const combinedDocs = [...docs]
+
+      for (const [id, localDoc] of documentsStore.entries()) {
+        if (
+          !resultDocIds.has(id) &&
+          (id === "doc-1" || id === "doc-2" || id === "doc-3")
+        ) {
+          combinedDocs.push(localDoc)
+
+          resultDocIds.add(id)
+        }
+      }
+
+      return combinedDocs
+
         .map(normalizeDocument)
+
         .sort(
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -145,23 +200,38 @@ export async function getAllDocuments(
   }
 
   // Fallback to local documentsStore when Supabase is disabled or unreachable
-  const allLocalDocs = Array.from(documentsStore.values()).map(normalizeDocument)
-  if (userId) {
+
+  const allLocalDocs = Array.from(documentsStore.values()).map(
+    normalizeDocument,
+  )
+
+  if (allUserIds.length > 0) {
+    const userIdsSet = new Set(allUserIds)
+
     return allLocalDocs
-      .filter((d) => !d.userId || d.userId === userId)
+
+      .filter(
+        (d) =>
+          d.id === "doc-1" ||
+          d.id === "doc-2" ||
+          d.id === "doc-3" ||
+          (d.userId && userIdsSet.has(d.userId)),
+      )
+
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )
   }
+
   return allLocalDocs.sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 }
 
 export async function calculateStorageUsed(
   userId?: string,
+
   userEmail?: string,
 ): Promise<number> {
   const docs = await getAllDocuments(userId, userEmail)
@@ -172,6 +242,7 @@ export async function calculateStorageUsed(
 async function deleteBlobForUrl(audioUrl: string): Promise<void> {
   try {
     let url: URL
+
     try {
       url = new URL(audioUrl)
     } catch {
@@ -179,25 +250,30 @@ async function deleteBlobForUrl(audioUrl: string): Promise<void> {
     }
 
     const fileName = path.basename(url.pathname)
+
     if (!fileName) return
 
     if (audioUrl.includes("/uploads/")) {
       const localPath = path.join(UPLOADS_DIR, fileName)
+
       if (fs.existsSync(localPath)) await fs.promises.unlink(localPath)
     } else if (
       isR2Enabled() &&
       (url.hostname.includes("r2.cloudflarestorage.com") ||
-        (process.env.R2_PUBLIC_URL && audioUrl.includes(process.env.R2_PUBLIC_URL)) ||
+        (process.env.R2_PUBLIC_URL &&
+          audioUrl.includes(process.env.R2_PUBLIC_URL)) ||
         url.hostname.includes(process.env.R2_BUCKET_NAME || ""))
     ) {
       await deleteAudioFromR2(fileName)
     } else if (
       isSupabaseEnabled() &&
-      (url.hostname.includes("supabase.co") || audioUrl.includes("/storage/v1/"))
+      (url.hostname.includes("supabase.co") ||
+        audioUrl.includes("/storage/v1/"))
     ) {
       await deleteAudioFromSupabase(fileName)
     } else {
       // Fallback: attempt configured cloud providers
+
       if (isR2Enabled()) {
         await deleteAudioFromR2(fileName)
       } else if (isSupabaseEnabled()) {
@@ -213,25 +289,32 @@ async function deleteBlobForUrl(audioUrl: string): Promise<void> {
  * Checks whether any document (other than excludeDocId) still references the same audio file.
  * Uses lightweight metadata queries rather than downloading full document payloads.
  */
+
 async function isAudioBlobStillReferenced(
   excludeDocId: string | null,
+
   audioUrl: string,
 ): Promise<boolean> {
   try {
     let fileName: string
+
     try {
       fileName = path.basename(new URL(audioUrl).pathname)
     } catch {
       return false
     }
+
     if (!fileName) return false
 
     if (isSupabaseEnabled()) {
       const refs = await getSupabaseAudioRefs()
+
       if (refs !== null) {
         return refs.some((r) => {
           if (excludeDocId && r.id === excludeDocId) return false
+
           if (!r.audioUrl || r.audioUrl === "Expired") return false
+
           try {
             return path.basename(new URL(r.audioUrl).pathname) === fileName
           } catch {
@@ -242,9 +325,12 @@ async function isAudioBlobStillReferenced(
     }
 
     // Local mode
+
     for (const other of documentsStore.values()) {
       if (excludeDocId && other.id === excludeDocId) continue
+
       if (!other.audioUrl || other.audioUrl === "Expired") continue
+
       try {
         if (path.basename(new URL(other.audioUrl).pathname) === fileName) {
           return true
@@ -254,6 +340,7 @@ async function isAudioBlobStillReferenced(
   } catch (err) {
     console.error("Error evaluating audio blob references:", err)
   }
+
   return false
 }
 
@@ -261,6 +348,7 @@ async function isAudioBlobStillReferenced(
  * Deletes a document row. The underlying audio blob is only removed when no
  * other document references the same file (duplicates share the blob URL).
  */
+
 export async function deleteDocument(id: string): Promise<boolean> {
   const doc = await getDocumentById(id)
 
@@ -271,16 +359,21 @@ export async function deleteDocument(id: string): Promise<boolean> {
   }
 
   // Always remove from local in-memory Map and persist to db.json
+
   const localDeleted = documentsStore.delete(id)
+
   scheduleDbWrite()
 
-  const isDeleted = isSupabaseEnabled() ? (supaDeleted || localDeleted) : localDeleted
+  const isDeleted = isSupabaseEnabled()
+    ? supaDeleted || localDeleted
+    : localDeleted
 
   if (!isDeleted || !doc) return isDeleted
 
   if (doc.audioUrl && doc.audioUrl !== "Expired") {
     try {
       const stillReferenced = await isAudioBlobStillReferenced(id, doc.audioUrl)
+
       if (!stillReferenced) {
         await deleteBlobForUrl(doc.audioUrl)
       }
@@ -296,6 +389,7 @@ export async function deleteDocument(id: string): Promise<boolean> {
  * Deletes only the audio blob for a document to free storage quota while
  * preserving transcripts, AI summary, and metadata.
  */
+
 export async function deleteDocumentAudio(
   id: string,
 ): Promise<FullDocument | null> {
@@ -306,6 +400,7 @@ export async function deleteDocumentAudio(
   if (doc.audioUrl && doc.audioUrl !== "Expired") {
     try {
       const stillReferenced = await isAudioBlobStillReferenced(id, doc.audioUrl)
+
       if (!stillReferenced) {
         await deleteBlobForUrl(doc.audioUrl)
       }
@@ -315,6 +410,7 @@ export async function deleteDocumentAudio(
   }
 
   doc.audioUrl = undefined
+
   doc.sizeBytes = 0
 
   return await saveDocument(doc)
@@ -322,12 +418,21 @@ export async function deleteDocumentAudio(
 
 export async function cleanupExpiredAudio(): Promise<void> {
   const docs = await getAllDocuments()
+
   const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+
   const now = Date.now()
 
   for (const doc of docs) {
     if (!doc.audioUrl || doc.audioUrl === "Expired") continue
-    if (!doc.userId || doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3") continue
+
+    if (
+      !doc.userId ||
+      doc.id === "doc-1" ||
+      doc.id === "doc-2" ||
+      doc.id === "doc-3"
+    )
+      continue
 
     const docAge = now - new Date(doc.createdAt).getTime()
 
@@ -335,12 +440,17 @@ export async function cleanupExpiredAudio(): Promise<void> {
       console.log(`Auto-deleting expired audio for doc: ${doc.id}`)
 
       try {
-        const stillReferenced = await isAudioBlobStillReferenced(doc.id, doc.audioUrl)
+        const stillReferenced = await isAudioBlobStillReferenced(
+          doc.id,
+          doc.audioUrl,
+        )
+
         if (!stillReferenced) {
           await deleteBlobForUrl(doc.audioUrl)
         }
 
         doc.audioUrl = "Expired"
+
         doc.sizeBytes = 0
 
         await saveDocument(doc)
@@ -356,20 +466,25 @@ export async function cleanupExpiredAudio(): Promise<void> {
  * crash or redeploy leaves documents stuck in "Processing".
  * Any "Processing" document found in the DB at boot has lost its in-memory worker.
  */
+
 export async function failStaleProcessingDocuments(): Promise<number> {
   const docs = await getAllDocuments()
+
   let recovered = 0
 
   for (const doc of docs) {
     if (doc.status !== "Processing") continue
 
     doc.status = "Failed"
+
     doc.warnings = [
       ...(doc.warnings || []),
+
       "Processing was interrupted by a server restart. Please re-upload or re-run the summary.",
     ]
 
     await saveDocument(doc)
+
     recovered += 1
   }
 
@@ -386,8 +501,10 @@ export async function getDocumentById(
   id: string,
 ): Promise<FullDocument | undefined> {
   let doc: FullDocument | undefined
+
   if (isSupabaseEnabled()) {
     const supaDoc = await getSupabaseDocumentById(id)
+
     if (supaDoc !== null) doc = supaDoc
   }
 
@@ -402,8 +519,10 @@ export async function getDocumentByShareId(
   shareId: string,
 ): Promise<FullDocument | undefined> {
   let doc: FullDocument | undefined
+
   if (isSupabaseEnabled()) {
     const supaDoc = await getSupabaseDocumentByShareId(shareId)
+
     if (supaDoc !== null) doc = supaDoc
   }
 
@@ -411,6 +530,7 @@ export async function getDocumentByShareId(
     for (const d of documentsStore.values()) {
       if (d.shareSettings?.shareId === shareId) {
         doc = d
+
         break
       }
     }
@@ -435,10 +555,12 @@ export async function incrementShareViewCount(shareId: string): Promise<void> {
 
 export async function saveDocument(doc: FullDocument): Promise<FullDocument> {
   documentsStore.set(doc.id, doc)
+
   scheduleDbWrite()
 
   if (isSupabaseEnabled()) {
     const saved = await saveSupabaseDocument(doc)
+
     if (saved !== null) return saved
   }
 
@@ -466,6 +588,7 @@ export async function renameDocument(
 
 export async function duplicateDocument(
   id: string,
+
   newUserId?: string,
 ): Promise<FullDocument | null> {
   const doc = await getDocumentById(id)
@@ -498,18 +621,23 @@ export async function duplicateDocument(
 
 export async function claimGuestDocuments(
   guestSessionId: string | undefined,
+
   newUserId: string,
+
   documentIds?: string[],
+
   userEmail?: string,
 ): Promise<number> {
   if (!newUserId) return 0
 
   let localUserId: string | null = null
+
   if (userEmail) {
     localUserId = getLocalUserIdByEmail(userEmail)
   }
 
   const additionalUserIds: string[] = []
+
   if (localUserId && localUserId !== newUserId) {
     additionalUserIds.push(localUserId)
   }
@@ -526,14 +654,19 @@ export async function claimGuestDocuments(
   let totalCount = 0
 
   // 1. Supabase claim
+
   if (isSupabaseEnabled()) {
     try {
       const supabaseCount = await claimSupabaseGuestDocuments(
         cleanGuestId,
+
         newUserId,
+
         documentIds,
+
         additionalUserIds,
       )
+
       totalCount += supabaseCount
     } catch (err) {
       console.error("Supabase claim failed, checking local store:", err)
@@ -541,8 +674,11 @@ export async function claimGuestDocuments(
   }
 
   // 2. Local documentsStore claim
+
   let localModified = false
+
   const docsToSync: FullDocument[] = []
+
   const requestedIds = new Set(documentIds || [])
 
   for (const doc of documentsStore.values()) {
@@ -553,7 +689,9 @@ export async function claimGuestDocuments(
     } else if (localUserId && doc.userId === localUserId) {
       shouldClaim = true
     } else if (requestedIds.has(doc.id)) {
-      const isDemoDoc = doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+      const isDemoDoc =
+        doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+
       if (
         !isDemoDoc &&
         (!doc.userId ||
@@ -566,8 +704,11 @@ export async function claimGuestDocuments(
 
     if (shouldClaim && doc.userId !== newUserId) {
       doc.userId = newUserId
+
       localModified = true
+
       docsToSync.push(doc)
+
       totalCount++
     }
   }
@@ -589,15 +730,19 @@ export async function claimGuestDocuments(
  * Automatically synchronizes documents in local db.json with Supabase on startup,
  * linking any historical local user accounts (usr-...) to their matching Supabase user IDs.
  */
+
 export async function syncLocalDbToSupabase(): Promise<void> {
   // Only run when explicitly enabled via environment variable to prevent resurrecting deleted documents
+
   if (!isSupabaseEnabled() || process.env.SYNC_LOCAL_DB !== "true") return
 
   try {
     const supaDocs = await getSupabaseAllDocuments()
+
     if (!supaDocs) return
 
     const supaIds = new Set(supaDocs.map((d) => d.id))
+
     const missingDocs = Array.from(documentsStore.values()).filter(
       (d) => !supaIds.has(d.id),
     )
@@ -609,11 +754,15 @@ export async function syncLocalDbToSupabase(): Promise<void> {
     )
 
     // Build email to Supabase userId map
+
     const emailToSupaUserId = new Map<string, string>()
+
     const client = getSupabaseClient()
+
     if (client) {
       try {
         const { data } = await client.auth.admin.listUsers()
+
         if (data?.users) {
           for (const u of data.users) {
             if (u.email) {
@@ -624,17 +773,21 @@ export async function syncLocalDbToSupabase(): Promise<void> {
       } catch (err) {
         console.warn(
           "[Storage] Could not list Supabase admin users for email mapping:",
+
           err,
         )
       }
     }
 
     let modifiedLocal = false
+
     for (const doc of missingDocs) {
       if (doc.userId && doc.userId.startsWith("usr-")) {
         const email = getUserEmailByLocalId(doc.userId)
+
         if (email && emailToSupaUserId.has(email.toLowerCase())) {
           doc.userId = emailToSupaUserId.get(email.toLowerCase())!
+
           modifiedLocal = true
         }
       }
@@ -645,6 +798,7 @@ export async function syncLocalDbToSupabase(): Promise<void> {
     }
 
     const upserted = await upsertSupabaseDocumentsBatch(missingDocs)
+
     console.log(
       `[Storage] Successfully synchronized ${upserted} documents from db.json to Supabase.`,
     )

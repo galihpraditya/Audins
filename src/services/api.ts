@@ -402,6 +402,24 @@ export async function pollDocumentStatusApi(
   }
 }
 
+/**
+ * Fetches single document details by ID.
+ * Returns null if the document does not exist (404).
+ * Throws ApiError on network or server errors.
+ */
+export async function fetchDocumentByIdApi(
+  id: string | number,
+): Promise<DocumentItem | null> {
+  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+    headers: authHeaders(),
+  })
+
+  if (res.status === 404) return null
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to load document")
+
+  return (await res.json()) as DocumentItem
+}
+
 export async function reSummarizeApi(
   id: string | number,
 

@@ -276,10 +276,24 @@ export default function App() {
   }, [registerSyncListener, loadInitialData])
 
   // Reload when active user account changes (login/logout)
-
   useEffect(() => {
     void loadInitialData()
   }, [user?.id, loadInitialData])
+
+  const handleDocumentLoaded = useCallback(
+    (doc: DocumentItem) => {
+      setDocuments((prev) => {
+        const exists = prev.some((d) => String(d.id) === String(doc.id))
+        if (exists) return prev
+        return [doc, ...prev]
+      })
+
+      if (doc.status === "Processing") {
+        startPolling(doc.id)
+      }
+    },
+    [startPolling],
+  )
 
   const handleUploadFile = async (file: File, knownDurationSec?: number) => {
     // Check free demo quota against the server-provided max (not a hardcoded 10).
@@ -850,6 +864,8 @@ export default function App() {
               <Workspace
                 documents={documents}
                 isLoading={initialLoading}
+                loadError={loadError}
+                onDocumentLoaded={handleDocumentLoaded}
                 onReSummarize={handleReSummarize}
                 onDeleteDocument={handleDeleteDocument}
                 onDeleteAudioOnly={handleDeleteAudioOnly}
@@ -868,6 +884,8 @@ export default function App() {
               <Workspace
                 documents={documents}
                 isLoading={initialLoading}
+                loadError={loadError}
+                onDocumentLoaded={handleDocumentLoaded}
                 onReSummarize={handleReSummarize}
                 onDeleteDocument={handleDeleteDocument}
                 onDeleteAudioOnly={handleDeleteAudioOnly}
