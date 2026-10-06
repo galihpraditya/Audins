@@ -153,16 +153,18 @@ export async function getAllDocuments(
 
       const supaIds = new Set(docs.map((d) => d.id))
 
-      const userIdsSet = new Set(allUserIds)
+      // Only prune documents belonging to the specifically queried user identities
+      if (allUserIds.length > 0) {
+        const userIdsSet = new Set(allUserIds)
+        for (const [id, d] of documentsStore.entries()) {
+          const isDemo = id === "doc-1" || id === "doc-2" || id === "doc-3"
 
-      for (const [id, d] of documentsStore.entries()) {
-        const isDemo = id === "doc-1" || id === "doc-2" || id === "doc-3"
+          if (isDemo) continue
 
-        if (isDemo) continue
-
-        if (allUserIds.length === 0 || (d.userId && userIdsSet.has(d.userId))) {
-          if (!supaIds.has(id)) {
-            documentsStore.delete(id)
+          if (d.userId && userIdsSet.has(d.userId)) {
+            if (!supaIds.has(id)) {
+              documentsStore.delete(id)
+            }
           }
         }
       }

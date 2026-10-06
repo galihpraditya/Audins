@@ -214,7 +214,11 @@ export default function Workspace({
 
   // If a document ID was specified in route (/workspace/:id) but not matched
   if (id && !document) {
-    if (isLoading || isFetchingDirect) {
+    if (
+      isLoading ||
+      isFetchingDirect ||
+      (!isNotFound && !directFetchError && !loadError)
+    ) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center bg-background p-6">
           <div className="flex flex-col items-center gap-3 text-center">

@@ -37,16 +37,27 @@ export async function authenticate(
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7).trim()
 
-      const user = await getUserFromToken(token)
+      if (token) {
+        const user = await getUserFromToken(token)
 
-      if (user) {
-        req.user = user
+        if (user) {
+          req.user = user
 
-        req.userId = user.id
+          req.userId = user.id
 
-        req.isGuest = false
+          req.isGuest = false
 
-        return next()
+          return next()
+        }
+
+        // A Bearer token was explicitly provided but is invalid or expired.
+        // Reject with 401 so the client can trigger an automatic token refresh.
+        res.status(401).json({
+          error: "Token expired or invalid",
+          code: "TOKEN_EXPIRED",
+        })
+
+        return
       }
     }
 

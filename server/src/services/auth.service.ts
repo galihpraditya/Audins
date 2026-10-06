@@ -93,8 +93,15 @@ export async function getAllUserIdentities(
     const localEmail = getUserEmailByLocalId(userId)
     if (localEmail) email = localEmail.trim().toLowerCase()
   }
-  if (!email && userId && isSupabaseEnabled()) {
-    const supaEmail = await getSupabaseUserEmailById(userId)
+  const isUuid = Boolean(
+    userId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        userId,
+      ),
+  )
+
+  if (!email && isUuid && isSupabaseEnabled()) {
+    const supaEmail = await getSupabaseUserEmailById(userId!)
     if (supaEmail) email = supaEmail.trim().toLowerCase()
   }
 
@@ -502,6 +509,8 @@ export async function refreshUserToken(
         })
 
         if (!error && data.user && data.session) {
+          setSupabaseUserCache(data.user.id, data.user.email || "")
+
           return {
             user: {
               id: data.user.id,

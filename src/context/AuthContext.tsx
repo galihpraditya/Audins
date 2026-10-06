@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   ReactNode,
 } from "react"
 
@@ -105,6 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => new Set(),
   )[0]
 
+  const lastVerifiedTokenRef = useRef<string | null>(null)
+
   const registerSyncListener = useCallback(
     (fn: () => Promise<void>) => {
       syncListenersRef.add(fn)
@@ -147,11 +150,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
+      lastVerifiedTokenRef.current = null
       setSyncStatus("guest")
 
       return
     }
 
+    if (lastVerifiedTokenRef.current === token) {
+      return
+    }
+
+    lastVerifiedTokenRef.current = token
     let active = true
 
     fetchCurrentUserApi()
@@ -160,6 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return
 
         if (verifiedUser) {
+          const latestToken = getAuthToken()
+          if (latestToken && latestToken !== token) {
+            lastVerifiedTokenRef.current = latestToken
+            setTokenState(latestToken)
+          }
+
           setUserState(verifiedUser)
 
           setStoredUser(verifiedUser)
@@ -167,9 +182,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSyncStatus("synced")
 
           setLastSyncedAt(new Date())
+
+          // Run sync listeners so document list and quota update
+          const tasks = Array.from(syncListenersRef).map((fn) =>
+            fn().catch(() => {}),
+          )
+          void Promise.all(tasks)
         } else {
           // Token expired or invalid
 
+          lastVerifiedTokenRef.current = null
           clearAuth()
 
           setTokenState(null)
@@ -177,6 +199,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserState(null)
 
           setSyncStatus("guest")
+
+          const tasks = Array.from(syncListenersRef).map((fn) =>
+            fn().catch(() => {}),
+          )
+          void Promise.all(tasks)
         }
       })
 
@@ -189,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [token])
+  }, [token, syncListenersRef])
 
   // Periodic token refresh to keep session alive
   useEffect(() => {
@@ -276,6 +303,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUserState(res.user)
 
+      lastVerifiedTokenRef.current = res.token
+
       setSyncStatus("synced")
 
       setLastSyncedAt(new Date())
@@ -325,6 +354,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUserState(res.user)
 
+      lastVerifiedTokenRef.current = res.token
+
       setSyncStatus("synced")
 
       setLastSyncedAt(new Date())
@@ -348,6 +379,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     clearAuth()
     rotateSessionId()
+
+    lastVerifiedTokenRef.current = null
 
     setTokenState(null)
 

@@ -258,10 +258,53 @@ async function extractErrorMessage(
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null
+
+/**
+ * Central authenticated fetch wrapper with automatic token refresh on 401.
+ * Automatically retries with refreshed token when available, de-duplicating
+ * concurrent refresh attempts across simultaneous API calls.
+ */
+export async function apiFetch(
+  url: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const customHeaders = (options.headers as Record<string, string>) || {}
+  let headers = authHeaders(customHeaders)
+  let res = await fetch(url, { ...options, headers })
+
+  if (res.status === 401) {
+    const refreshToken = getRefreshToken()
+    if (refreshToken) {
+      if (!refreshPromise) {
+        refreshPromise = (async () => {
+          try {
+            const rt = getRefreshToken()
+            if (!rt) return null
+            const authRes = await refreshTokenApi(rt)
+            return authRes.token
+          } catch {
+            clearAuth()
+            return null
+          } finally {
+            refreshPromise = null
+          }
+        })()
+      }
+
+      const newToken = await refreshPromise
+      if (newToken) {
+        headers = authHeaders(customHeaders)
+        res = await fetch(url, { ...options, headers })
+      }
+    }
+  }
+
+  return res
+}
+
 export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
-  const res = await fetch(`${API_BASE_URL}/documents`, {
-    headers: authHeaders(),
-  })
+  const res = await apiFetch(`${API_BASE_URL}/documents`)
 
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load documents")
 
@@ -269,9 +312,7 @@ export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
 }
 
 export async function fetchRateLimitApi(): Promise<RateLimitResponse> {
-  const res = await fetch(`${API_BASE_URL}/settings/rate-limit`, {
-    headers: authHeaders(),
-  })
+  const res = await apiFetch(`${API_BASE_URL}/settings/rate-limit`)
 
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load quota info")
 
@@ -390,9 +431,7 @@ export async function pollDocumentStatusApi(
   id: string | number,
 ): Promise<DocumentItem | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
-      headers: authHeaders(),
-    })
+    const res = await apiFetch(`${API_BASE_URL}/documents/${id}`)
 
     if (!res.ok) return null
 
@@ -410,9 +449,7 @@ export async function pollDocumentStatusApi(
 export async function fetchDocumentByIdApi(
   id: string | number,
 ): Promise<DocumentItem | null> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
-    headers: authHeaders(),
-  })
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`)
 
   if (res.status === 404) return null
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load document")
@@ -422,24 +459,20 @@ export async function fetchDocumentByIdApi(
 
 export async function reSummarizeApi(
   id: string | number,
-
   userApiKey?: string,
-
   customPrompt?: string,
 ): Promise<DocumentItem> {
-  const headers = authHeaders({
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-  })
+  }
 
   if (userApiKey) {
     headers["X-Groq-API-Key"] = userApiKey
   }
 
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/summarize`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/summarize`, {
     method: "POST",
-
     headers,
-
     body: JSON.stringify({ customPrompt }),
   })
 
@@ -449,10 +482,8 @@ export async function reSummarizeApi(
 }
 
 export async function deleteDocumentApi(id: string | number): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`, {
     method: "DELETE",
-
-    headers: authHeaders(),
   })
 
   if (!res.ok) {
@@ -463,10 +494,8 @@ export async function deleteDocumentApi(id: string | number): Promise<void> {
 export async function deleteAudioOnlyApi(
   id: string | number,
 ): Promise<DocumentItem> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/audio`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/audio`, {
     method: "DELETE",
-
-    headers: authHeaders(),
   })
 
   if (!res.ok)
@@ -477,24 +506,20 @@ export async function deleteAudioOnlyApi(
 
 export async function retranscribeDocumentApi(
   id: string | number,
-
   options: RetranscribeOptions,
-
   userApiKey?: string,
 ): Promise<DocumentItem> {
-  const headers = authHeaders({
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-  })
+  }
 
   if (userApiKey) {
     headers["X-Groq-API-Key"] = userApiKey
   }
 
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/retranscribe`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/retranscribe`, {
     method: "POST",
-
     headers,
-
     body: JSON.stringify(options),
   })
 
@@ -505,14 +530,11 @@ export async function retranscribeDocumentApi(
 
 export async function renameDocumentApi(
   id: string | number,
-
   newName: string,
 ): Promise<DocumentItem> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`, {
     method: "PATCH",
-
-    headers: authHeaders({ "Content-Type": "application/json" }),
-
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: newName }),
   })
 
@@ -524,10 +546,8 @@ export async function renameDocumentApi(
 export async function duplicateDocumentApi(
   id: string | number,
 ): Promise<DocumentItem> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/duplicate`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/duplicate`, {
     method: "POST",
-
-    headers: authHeaders(),
   })
 
   if (!res.ok)
@@ -538,14 +558,11 @@ export async function duplicateDocumentApi(
 
 export async function updateDocumentSummaryApi(
   id: string | number,
-
   summary: AISummary,
 ): Promise<DocumentItem> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/summary`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/summary`, {
     method: "PATCH",
-
-    headers: authHeaders({ "Content-Type": "application/json" }),
-
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ summary }),
   })
 
@@ -556,24 +573,17 @@ export async function updateDocumentSummaryApi(
 
 export async function updateDocumentShareSettingsApi(
   id: string | number,
-
   settings: {
     isPublic: boolean
-
     includeAudio?: boolean
-
     includeTranscript?: boolean
-
     includeSummary?: boolean
-
     regenerateShareId?: boolean
   },
 ): Promise<DocumentItem> {
-  const res = await fetch(`${API_BASE_URL}/documents/${id}/share`, {
+  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/share`, {
     method: "PUT",
-
-    headers: authHeaders({ "Content-Type": "application/json" }),
-
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   })
 
@@ -599,12 +609,10 @@ export async function fetchPublicSharedDocumentApi(
 export async function duplicateSharedDocumentApi(
   shareId: string,
 ): Promise<DocumentItem> {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE_URL}/shared/${encodeURIComponent(shareId)}/duplicate`,
     {
       method: "POST",
-
-      headers: authHeaders(),
     },
   )
 
@@ -724,11 +732,9 @@ export async function claimGuestSessionApi(
   guestSessionId: string,
   documentIds?: string[],
 ): Promise<{ success: boolean; claimedCount: number }> {
-  const res = await fetch(`${API_BASE_URL}/auth/claim-session`, {
+  const res = await apiFetch(`${API_BASE_URL}/auth/claim-session`, {
     method: "POST",
-
-    headers: authHeaders({ "Content-Type": "application/json" }),
-
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       guestSessionId,
       documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
