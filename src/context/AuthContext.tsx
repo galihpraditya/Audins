@@ -5,7 +5,6 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  useRef,
   ReactNode,
 } from "react"
 
@@ -31,6 +30,7 @@ import {
   fetchCurrentUserApi,
   getSessionId,
   rotateSessionId,
+  claimOrphanedDocumentsApi,
 } from "../services/api"
 
 interface AuthContextType {
@@ -71,6 +71,8 @@ interface AuthContextType {
   triggerSync: () => Promise<void>
 
   registerSyncListener: (fn: () => Promise<void>) => () => void
+
+  claimOrphanedDocuments: () => Promise<number>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -105,8 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncListenersRef = useState<Set<() => Promise<void>>>(
     () => new Set(),
   )[0]
-
-  const lastVerifiedTokenRef = useRef<string | null>(null)
 
   const registerSyncListener = useCallback(
     (fn: () => Promise<void>) => {
@@ -150,17 +150,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) {
-      lastVerifiedTokenRef.current = null
       setSyncStatus("guest")
 
       return
     }
 
-    if (lastVerifiedTokenRef.current === token) {
-      return
-    }
-
-    lastVerifiedTokenRef.current = token
     let active = true
 
     fetchCurrentUserApi()
@@ -169,12 +163,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return
 
         if (verifiedUser) {
-          const latestToken = getAuthToken()
-          if (latestToken && latestToken !== token) {
-            lastVerifiedTokenRef.current = latestToken
-            setTokenState(latestToken)
-          }
-
           setUserState(verifiedUser)
 
           setStoredUser(verifiedUser)
@@ -182,16 +170,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSyncStatus("synced")
 
           setLastSyncedAt(new Date())
-
-          // Run sync listeners so document list and quota update
-          const tasks = Array.from(syncListenersRef).map((fn) =>
-            fn().catch(() => {}),
-          )
-          void Promise.all(tasks)
         } else {
           // Token expired or invalid
 
-          lastVerifiedTokenRef.current = null
           clearAuth()
 
           setTokenState(null)
@@ -199,11 +180,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserState(null)
 
           setSyncStatus("guest")
-
-          const tasks = Array.from(syncListenersRef).map((fn) =>
-            fn().catch(() => {}),
-          )
-          void Promise.all(tasks)
         }
       })
 
@@ -216,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false
     }
-  }, [token, syncListenersRef])
+  }, [token])
 
   // Periodic token refresh to keep session alive
   useEffect(() => {
@@ -303,8 +279,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUserState(res.user)
 
-      lastVerifiedTokenRef.current = res.token
-
       setSyncStatus("synced")
 
       setLastSyncedAt(new Date())
@@ -354,8 +328,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setUserState(res.user)
 
-      lastVerifiedTokenRef.current = res.token
-
       setSyncStatus("synced")
 
       setLastSyncedAt(new Date())
@@ -380,8 +352,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth()
     rotateSessionId()
 
-    lastVerifiedTokenRef.current = null
-
     setTokenState(null)
 
     setUserState(null)
@@ -391,79 +361,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLastSyncedAt(null)
 
     // Notify listeners so documents reload for clean guest state
-
     const tasks = Array.from(syncListenersRef).map((fn) => fn().catch(() => {}))
-
     await Promise.all(tasks)
   }, [syncListenersRef])
 
-  const isAuthenticated = Boolean(token && user)
+  const claimOrphanedDocuments = useCallback(async (): Promise<number> => {
+    if (!token) return 0
+    try {
+      const res = await claimOrphanedDocumentsApi()
+      if (res.claimedCount > 0) {
+        await triggerSync()
+      }
+      return res.claimedCount
+    } catch (err) {
+      console.error("Failed to claim orphaned documents:", err)
+      return 0
+    }
+  }, [token, triggerSync])
 
+  const isAuthenticated = Boolean(token && user)
   const isGuest = !isAuthenticated
 
   const value = useMemo(
     () => ({
       user,
-
       token,
-
       isAuthenticated,
-
       isGuest,
-
       syncStatus,
-
       lastSyncedAt,
-
       authModalOpen,
-
       authModalTab,
-
       openAuthModal,
-
       closeAuthModal,
-
       login,
-
       register,
-
       logout,
-
       triggerSync,
-
       registerSyncListener,
+      claimOrphanedDocuments,
     }),
-
     [
       user,
-
       token,
-
       isAuthenticated,
-
       isGuest,
-
       syncStatus,
-
       lastSyncedAt,
-
       authModalOpen,
-
       authModalTab,
-
       openAuthModal,
-
       closeAuthModal,
-
       login,
-
       register,
-
       logout,
-
       triggerSync,
-
       registerSyncListener,
+      claimOrphanedDocuments,
     ],
   )
 

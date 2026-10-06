@@ -156,17 +156,13 @@ router.get(
 )
 
 // POST /api/v1/auth/claim-session
-
 router.post(
   "/claim-session",
-
   authenticate,
-
   requireAuthenticatedUser,
-
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { guestSessionId, documentIds } = req.body
+      const { guestSessionId, documentIds, claimAllUnowned } = req.body
       const targetSessionId =
         (typeof guestSessionId === "string" && guestSessionId.trim()) ||
         getHeaderKey(req.headers["x-user-session"])
@@ -180,6 +176,7 @@ router.post(
         req.userId!,
         targetDocIds,
         req.user?.email,
+        Boolean(claimAllUnowned),
       )
 
       console.log(
@@ -192,8 +189,37 @@ router.post(
       })
     } catch (error: any) {
       console.error("Claim session error:", error)
-
       res.status(500).json({ error: "Failed to claim guest documents" })
+    }
+  },
+)
+
+// POST /api/v1/auth/claim-orphans
+router.post(
+  "/claim-orphans",
+  authenticate,
+  requireAuthenticatedUser,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const claimedCount = await claimGuestDocuments(
+        undefined,
+        req.userId!,
+        undefined,
+        req.user?.email,
+        true,
+      )
+
+      console.log(
+        `[Auth Claim-Orphans] Claimed ${claimedCount} orphaned documents for user ${req.userId}`,
+      )
+
+      res.json({
+        success: true,
+        claimedCount,
+      })
+    } catch (error: any) {
+      console.error("Claim orphans error:", error)
+      res.status(500).json({ error: "Failed to claim orphaned documents" })
     }
   },
 )

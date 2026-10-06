@@ -34,55 +34,58 @@ export async function authenticate(
   try {
     const authHeader = req.headers.authorization
 
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.substring(7).trim()
+    if (authHeader) {
+      if (authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7).trim()
 
-      if (token) {
+        if (!token) {
+          res.status(401).json({
+            error: "Missing authentication token",
+            code: "TOKEN_EXPIRED",
+          })
+          return
+        }
+
         const user = await getUserFromToken(token)
 
         if (user) {
           req.user = user
-
           req.userId = user.id
-
           req.isGuest = false
-
           return next()
         }
 
-        // A Bearer token was explicitly provided but is invalid or expired.
-        // Reject with 401 so the client can trigger an automatic token refresh.
+        // Bearer token was supplied but is expired or invalid.
+        // DO NOT silently downgrade to guest mode! Return 401 so client can refresh token.
         res.status(401).json({
-          error: "Token expired or invalid",
+          error: "Authentication token expired or invalid",
           code: "TOKEN_EXPIRED",
         })
-
         return
       }
+
+      res.status(401).json({
+        error: "Invalid authorization scheme",
+        code: "INVALID_AUTH",
+      })
+      return
     }
 
-    // Fallback to guest session header
-
+    // Fallback to guest session header ONLY when Authorization header is absent
     const guestSession = getHeaderKey(req.headers["x-user-session"])
 
     if (guestSession) {
       req.userId = guestSession
-
       req.isGuest = true
-
       return next()
     }
 
     // Neither present
-
     req.userId = undefined
-
     req.isGuest = undefined
-
     next()
   } catch (error) {
     console.error("Authentication middleware error:", error)
-
     next()
   }
 }

@@ -236,6 +236,17 @@ export async function getSupabaseUserEmailById(
   }
 }
 
+export async function isSupabaseRegisteredUserId(id: string): Promise<boolean> {
+  if (!id || !supabase || !isSupabaseEnabled()) return false
+  if (supabaseIdToEmailCache.has(id)) return true
+  try {
+    const email = await getSupabaseUserEmailById(id)
+    return Boolean(email)
+  } catch {
+    return false
+  }
+}
+
 export async function getSupabaseAllDocuments(
   userIdsOrUserId?: string | string[],
 
@@ -498,8 +509,8 @@ export async function claimSupabaseGuestDocuments(
   newUserId: string,
 
   documentIds?: string[],
-
   additionalUserIds?: string[],
+  claimAllGuest = false,
 ): Promise<number> {
   if (!supabase || !isSupabaseEnabled()) return 0
 
@@ -507,16 +518,11 @@ export async function claimSupabaseGuestDocuments(
     const rowsMap = new Map<string, any>()
 
     // 1. Find by guest session id in JSON content
-
     if (guestSessionId) {
       const { data, error } = await supabase
-
         .from("documents")
-
         .select("id, content")
-
         .not("id", "like", "rate_limit_%")
-
         .contains("content", { userId: guestSessionId })
 
       if (!error && data) {
@@ -527,19 +533,14 @@ export async function claimSupabaseGuestDocuments(
     }
 
     // 2. Find by additional user IDs (e.g. historical local user id like usr-...)
-
     if (additionalUserIds && additionalUserIds.length > 0) {
       for (const altId of additionalUserIds) {
         if (!altId) continue
 
         const { data, error } = await supabase
-
           .from("documents")
-
           .select("id, content")
-
           .not("id", "like", "rate_limit_%")
-
           .contains("content", { userId: altId })
 
         if (!error && data) {
@@ -550,33 +551,54 @@ export async function claimSupabaseGuestDocuments(
       }
     }
 
-    // 3. Also find any document IDs specifically passed by the client
-
+    // 3. Find any document IDs specifically passed by the client
     if (documentIds && documentIds.length > 0) {
       const { data, error } = await supabase
-
         .from("documents")
-
         .select("id, content")
-
         .not("id", "like", "rate_limit_%")
-
         .in("id", documentIds)
 
       if (!error && data) {
         for (const row of data) {
           const doc = row.content as FullDocument
-
           const isDemoDoc =
             doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
 
-          if (
-            !isDemoDoc &&
-            (!doc.userId ||
-              (guestSessionId && doc.userId === guestSessionId) ||
-              (additionalUserIds && additionalUserIds.includes(doc.userId)))
-          ) {
-            rowsMap.set(row.id, row)
+          if (!isDemoDoc) {
+            // Check if document belongs to another registered user
+            const isOtherRegistered =
+              doc.userId &&
+              doc.userId !== newUserId &&
+              !additionalUserIds?.includes(doc.userId) &&
+              (await isSupabaseRegisteredUserId(doc.userId))
+
+            if (!isOtherRegistered) {
+              rowsMap.set(row.id, row)
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Find all orphaned guest documents if claimAllGuest is true
+    if (claimAllGuest) {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, content")
+        .not("id", "like", "rate_limit_%")
+
+      if (!error && data) {
+        for (const row of data) {
+          const doc = row.content as FullDocument
+          const isDemoDoc =
+            doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+
+          if (!isDemoDoc && doc.userId && doc.userId !== newUserId) {
+            const isReg = await isSupabaseRegisteredUserId(doc.userId)
+            if (!isReg) {
+              rowsMap.set(row.id, row)
+            }
           }
         }
       }
@@ -586,16 +608,12 @@ export async function claimSupabaseGuestDocuments(
 
     const rowsToUpsert = Array.from(rowsMap.values()).map((row: any) => {
       const doc = row.content as FullDocument
-
       doc.userId = newUserId
-
       return { id: doc.id, content: doc }
     })
 
     const { error: upsertErr } = await supabase
-
       .from("documents")
-
       .upsert(rowsToUpsert)
 
     if (upsertErr) {
@@ -603,18 +621,15 @@ export async function claimSupabaseGuestDocuments(
         "Failed to batch upsert claimed documents in Supabase:",
         upsertErr,
       )
-
       return 0
     }
 
     console.log(
       `Migrated ${rowsToUpsert.length} document(s) to user ${newUserId} in Supabase`,
     )
-
     return rowsToUpsert.length
   } catch (error) {
     console.error("Failed to claim guest documents in Supabase:", error)
-
     return 0
   }
 }

@@ -17,6 +17,7 @@ import {
   getSupabaseUserIdByEmail,
   getSupabaseUserEmailById,
   setSupabaseUserCache,
+  isSupabaseRegisteredUserId,
 } from "./supabase.service.js"
 
 import { User, AuthResponse } from "../types/index.js"
@@ -66,6 +67,15 @@ export function isLocalRegisteredUserId(id: string): boolean {
   return false
 }
 
+export async function isRegisteredUserId(id?: string): Promise<boolean> {
+  if (!id) return false
+  if (isLocalRegisteredUserId(id)) return true
+  if (isSupabaseEnabled()) {
+    return await isSupabaseRegisteredUserId(id)
+  }
+  return false
+}
+
 export function getLocalUserIdByEmail(email: string): string | null {
   const clean = email.trim().toLowerCase()
   const user = localUsersStore.get(clean)
@@ -77,6 +87,30 @@ export function getUserEmailByLocalId(id: string): string | null {
     if (u.id === id) return u.email
   }
   return null
+}
+
+export async function getCanonicalUserId(
+  userId?: string,
+  userEmail?: string,
+): Promise<string | undefined> {
+  if (!userId && !userEmail) return undefined
+  let email = userEmail?.trim().toLowerCase()
+  if (!email && userId) {
+    if (userId.startsWith("usr-")) {
+      email = getUserEmailByLocalId(userId)?.toLowerCase()
+    } else if (isSupabaseEnabled()) {
+      email = (await getSupabaseUserEmailById(userId))?.toLowerCase()
+    }
+  }
+  if (email && isSupabaseEnabled()) {
+    const supaId = await getSupabaseUserIdByEmail(email)
+    if (supaId) return supaId
+  }
+  if (email) {
+    const localId = getLocalUserIdByEmail(email)
+    if (localId) return localId
+  }
+  return userId
 }
 
 export async function getAllUserIdentities(
@@ -93,15 +127,8 @@ export async function getAllUserIdentities(
     const localEmail = getUserEmailByLocalId(userId)
     if (localEmail) email = localEmail.trim().toLowerCase()
   }
-  const isUuid = Boolean(
-    userId &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        userId,
-      ),
-  )
-
-  if (!email && isUuid && isSupabaseEnabled()) {
-    const supaEmail = await getSupabaseUserEmailById(userId!)
+  if (!email && userId && isSupabaseEnabled()) {
+    const supaEmail = await getSupabaseUserEmailById(userId)
     if (supaEmail) email = supaEmail.trim().toLowerCase()
   }
 
@@ -509,8 +536,6 @@ export async function refreshUserToken(
         })
 
         if (!error && data.user && data.session) {
-          setSupabaseUserCache(data.user.id, data.user.email || "")
-
           return {
             user: {
               id: data.user.id,

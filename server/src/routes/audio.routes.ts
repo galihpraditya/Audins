@@ -44,6 +44,8 @@ import {
 import {
   getLocalUserIdByEmail,
   getAllUserIdentities,
+  getCanonicalUserId,
+  isRegisteredUserId,
 } from "../services/auth.service.js"
 
 import {
@@ -270,20 +272,16 @@ async function requireOwnedDocument(
     return null
   }
 
-  // Auto-migrate document ownership to current authenticated ID if previously guest
-
+  // Auto-migrate document ownership to current authenticated ID if previously guest or unowned
   // (Never auto-migrate unowned/demo documents)
-
   if (
     !isDemoDoc &&
     doc.userId &&
     doc.userId !== userId &&
     !authReq.isGuest &&
-    guestSession &&
-    doc.userId === guestSession
+    (doc.userId === guestSession || !(await isRegisteredUserId(doc.userId)))
   ) {
     doc.userId = userId
-
     void saveDocument(doc).catch(() => {})
   }
 
@@ -415,8 +413,7 @@ router.post(
       }
 
       // Check per-user storage limit (500MB)
-
-      const storageUsed = await calculateStorageUsed(userId)
+      const storageUsed = await calculateStorageUsed(userId, authReq.user?.email)
 
       if (storageUsed + file.size > MAX_FILE_BYTES) {
         await refundRateLimit(req)
@@ -431,32 +428,21 @@ router.post(
       }
 
       const docId = `doc-${uuidv4().substring(0, 8)}`
-
       const now = new Date()
-
       const durationStr = req.body.duration || "0m 0s"
-
       const durationSec = req.body.durationSec
         ? parseInt(req.body.durationSec, 10)
         : 0
 
       // Signed local media URL fallback. The token makes bare filename knowledge
-
       // useless; expiry matches the 7-day media retention window plus a grace day.
-
       const serverAudioUrl = buildSignedLocalUrl(
         path.basename(file.path),
-
         now.getTime() + 8 * 24 * 60 * 60 * 1000,
       )
 
-      let resolvedUserId = userId
-
-      if (authReq.user?.email && isSupabaseEnabled()) {
-        const supaId = await getSupabaseUserIdByEmail(authReq.user.email)
-
-        if (supaId) resolvedUserId = supaId
-      }
+      const resolvedUserId =
+        (await getCanonicalUserId(userId, authReq.user?.email)) || userId
 
       const newDoc: FullDocument = {
         id: docId,
@@ -896,7 +882,10 @@ router.post("/documents/:id/duplicate", async (req: Request, res: Response) => {
   if (!userId) return
 
   try {
-    const copy = await duplicateDocument(doc.id, userId)
+    const authReq = req as AuthenticatedRequest
+    const resolvedUserId =
+      (await getCanonicalUserId(userId, authReq.user?.email)) || userId
+    const copy = await duplicateDocument(doc.id, resolvedUserId)
 
     if (!copy) {
       res.status(404).json({ error: "Document not found" })
@@ -1175,7 +1164,9 @@ router.post(
 
         name: `${doc.name} (Shared Copy)`,
 
-        userId: userId,
+        userId:
+          (await getCanonicalUserId(userId, (req as AuthenticatedRequest).user?.email)) ||
+          userId,
 
         createdAt: new Date().toISOString(),
 

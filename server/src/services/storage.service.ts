@@ -27,6 +27,7 @@ import { isR2Enabled, deleteAudioFromR2 } from "./r2.service.js"
 
 import {
   isLocalRegisteredUserId,
+  isRegisteredUserId,
   getLocalUserIdByEmail,
   getUserEmailByLocalId,
   getAllUserIdentities,
@@ -145,55 +146,47 @@ export async function getAllDocuments(
     const docs = await getSupabaseAllDocuments(allUserIds)
 
     if (docs !== null) {
-      // Keep documentsStore aligned with authoritative Supabase truth:
+      const userIdsSet = new Set(allUserIds)
 
-      // Prune documents that were deleted from Supabase so they don't linger in cache.
+      // Sync Supabase authoritative records into in-memory store
+      for (const doc of docs) {
+        documentsStore.set(doc.id, doc)
+      }
 
-      // NEVER delete demo documents (doc-1, doc-2, doc-3).
+      // Merge local in-memory documents that match the user or demo docs,
+      // but are not yet in Supabase (e.g. newly uploaded or in-flight processing).
+      // NEVER delete local documents simply because a Supabase query didn't return them yet!
+      const resultDocIds = new Set(docs.map((d) => d.id))
+      const combinedDocs = [...docs]
+      const pendingSyncToSupabase: FullDocument[] = []
 
-      const supaIds = new Set(docs.map((d) => d.id))
-
-      // Only prune documents belonging to the specifically queried user identities
-      if (allUserIds.length > 0) {
-        const userIdsSet = new Set(allUserIds)
-        for (const [id, d] of documentsStore.entries()) {
+      for (const [id, localDoc] of documentsStore.entries()) {
+        if (!resultDocIds.has(id)) {
           const isDemo = id === "doc-1" || id === "doc-2" || id === "doc-3"
+          const belongsToUser =
+            allUserIds.length === 0 ||
+            (localDoc.userId && userIdsSet.has(localDoc.userId))
 
-          if (isDemo) continue
+          if (isDemo || belongsToUser) {
+            combinedDocs.push(localDoc)
+            resultDocIds.add(id)
 
-          if (d.userId && userIdsSet.has(d.userId)) {
-            if (!supaIds.has(id)) {
-              documentsStore.delete(id)
+            // If non-demo and not actively processing, schedule background sync to Supabase
+            if (!isDemo && localDoc.status !== "Processing") {
+              pendingSyncToSupabase.push(localDoc)
             }
           }
         }
       }
 
-      for (const doc of docs) {
-        documentsStore.set(doc.id, doc)
-      }
-
-      // Ensure any local demo docs in documentsStore (from db.json) are included if missing
-
-      const resultDocIds = new Set(docs.map((d) => d.id))
-
-      const combinedDocs = [...docs]
-
-      for (const [id, localDoc] of documentsStore.entries()) {
-        if (
-          !resultDocIds.has(id) &&
-          (id === "doc-1" || id === "doc-2" || id === "doc-3")
-        ) {
-          combinedDocs.push(localDoc)
-
-          resultDocIds.add(id)
-        }
+      if (pendingSyncToSupabase.length > 0) {
+        void upsertSupabaseDocumentsBatch(pendingSyncToSupabase).catch((err) => {
+          console.warn("Background sync of local docs to Supabase failed:", err)
+        })
       }
 
       return combinedDocs
-
         .map(normalizeDocument)
-
         .sort(
           (a, b) =>
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -623,12 +616,10 @@ export async function duplicateDocument(
 
 export async function claimGuestDocuments(
   guestSessionId: string | undefined,
-
   newUserId: string,
-
   documentIds?: string[],
-
   userEmail?: string,
+  claimAllGuest = false,
 ): Promise<number> {
   if (!newUserId) return 0
 
@@ -653,34 +644,29 @@ export async function claimGuestDocuments(
       ? guestSessionId
       : undefined
 
-  let totalCount = 0
+  let claimedCount = 0
 
   // 1. Supabase claim
-
   if (isSupabaseEnabled()) {
     try {
       const supabaseCount = await claimSupabaseGuestDocuments(
         cleanGuestId,
-
         newUserId,
-
         documentIds,
-
         additionalUserIds,
+        claimAllGuest,
       )
-
-      totalCount += supabaseCount
+      if (supabaseCount > 0) {
+        claimedCount += supabaseCount
+      }
     } catch (err) {
       console.error("Supabase claim failed, checking local store:", err)
     }
   }
 
   // 2. Local documentsStore claim
-
   let localModified = false
-
   const docsToSync: FullDocument[] = []
-
   const requestedIds = new Set(documentIds || [])
 
   for (const doc of documentsStore.values()) {
@@ -693,25 +679,36 @@ export async function claimGuestDocuments(
     } else if (requestedIds.has(doc.id)) {
       const isDemoDoc =
         doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+      const isOtherReg =
+        doc.userId &&
+        doc.userId !== newUserId &&
+        !additionalUserIds.includes(doc.userId) &&
+        (await isRegisteredUserId(doc.userId))
 
-      if (
-        !isDemoDoc &&
-        (!doc.userId ||
-          (cleanGuestId && doc.userId === cleanGuestId) ||
-          (localUserId && doc.userId === localUserId))
-      ) {
+      if (!isDemoDoc && !isOtherReg) {
+        shouldClaim = true
+      }
+    } else if (claimAllGuest) {
+      const isDemoDoc =
+        doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
+      const isOtherReg =
+        doc.userId &&
+        doc.userId !== newUserId &&
+        !additionalUserIds.includes(doc.userId) &&
+        (await isRegisteredUserId(doc.userId))
+
+      if (!isDemoDoc && !isOtherReg && doc.userId) {
         shouldClaim = true
       }
     }
 
     if (shouldClaim && doc.userId !== newUserId) {
       doc.userId = newUserId
-
       localModified = true
-
       docsToSync.push(doc)
-
-      totalCount++
+      if (!isSupabaseEnabled()) {
+        claimedCount++
+      }
     }
   }
 
@@ -725,7 +722,14 @@ export async function claimGuestDocuments(
     })
   }
 
-  return totalCount
+  return claimedCount
+}
+
+export async function claimAllUnownedDocuments(
+  targetUserId: string,
+  userEmail?: string,
+): Promise<number> {
+  return await claimGuestDocuments(undefined, targetUserId, undefined, userEmail, true)
 }
 
 /**

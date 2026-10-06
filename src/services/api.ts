@@ -241,7 +241,6 @@ export function authHeaders(
  * Safely extracts an error message from a failed Response without assuming
  * the body is JSON (500 responses may be HTML/plain text).
  */
-
 async function extractErrorMessage(
   res: Response,
   fallback: string,
@@ -258,45 +257,79 @@ async function extractErrorMessage(
   }
 }
 
+export async function refreshTokenApi(
+  refreshToken: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken }),
+  })
+
+  if (!res.ok) throw await extractErrorMessage(res, "Failed to refresh session")
+
+  const data = (await res.json()) as AuthResponse
+  const remember = isRememberMe()
+  setAuthToken(data.token, remember)
+  if (data.refreshToken) {
+    setRefreshToken(data.refreshToken, remember)
+  }
+  setStoredUser(data.user, remember)
+
+  return data
+}
+
 let refreshPromise: Promise<string | null> | null = null
 
+export async function refreshAccessTokenSingleFlight(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise
+
+  const rt = getRefreshToken()
+  if (!rt) return null
+
+  refreshPromise = (async () => {
+    try {
+      const data = await refreshTokenApi(rt)
+      return data.token
+    } catch {
+      clearAuth()
+      return null
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
+}
+
 /**
- * Central authenticated fetch wrapper with automatic token refresh on 401.
- * Automatically retries with refreshed token when available, de-duplicating
- * concurrent refresh attempts across simultaneous API calls.
+ * Universal fetch wrapper that injects standard auth/session headers and
+ * transparently refreshes expired access tokens upon receiving HTTP 401.
  */
-export async function apiFetch(
+export async function fetchWithAuth(
   url: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const customHeaders = (options.headers as Record<string, string>) || {}
-  let headers = authHeaders(customHeaders)
-  let res = await fetch(url, { ...options, headers })
+  const headers = authHeaders(
+    (options.headers as Record<string, string>) || {},
+  )
 
-  if (res.status === 401) {
-    const refreshToken = getRefreshToken()
-    if (refreshToken) {
-      if (!refreshPromise) {
-        refreshPromise = (async () => {
-          try {
-            const rt = getRefreshToken()
-            if (!rt) return null
-            const authRes = await refreshTokenApi(rt)
-            return authRes.token
-          } catch {
-            clearAuth()
-            return null
-          } finally {
-            refreshPromise = null
-          }
-        })()
-      }
+  let res = await fetch(url, {
+    ...options,
+    headers,
+  })
 
-      const newToken = await refreshPromise
-      if (newToken) {
-        headers = authHeaders(customHeaders)
-        res = await fetch(url, { ...options, headers })
-      }
+  // If 401 Unauthorized occurs and we had a stored token, auto-refresh once and replay request
+  if (res.status === 401 && getAuthToken()) {
+    const newToken = await refreshAccessTokenSingleFlight()
+    if (newToken) {
+      const retryHeaders = authHeaders(
+        (options.headers as Record<string, string>) || {},
+      )
+      res = await fetch(url, {
+        ...options,
+        headers: retryHeaders,
+      })
     }
   }
 
@@ -304,7 +337,7 @@ export async function apiFetch(
 }
 
 export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
-  const res = await apiFetch(`${API_BASE_URL}/documents`)
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents`)
 
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load documents")
 
@@ -312,7 +345,7 @@ export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
 }
 
 export async function fetchRateLimitApi(): Promise<RateLimitResponse> {
-  const res = await apiFetch(`${API_BASE_URL}/settings/rate-limit`)
+  const res = await fetchWithAuth(`${API_BASE_URL}/settings/rate-limit`)
 
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load quota info")
 
@@ -431,7 +464,7 @@ export async function pollDocumentStatusApi(
   id: string | number,
 ): Promise<DocumentItem | null> {
   try {
-    const res = await apiFetch(`${API_BASE_URL}/documents/${id}`)
+    const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}`)
 
     if (!res.ok) return null
 
@@ -449,7 +482,7 @@ export async function pollDocumentStatusApi(
 export async function fetchDocumentByIdApi(
   id: string | number,
 ): Promise<DocumentItem | null> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`)
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}`)
 
   if (res.status === 404) return null
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load document")
@@ -470,7 +503,7 @@ export async function reSummarizeApi(
     headers["X-Groq-API-Key"] = userApiKey
   }
 
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/summarize`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/summarize`, {
     method: "POST",
     headers,
     body: JSON.stringify({ customPrompt }),
@@ -482,7 +515,7 @@ export async function reSummarizeApi(
 }
 
 export async function deleteDocumentApi(id: string | number): Promise<void> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}`, {
     method: "DELETE",
   })
 
@@ -494,7 +527,7 @@ export async function deleteDocumentApi(id: string | number): Promise<void> {
 export async function deleteAudioOnlyApi(
   id: string | number,
 ): Promise<DocumentItem> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/audio`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/audio`, {
     method: "DELETE",
   })
 
@@ -517,7 +550,7 @@ export async function retranscribeDocumentApi(
     headers["X-Groq-API-Key"] = userApiKey
   }
 
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/retranscribe`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/retranscribe`, {
     method: "POST",
     headers,
     body: JSON.stringify(options),
@@ -532,7 +565,7 @@ export async function renameDocumentApi(
   id: string | number,
   newName: string,
 ): Promise<DocumentItem> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: newName }),
@@ -546,7 +579,7 @@ export async function renameDocumentApi(
 export async function duplicateDocumentApi(
   id: string | number,
 ): Promise<DocumentItem> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/duplicate`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/duplicate`, {
     method: "POST",
   })
 
@@ -560,7 +593,7 @@ export async function updateDocumentSummaryApi(
   id: string | number,
   summary: AISummary,
 ): Promise<DocumentItem> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/summary`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/summary`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ summary }),
@@ -581,7 +614,7 @@ export async function updateDocumentShareSettingsApi(
     regenerateShareId?: boolean
   },
 ): Promise<DocumentItem> {
-  const res = await apiFetch(`${API_BASE_URL}/documents/${id}/share`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}/share`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
@@ -609,7 +642,7 @@ export async function fetchPublicSharedDocumentApi(
 export async function duplicateSharedDocumentApi(
   shareId: string,
 ): Promise<DocumentItem> {
-  const res = await apiFetch(
+  const res = await fetchWithAuth(
     `${API_BASE_URL}/shared/${encodeURIComponent(shareId)}/duplicate`,
     {
       method: "POST",
@@ -668,60 +701,22 @@ export async function registerApi(
   return (await res.json()) as AuthResponse
 }
 
-export async function refreshTokenApi(
-  refreshToken: string,
-): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: "POST",
-
-    headers: { "Content-Type": "application/json" },
-
-    body: JSON.stringify({ refreshToken }),
-  })
-
-  if (!res.ok) throw await extractErrorMessage(res, "Failed to refresh session")
-
-  const data = (await res.json()) as AuthResponse
-  const remember = isRememberMe()
-  setAuthToken(data.token, remember)
-  if (data.refreshToken) {
-    setRefreshToken(data.refreshToken, remember)
-  }
-  setStoredUser(data.user, remember)
-
-  return data
-}
-
 export async function fetchCurrentUserApi(): Promise<User | null> {
   const token = getAuthToken()
 
   if (!token) return null
 
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: authHeaders(),
-    })
+    const res = await fetchWithAuth(`${API_BASE_URL}/auth/me`)
 
     if (!res.ok) {
       if (res.status === 401) {
-        const refreshToken = getRefreshToken()
-        if (refreshToken) {
-          try {
-            const refreshed = await refreshTokenApi(refreshToken)
-            return refreshed.user
-          } catch {
-            clearAuth()
-            return null
-          }
-        }
         clearAuth()
       }
-
       return null
     }
 
     const data = await res.json()
-
     return data.user as User
   } catch {
     return null
@@ -731,18 +726,34 @@ export async function fetchCurrentUserApi(): Promise<User | null> {
 export async function claimGuestSessionApi(
   guestSessionId: string,
   documentIds?: string[],
+  claimAllUnowned?: boolean,
 ): Promise<{ success: boolean; claimedCount: number }> {
-  const res = await apiFetch(`${API_BASE_URL}/auth/claim-session`, {
+  const res = await fetchWithAuth(`${API_BASE_URL}/auth/claim-session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       guestSessionId,
       documentIds: documentIds && documentIds.length > 0 ? documentIds : undefined,
+      claimAllUnowned,
     }),
   })
 
   if (!res.ok)
     throw await extractErrorMessage(res, "Failed to claim guest session")
+
+  return await res.json()
+}
+
+export async function claimOrphanedDocumentsApi(): Promise<{
+  success: boolean
+  claimedCount: number
+}> {
+  const res = await fetchWithAuth(`${API_BASE_URL}/auth/claim-orphans`, {
+    method: "POST",
+  })
+
+  if (!res.ok)
+    throw await extractErrorMessage(res, "Failed to claim orphaned documents")
 
   return await res.json()
 }
