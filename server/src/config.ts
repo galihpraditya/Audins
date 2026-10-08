@@ -52,6 +52,9 @@ export const JWT_SECRET =
       console.warn(
         "CRITICAL SECURITY WARNING: JWT_SECRET is not set in production. Using insecure default secret.",
       )
+      console.warn(
+        "-> Please generate a secret via 'npm run generate-secrets' and add JWT_SECRET to your Render Environment Variables.",
+      )
     }
     return "audin-jwt-auth-secret"
   })()
@@ -63,6 +66,9 @@ export const MEDIA_SIGNING_SECRET =
     if (process.env.NODE_ENV === "production") {
       console.warn(
         "CRITICAL SECURITY WARNING: MEDIA_SIGNING_SECRET is not set in production. Using insecure default secret.",
+      )
+      console.warn(
+        "-> Please generate a secret via 'npm run generate-secrets' and add MEDIA_SIGNING_SECRET to your Render Environment Variables.",
       )
     }
     return "audin-insecure-dev-secret"

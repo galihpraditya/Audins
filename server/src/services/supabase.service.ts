@@ -280,7 +280,7 @@ export async function getSupabaseAllDocuments(
     }
 
     if (userIds.size > 0) {
-      const orConditions = ["id.in.(doc-1,doc-2,doc-3)"]
+      const orConditions: string[] = []
 
       for (const uid of userIds) {
         const cleanUid = uid.replace(/[,()]/g, "").trim()
@@ -290,7 +290,9 @@ export async function getSupabaseAllDocuments(
         }
       }
 
-      query = query.or(orConditions.join(","))
+      if (orConditions.length > 0) {
+        query = query.or(orConditions.join(","))
+      }
     }
 
     const { data, error } = await query

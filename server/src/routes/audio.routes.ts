@@ -260,11 +260,7 @@ async function requireOwnedDocument(
     return null
   }
 
-  const isDemoDoc =
-    doc.id === "doc-1" || doc.id === "doc-2" || doc.id === "doc-3"
-
-  const isOwner =
-    isDemoDoc || (doc.userId ? allowedUserIds.includes(doc.userId) : false)
+  const isOwner = doc.userId ? allowedUserIds.includes(doc.userId) : false
 
   if (!isOwner) {
     res.status(404).json({ error: "Document not found" })
@@ -273,9 +269,7 @@ async function requireOwnedDocument(
   }
 
   // Auto-migrate document ownership to current authenticated ID if previously guest or unowned
-  // (Never auto-migrate unowned/demo documents)
   if (
-    !isDemoDoc &&
     doc.userId &&
     doc.userId !== userId &&
     !authReq.isGuest &&

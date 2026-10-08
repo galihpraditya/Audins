@@ -43,6 +43,8 @@ import {
   duplicateDocumentApi,
   updateDocumentSummaryApi,
   ApiError,
+  getCachedDocuments,
+  setCachedDocuments,
 } from "./services/api"
 
 import { useToast } from "./components/ui/ToastContext"
@@ -96,12 +98,15 @@ export default function App() {
   } = useAuth()
 
   // Document collection state
-
-  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [documents, setDocuments] = useState<DocumentItem[]>(() => {
+    return getCachedDocuments()
+  })
 
   const [loadError, setLoadError] = useState(false)
-
-  const [initialLoading, setInitialLoading] = useState(true)
+  const [isServerWakingUp, setIsServerWakingUp] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(() => {
+    return getCachedDocuments().length === 0
+  })
 
   const uploadControllersRef = useRef<Map<string | number, AbortController>>(
     new Map(),
@@ -224,19 +229,23 @@ export default function App() {
   }, [])
 
   // Fetch initial documents and rate limit from backend
-
   const loadInitialData = useCallback(async () => {
     setLoadError(false)
-
-    setInitialLoading(true)
+    setIsServerWakingUp(false)
 
     try {
-      const docs = await fetchDocumentsFromApi()
+      const docs = await fetchDocumentsFromApi(() => {
+        setIsServerWakingUp(true)
+      })
 
-      const sortedDocs = [...docs].sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
+      const sortedDocs = docs
+        .filter(
+          (d) => d.id !== "doc-1" && d.id !== "doc-2" && d.id !== "doc-3",
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
 
       setDocuments((prev) => {
         // Merge server docs with any local in-flight or actively uploading docs so
@@ -249,7 +258,9 @@ export default function App() {
               d.status === "Processing" ||
               (d.uploadProgress !== undefined && d.uploadProgress < 100)),
         )
-        return [...inFlightLocal, ...sortedDocs]
+        const merged = [...inFlightLocal, ...sortedDocs]
+        setCachedDocuments(merged, user?.id)
+        return merged
       })
 
       // Resume status tracking for jobs that were still running server-side
@@ -260,25 +271,36 @@ export default function App() {
       })
     } catch {
       // Surface a visible error + retry instead of an ambiguous empty state.
-
       setLoadError(true)
     } finally {
       setInitialLoading(false)
+      setIsServerWakingUp(false)
     }
 
     await refreshFromServer()
-  }, [refreshFromServer, startPolling])
+  }, [refreshFromServer, startPolling, user?.id])
 
   // Register loadInitialData as sync listener so cross-device triggers refresh UI
-
   useEffect(() => {
     return registerSyncListener(loadInitialData)
   }, [registerSyncListener, loadInitialData])
 
-  // Reload when active user account changes (login/logout)
+  // Reload and restore user-specific cache when active user account changes (login/logout)
   useEffect(() => {
+    const userCached = getCachedDocuments(user?.id)
+    if (userCached.length > 0) {
+      setDocuments(userCached)
+      setInitialLoading(false)
+    }
     void loadInitialData()
   }, [user?.id, loadInitialData])
+
+  // Sync cache whenever documents state changes
+  useEffect(() => {
+    if (documents.length > 0) {
+      setCachedDocuments(documents, user?.id)
+    }
+  }, [documents, user?.id])
 
   const handleDocumentLoaded = useCallback(
     (doc: DocumentItem) => {
@@ -817,6 +839,20 @@ export default function App() {
 
       {/* Main Content Area with React Router */}
       <div className="flex-1 flex flex-col overflow-hidden print:block print:overflow-visible print:h-auto print:bg-white">
+        {isServerWakingUp && !loadError && (
+          <div className="px-4 sm:px-6 py-3 no-print">
+            <Alert
+              variant="info"
+              title={t("server_waking_up_title")}
+            >
+              <div className="flex items-center gap-2">
+                <ArrowClockwise size={13} weight="bold" className="animate-spin text-fg-secondary shrink-0" />
+                <span>{t("server_waking_up_desc")}</span>
+              </div>
+            </Alert>
+          </div>
+        )}
+
         {loadError && (
           <div className="px-4 sm:px-6 py-3 no-print">
             <Alert

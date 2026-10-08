@@ -467,6 +467,11 @@ export const translations = {
 
     btn_retry: "Retry",
 
+    server_waking_up_title: "Waking up backend server...",
+
+    server_waking_up_desc:
+      "The server is starting from sleep mode (Render free tier, ~30-50s). Showing cached files while syncing...",
+
     // Misc UI strings
 
     search_no_match: 'No documents matching "{query}".',
@@ -1136,6 +1141,11 @@ export const translations = {
       "Kami tidak dapat menghubungi server. Periksa koneksi Anda dan coba lagi.",
 
     btn_retry: "Coba Lagi",
+
+    server_waking_up_title: "Menghubungkan ke server backend...",
+
+    server_waking_up_desc:
+      "Server sedang bangun dari mode tidur (Render free tier, ~30-50 detik). Menampilkan berkas tersimpan sementara...",
 
     // Misc UI strings
 

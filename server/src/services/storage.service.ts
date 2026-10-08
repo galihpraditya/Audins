@@ -42,7 +42,14 @@ function loadDb() {
     try {
       const data = JSON.parse(fs.readFileSync(DB_FILE, "utf8"))
 
-      documentsStore = new Map(data.map((doc: FullDocument) => [doc.id, doc]))
+      documentsStore = new Map(
+        data
+          .filter(
+            (doc: FullDocument) =>
+              doc.id !== "doc-1" && doc.id !== "doc-2" && doc.id !== "doc-3",
+          )
+          .map((doc: FullDocument) => [doc.id, doc]),
+      )
 
       return
     } catch (error) {
@@ -99,6 +106,15 @@ export function flushDbWrites(): Promise<void> {
 // Initial Load for Local DB
 
 loadDb()
+
+// Cleanup legacy demo documents from Supabase if configured
+if (isSupabaseEnabled()) {
+  void Promise.all([
+    deleteSupabaseDocument("doc-1"),
+    deleteSupabaseDocument("doc-2"),
+    deleteSupabaseDocument("doc-3"),
+  ]).catch(() => {})
+}
 
 // --- Exported Async CRUD API ---
 
@@ -162,17 +178,17 @@ export async function getAllDocuments(
 
       for (const [id, localDoc] of documentsStore.entries()) {
         if (!resultDocIds.has(id)) {
-          const isDemo = id === "doc-1" || id === "doc-2" || id === "doc-3"
+          if (id === "doc-1" || id === "doc-2" || id === "doc-3") continue
           const belongsToUser =
             allUserIds.length === 0 ||
             (localDoc.userId && userIdsSet.has(localDoc.userId))
 
-          if (isDemo || belongsToUser) {
+          if (belongsToUser) {
             combinedDocs.push(localDoc)
             resultDocIds.add(id)
 
-            // If non-demo and not actively processing, schedule background sync to Supabase
-            if (!isDemo && localDoc.status !== "Processing") {
+            // If not actively processing, schedule background sync to Supabase
+            if (localDoc.status !== "Processing") {
               pendingSyncToSupabase.push(localDoc)
             }
           }
@@ -196,23 +212,17 @@ export async function getAllDocuments(
 
   // Fallback to local documentsStore when Supabase is disabled or unreachable
 
-  const allLocalDocs = Array.from(documentsStore.values()).map(
-    normalizeDocument,
-  )
+  const allLocalDocs = Array.from(documentsStore.values())
+    .filter(
+      (d) => d.id !== "doc-1" && d.id !== "doc-2" && d.id !== "doc-3",
+    )
+    .map(normalizeDocument)
 
   if (allUserIds.length > 0) {
     const userIdsSet = new Set(allUserIds)
 
     return allLocalDocs
-
-      .filter(
-        (d) =>
-          d.id === "doc-1" ||
-          d.id === "doc-2" ||
-          d.id === "doc-3" ||
-          (d.userId && userIdsSet.has(d.userId)),
-      )
-
+      .filter((d) => d.userId && userIdsSet.has(d.userId))
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -421,13 +431,7 @@ export async function cleanupExpiredAudio(): Promise<void> {
   for (const doc of docs) {
     if (!doc.audioUrl || doc.audioUrl === "Expired") continue
 
-    if (
-      !doc.userId ||
-      doc.id === "doc-1" ||
-      doc.id === "doc-2" ||
-      doc.id === "doc-3"
-    )
-      continue
+    if (!doc.userId) continue
 
     const docAge = now - new Date(doc.createdAt).getTime()
 

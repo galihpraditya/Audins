@@ -302,6 +302,47 @@ export async function refreshAccessTokenSingleFlight(): Promise<string | null> {
   return refreshPromise
 }
 
+const DOCS_CACHE_PREFIX = "audin_cached_docs_"
+
+function isNotDemoDoc(d: DocumentItem): boolean {
+  return d.id !== "doc-1" && d.id !== "doc-2" && d.id !== "doc-3"
+}
+
+export function getCachedDocuments(userKey?: string): DocumentItem[] {
+  try {
+    const key = `${DOCS_CACHE_PREFIX}${userKey || getSessionId()}`
+    const raw = localStorage.getItem(key)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(isNotDemoDoc)
+  } catch {
+    return []
+  }
+}
+
+export function setCachedDocuments(
+  docs: DocumentItem[],
+  userKey?: string,
+): void {
+  try {
+    const key = `${DOCS_CACHE_PREFIX}${userKey || getSessionId()}`
+    // Filter demo docs and cache up to 100 most recent documents
+    const safeDocs = docs.filter(isNotDemoDoc).slice(0, 100)
+    localStorage.setItem(key, JSON.stringify(safeDocs))
+  } catch {
+    /* non-fatal if storage quota exceeded */
+  }
+}
+
+const COLD_START_STATUSES = new Set([502, 503, 504])
+
+export interface ColdStartFetchOptions extends RequestInit {
+  maxRetries?: number
+  initialDelayMs?: number
+  onColdStartDetected?: () => void
+}
+
 /**
  * Universal fetch wrapper that injects standard auth/session headers and
  * transparently refreshes expired access tokens upon receiving HTTP 401.
@@ -336,8 +377,61 @@ export async function fetchWithAuth(
   return res
 }
 
-export async function fetchDocumentsFromApi(): Promise<DocumentItem[]> {
-  const res = await fetchWithAuth(`${API_BASE_URL}/documents`)
+/**
+ * Enhanced fetch wrapper with auto-retry specifically tuned for Render Free Tier cold starts.
+ * When Render is asleep, requests often hang or return 502/503/504 until the container is ready.
+ */
+export async function fetchWithColdStartRetry(
+  url: string,
+  options: ColdStartFetchOptions = {},
+): Promise<Response> {
+  const {
+    maxRetries = 3,
+    initialDelayMs = 2500,
+    onColdStartDetected,
+    ...fetchOptions
+  } = options
+
+  let slowTimer: ReturnType<typeof setTimeout> | null = null
+  if (onColdStartDetected) {
+    slowTimer = setTimeout(() => {
+      onColdStartDetected()
+    }, 3500)
+  }
+
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetchWithAuth(url, fetchOptions)
+        // If not a gateway cold start error (or last attempt), return response
+        if (!COLD_START_STATUSES.has(res.status) || attempt === maxRetries) {
+          return res
+        }
+        if (onColdStartDetected) onColdStartDetected()
+      } catch (err: any) {
+        if (attempt === maxRetries) throw err
+        if (onColdStartDetected) onColdStartDetected()
+      }
+
+      // Backoff before next attempt (e.g. 2.5s, 3.75s, 5.6s)
+      const delay = initialDelayMs * Math.pow(1.5, attempt)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+
+    return await fetchWithAuth(url, fetchOptions)
+  } finally {
+    if (slowTimer) clearTimeout(slowTimer)
+  }
+}
+
+export async function fetchDocumentsFromApi(
+  onColdStart?: () => void,
+): Promise<DocumentItem[]> {
+  const res = await fetchWithColdStartRetry(`${API_BASE_URL}/documents`, {
+    maxRetries: 3,
+    initialDelayMs: 2500,
+    onColdStartDetected: onColdStart,
+  })
 
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load documents")
 
