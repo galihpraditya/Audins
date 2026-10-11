@@ -165,7 +165,11 @@ export default function App() {
         const updated = outcome.doc
 
         setDocuments((prev) =>
-          prev.map((d) => (String(d.id) === String(updated.id) ? updated : d)),
+          prev.map((d) =>
+            String(d.id) === String(updated.id)
+              ? { ...d, ...updated, audioUrl: d.audioUrl || updated.audioUrl }
+              : d,
+          ),
         )
 
         if (updated.status === "Completed") {
@@ -173,13 +177,13 @@ export default function App() {
             t("toast_processing_done", { name: updated.name }),
             "success",
           )
-
-          revokeTempBlob(updated.id)
         } else {
           showToast(
             t("toast_processing_failed", { name: updated.name }),
             "error",
           )
+
+          revokeTempBlob(updated.id)
         }
       } else {
         // Give up: flip the doc to Failed so it stops spinning forever, and
@@ -515,35 +519,27 @@ export default function App() {
 
       uploadControllersRef.current.delete(newId)
 
+      // If backend returned a different id than temp newId, remap the blob ref first
+      if (String(apiResult.id) !== String(newId)) {
+        const blob = tempBlobUrlsRef.current.get(newId)
+        if (blob) {
+          tempBlobUrlsRef.current.set(apiResult.id, blob)
+          tempBlobUrlsRef.current.delete(newId)
+        }
+        navigate(`/workspace/${apiResult.id}`, { replace: true })
+      }
+
+      // Keep local blob preview alive during background AI processing so the browser
+      // never encounters network/CORS stalls or missing audio errors mid-transcription.
       const processingDoc: DocumentItem = {
         ...apiResult,
-
-        audioUrl: apiResult.audioUrl || blobUrl,
-
+        audioUrl: blobUrl || apiResult.audioUrl,
         uploadProgress: 100,
       }
 
       setDocuments((prev) =>
         prev.map((d) => (String(d.id) === String(newId) ? processingDoc : d)),
       )
-
-      // The backend owns the media now — release our local preview copy.
-
-      if (apiResult.audioUrl) revokeTempBlob(newId)
-
-      // If backend returned a different id than temp newId, remap the blob ref
-
-      if (String(apiResult.id) !== String(newId)) {
-        navigate(`/workspace/${apiResult.id}`, { replace: true })
-
-        const blob = tempBlobUrlsRef.current.get(newId)
-
-        if (blob) {
-          tempBlobUrlsRef.current.set(apiResult.id, blob)
-
-          tempBlobUrlsRef.current.delete(newId)
-        }
-      }
 
       if (processingDoc.status === "Processing") {
         showToast(t("toast_processing_started"), "info")

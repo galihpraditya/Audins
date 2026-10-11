@@ -48,6 +48,9 @@ interface AudioPlayerProps {
   /** Renders a single-row transport with NO <audio> element. */
 
   compact?: boolean
+
+  /** Document is currently undergoing background transcription / processing. */
+  isProcessing?: boolean
 }
 
 export default function AudioPlayer({
@@ -68,6 +71,8 @@ export default function AudioPlayer({
   onPlayingChange,
 
   compact = false,
+
+  isProcessing = false,
 }: AudioPlayerProps) {
   const { t } = useLanguage()
 
@@ -82,7 +87,7 @@ export default function AudioPlayer({
   const isAudioMissingOrExpired = !audioUrl || audioUrl === "Expired"
 
   const setPlaying = (value: boolean) => {
-    if (value && (isAudioMissingOrExpired || audioError)) {
+    if (value && isAudioMissingOrExpired) {
       showToast(t("toast_audio_not_found"), "error")
 
       return
@@ -93,13 +98,38 @@ export default function AudioPlayer({
   }
 
   const togglePlay = () => {
-    if (isAudioMissingOrExpired || audioError) {
+    if (isAudioMissingOrExpired) {
       showToast(t("toast_audio_not_found"), "error")
 
       return
     }
 
-    setPlaying(!playing)
+    setAudioError(null)
+
+    if (audioRef.current) {
+      if (audioRef.current.paused) {
+        if (audioRef.current.error) {
+          audioRef.current.load()
+        }
+        const playPromise = audioRef.current.play()
+        if (playPromise !== undefined) {
+          playPromise.catch((err: unknown) => {
+            const errName = (err as Error)?.name
+            if (errName === "AbortError") return
+            console.warn("Audio play prevented:", err)
+            setPlaying(false)
+            if (!isProcessing && errName !== "NotAllowedError") {
+              setAudioError(t("audio_not_found_desc"))
+              showToast(t("toast_audio_not_found"), "error")
+            }
+          })
+        }
+      } else {
+        audioRef.current.pause()
+      }
+    } else {
+      setPlaying(!playing)
+    }
   }
 
   const [duration, setDuration] = useState<number>(initialDurationSec)
@@ -196,25 +226,32 @@ export default function AudioPlayer({
     }
   }, [currentTime, isDragging])
 
-  // Play / Pause effect
-
+  // Play / Pause synchronization effect (handles external state changes)
   useEffect(() => {
-    if (audioRef.current && audioUrl && !isAudioMissingOrExpired) {
-      if (playing) {
-        audioRef.current.play().catch((err) => {
-          console.warn("Audio play prevented:", err)
+    const audio = audioRef.current
+    if (!audio || !audioUrl || isAudioMissingOrExpired) return
 
-          setPlaying(false)
-
-          setAudioError(t("audio_not_found_desc"))
-
-          showToast(t("toast_audio_not_found"), "error")
-        })
-      } else {
-        audioRef.current.pause()
+    if (playing && audio.paused) {
+      if (audio.error) {
+        audio.load()
       }
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.catch((err: unknown) => {
+          const errName = (err as Error)?.name
+          if (errName === "AbortError") return
+          console.warn("Audio play prevented:", err)
+          setPlaying(false)
+          if (!isProcessing && errName !== "NotAllowedError") {
+            setAudioError(t("audio_not_found_desc"))
+            showToast(t("toast_audio_not_found"), "error")
+          }
+        })
+      }
+    } else if (!playing && !audio.paused) {
+      audio.pause()
     }
-  }, [playing, audioUrl, isAudioMissingOrExpired])
+  }, [playing, audioUrl, isAudioMissingOrExpired, isProcessing])
 
   // Playback rate sync
 
@@ -375,7 +412,7 @@ export default function AudioPlayer({
     return (
       <div className="flex-shrink-0 px-4 py-2.5 border-b border-border bg-surface flex items-center gap-3 select-none print:hidden">
         <button
-          disabled={!audioUrl || isAudioMissingOrExpired || !!audioError}
+          disabled={!audioUrl || isAudioMissingOrExpired}
           onClick={togglePlay}
           className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors text-primary-contrast bg-primary hover:bg-primary-hover disabled:opacity-40 cursor-pointer"
           aria-label={playing ? "Pause audio" : "Play audio"}
@@ -453,6 +490,11 @@ export default function AudioPlayer({
 
     setPlaying(false)
 
+    // Suppress alarming "audio not found / deleted" alerts while transcription is in progress
+    if (isProcessing) {
+      return
+    }
+
     setAudioError(t("audio_not_found_desc"))
 
     showToast(t("toast_audio_not_found"), "error")
@@ -471,6 +513,8 @@ export default function AudioPlayer({
           onSeeked={handleSeeked}
           onWaiting={handleWaiting}
           onCanPlay={handleCanPlay}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
           onPlaying={handlePlaying}
           onEnded={() => {
             setPlaying(false)
@@ -547,7 +591,7 @@ export default function AudioPlayer({
       </div>
 
       {/* Informative Audio Removed Banner */}
-      {isAudioMissingOrExpired && (
+      {!isProcessing && isAudioMissingOrExpired && (
         <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-surface-2 border border-border text-fg-secondary flex items-center gap-2.5 text-xs animate-scale-in">
           <HardDrives
             size={16}
@@ -561,7 +605,7 @@ export default function AudioPlayer({
       )}
 
       {/* Audio Error Alert Banner (Only when actual playback error occurs) */}
-      {audioError && !isAudioMissingOrExpired && (
+      {!isProcessing && audioError && !isAudioMissingOrExpired && (
         <div className="mb-3 px-3 py-2 rounded-xl bg-danger-dim border border-danger/25 text-danger flex items-center gap-2.5 text-xs animate-scale-in">
           <WarningCircle size={16} weight="fill" className="flex-shrink-0" />
           <span className="font-medium">{audioError}</span>
@@ -782,7 +826,7 @@ export default function AudioPlayer({
 
         {/* Play / Pause */}
         <button
-          disabled={!audioUrl}
+          disabled={!audioUrl || isAudioMissingOrExpired}
           onClick={togglePlay}
           className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 disabled:opacity-40 text-primary-contrast bg-primary hover:bg-primary-hover active:scale-95 cursor-pointer shadow-sm relative"
           aria-label={playing ? t("btn_pause") : t("a11y_play_audio")}

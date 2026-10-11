@@ -327,8 +327,17 @@ export function setCachedDocuments(
 ): void {
   try {
     const key = `${DOCS_CACHE_PREFIX}${userKey || getSessionId()}`
-    // Filter demo docs and cache up to 100 most recent documents
-    const safeDocs = docs.filter(isNotDemoDoc).slice(0, 100)
+    // Filter demo docs, sanitize dead blob URLs, and cache up to 100 most recent documents
+    const safeDocs = docs
+      .filter(isNotDemoDoc)
+      .slice(0, 100)
+      .map((d) => {
+        if (d.audioUrl && d.audioUrl.startsWith("blob:")) {
+          const { audioUrl: _, ...rest } = d
+          return rest as DocumentItem
+        }
+        return d
+      })
     localStorage.setItem(key, JSON.stringify(safeDocs))
   } catch {
     /* non-fatal if storage quota exceeded */

@@ -561,6 +561,7 @@ export default function Workspace({
               onDeleteAudio={() => setDeleteAudioModalOpen(true)}
               isPlaying={isPlaying}
               onPlayingChange={setIsPlaying}
+              isProcessing={document.status === "Processing"}
             />
             <TranscriptPanel
               entries={transcripts}
@@ -590,6 +591,7 @@ export default function Workspace({
                 onDeleteAudio={() => setDeleteAudioModalOpen(true)}
                 isPlaying={isPlaying}
                 onPlayingChange={setIsPlaying}
+                isProcessing={document.status === "Processing"}
               />
             </div>
             <SummaryEditor
