@@ -16,7 +16,6 @@ import {
   Check,
   Brain,
   X,
-  WarningCircle,
 } from "@phosphor-icons/react"
 
 // ~50KB gzipped of unified/micromark deps lives behind this boundary — only
@@ -28,53 +27,53 @@ const LazyReactMarkdown = lazy(() => import("react-markdown"))
 // Module-level constant so React doesn't remount the markdown tree each render.
 
 const markdownComponents = {
-  p: ({ node, ...props }: any) => (
+  p: ({ node: _node, ...props }: any) => (
     <p
       className="mb-3 last:mb-0 leading-relaxed print:mb-2.5 print:text-[13px] print:leading-relaxed print:text-slate-800"
       {...props}
     />
   ),
 
-  ul: ({ node, ...props }: any) => (
+  ul: ({ node: _node, ...props }: any) => (
     <ul
       className="space-y-2 mb-3 last:mb-0 list-none print:list-disc print:pl-5 print:space-y-1.5 print:mb-3 [&>li]:pl-5 [&>li]:relative [&>li]:before:absolute [&>li]:before:left-0 [&>li]:before:top-2 [&>li]:before:w-1.5 [&>li]:before:h-1.5 [&>li]:before:bg-primary [&>li]:before:rounded-full print:[&>li]:pl-0 print:[&>li]:before:hidden print:[&>li]:text-slate-800"
       {...props}
     />
   ),
 
-  li: ({ node, ...props }: any) => (
+  li: ({ node: _node, ...props }: any) => (
     <li className="print:text-[13px] print:text-slate-800" {...props} />
   ),
 
-  ol: ({ node, ...props }: any) => (
+  ol: ({ node: _node, ...props }: any) => (
     <ol
       className="list-decimal pl-5 space-y-2 mb-3 last:mb-0 font-mono text-fg-secondary print:text-slate-800 print:space-y-1.5 print:mb-3 print:font-sans print:text-[13px]"
       {...props}
     />
   ),
 
-  h3: ({ node, ...props }: any) => (
+  h3: ({ node: _node, ...props }: any) => (
     <h3
       className="text-sm font-bold font-display text-fg mt-4 mb-2 print:text-[15px] print:font-bold print:text-slate-950 print:mt-4 print:mb-1.5"
       {...props}
     />
   ),
 
-  h4: ({ node, ...props }: any) => (
+  h4: ({ node: _node, ...props }: any) => (
     <h4
       className="text-xs font-bold text-fg mt-3 mb-1.5 print:text-sm print:font-semibold print:text-slate-900 print:mt-3 print:mb-1"
       {...props}
     />
   ),
 
-  strong: ({ node, ...props }: any) => (
+  strong: ({ node: _node, ...props }: any) => (
     <strong
       className="font-semibold text-fg print:font-bold print:text-slate-950"
       {...props}
     />
   ),
 
-  code: ({ node, ...props }: any) => (
+  code: ({ node: _node, ...props }: any) => (
     <code
       className="bg-surface-3 text-fg-secondary px-1.5 py-0.5 rounded text-xs font-mono print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300"
       {...props}

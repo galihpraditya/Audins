@@ -59,7 +59,7 @@ import { useQuota } from "./hooks/useQuota"
 
 import { useDocumentPolling } from "./hooks/useDocumentPolling"
 
-import { ArrowClockwise, WarningCircle } from "@phosphor-icons/react"
+import { ArrowClockwise } from "@phosphor-icons/react"
 
 export default function App() {
   const navigate = useNavigate()

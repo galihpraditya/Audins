@@ -1,4 +1,4 @@
-import { FullDocument, TranscriptEntry } from "../types/index.js"
+import { FullDocument } from "../types/index.js"
 
 import fs from "node:fs"
 
@@ -13,7 +13,6 @@ import {
   getSupabaseAllDocuments,
   getSupabaseDocumentById,
   getSupabaseDocumentByShareId,
-  getSupabaseStorageSums,
   getSupabaseAudioRefs,
   saveSupabaseDocument,
   deleteSupabaseDocument,

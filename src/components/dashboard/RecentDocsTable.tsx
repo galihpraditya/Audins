@@ -8,7 +8,7 @@ import StatusBadge from "./StatusBadge"
 
 import DocCard, { DocCardSkeleton } from "./DocCard"
 
-import EmptyState, { EmptyStateSkeleton } from "../ui/EmptyState"
+import EmptyState from "../ui/EmptyState"
 
 import Modal from "../ui/Modal"
 

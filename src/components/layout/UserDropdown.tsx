@@ -9,7 +9,6 @@ import { useLanguage } from "../../context/LanguageContext"
 import { useToast } from "../ui/ToastContext"
 
 import {
-  UserCircle,
   SignOut,
   SignIn,
   ArrowsClockwise,
@@ -26,8 +25,6 @@ interface UserDropdownProps {
 export default function UserDropdown({ compact = false }: UserDropdownProps) {
   const {
     user,
-
-    isAuthenticated,
 
     isGuest,
 

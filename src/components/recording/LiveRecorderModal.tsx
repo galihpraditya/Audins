@@ -19,7 +19,6 @@ import {
   X,
   Waveform,
   CheckCircle,
-  DeviceMobile,
   Minus,
   CornersOut,
   Sparkle,
@@ -74,8 +73,6 @@ export default function LiveRecorderModal({
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
 
   const [recordingName, setRecordingName] = useState("")
-
-  const [isScreenAwake, setIsScreenAwake] = useState(false)
 
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([])
 

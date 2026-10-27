@@ -571,7 +571,7 @@ export async function transcribeAudioWithGroq(
     }
 
     const totalChunks = Math.max(chunks.length, numChunks, 1)
-    const resultsByIndex: TranscriptEntry[][] = new Array(totalChunks)
+    const resultsByIndex: TranscriptEntry[][] = Array.from({ length: totalChunks })
 
     let nextChunk = 0
 

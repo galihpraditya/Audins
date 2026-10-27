@@ -71,12 +71,6 @@ export function getRateLimitKey(req: Request): string {
   return hashedIpKey(socketAddress(req))
 }
 
-function isLocalSocket(req: Request): boolean {
-  const addr = socketAddress(req)
-
-  return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1"
-}
-
 /** Removes expired entries so the in-memory store cannot grow unbounded. */
 
 export function pruneLocalRateLimits(): void {

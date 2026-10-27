@@ -1,6 +1,5 @@
 import {
   DocumentItem,
-  DocumentShareSettings,
   PublicSharedDocument,
   AISummary,
   RateLimitResponse,
@@ -426,8 +425,6 @@ export async function fetchWithColdStartRetry(
       const delay = initialDelayMs * Math.pow(1.5, attempt)
       await new Promise((resolve) => setTimeout(resolve, delay))
     }
-
-    return await fetchWithAuth(url, fetchOptions)
   } finally {
     if (slowTimer) clearTimeout(slowTimer)
   }
@@ -558,26 +555,6 @@ export function uploadAudioToApi(
 }
 
 /**
- * Polls a document's processing status.
- * Returns null for transient failures (network hiccups) — callers decide
- * when to give up based on attempt caps.
- */
-
-export async function pollDocumentStatusApi(
-  id: string | number,
-): Promise<DocumentItem | null> {
-  try {
-    const res = await fetchWithAuth(`${API_BASE_URL}/documents/${id}`)
-
-    if (!res.ok) return null
-
-    return (await res.json()) as DocumentItem
-  } catch {
-    return null
-  }
-}
-
-/**
  * Fetches single document details by ID.
  * Returns null if the document does not exist (404).
  * Throws ApiError on network or server errors.
@@ -591,6 +568,17 @@ export async function fetchDocumentByIdApi(
   if (!res.ok) throw await extractErrorMessage(res, "Failed to load document")
 
   return (await res.json()) as DocumentItem
+}
+
+/**
+ * Polls a document's processing status.
+ * Returns null for transient failures (network hiccups) — callers decide
+ * when to give up based on attempt caps.
+ */
+export async function pollDocumentStatusApi(
+  id: string | number,
+): Promise<DocumentItem | null> {
+  return fetchDocumentByIdApi(id).catch(() => null)
 }
 
 export async function reSummarizeApi(

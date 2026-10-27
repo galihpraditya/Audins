@@ -19,13 +19,6 @@ function getHeaderKey(
   return header
 }
 
-function isValidGuestSessionId(id: string | undefined): boolean {
-  if (!id || typeof id !== "string") return false
-  const trimmed = id.trim()
-  if (trimmed.startsWith("usr-")) return false
-  return /^[A-Za-z0-9_-]{8,64}$/.test(trimmed)
-}
-
 // POST /api/v1/auth/signup
 router.post("/signup", async (req: AuthenticatedRequest, res: Response) => {
   try {

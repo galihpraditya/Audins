@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react"
+import { useState } from "react"
 import { DocumentItem } from "../../types"
 import Modal from "../ui/Modal"
 import { useLanguage } from "../../context/LanguageContext"
@@ -51,7 +51,6 @@ export default function ShareModal({
   const [copied, setCopied] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
-  const [, startTransition] = useTransition()
 
   const hasAudio = Boolean(document.audioUrl && document.audioUrl !== "Expired")
   const origin = typeof window !== "undefined" ? window.location.origin : ""

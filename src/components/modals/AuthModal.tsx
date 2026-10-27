@@ -16,7 +16,6 @@ import {
   EyeSlash,
   Spinner,
   X,
-  DeviceMobile,
   CheckCircle,
   WarningCircle,
 } from "@phosphor-icons/react"

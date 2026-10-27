@@ -175,7 +175,7 @@ app.use("/api/v1", audioRoutes)
 
 // Fallback 404 Handler
 
-app.use((req, res, next) => {
+app.use((req, res) => {
   res.status(404).json({
     error: "Not Found",
 
@@ -203,7 +203,7 @@ app.use(
 
     res: express.Response,
 
-    next: express.NextFunction,
+    _next: express.NextFunction,
   ) => {
     console.error("API Error:", err)
 

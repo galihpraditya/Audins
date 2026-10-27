@@ -25,7 +25,6 @@ import { uploadAudioToR2, isR2Enabled } from "../services/r2.service.js"
 import {
   uploadAudioToSupabase,
   isSupabaseEnabled,
-  getSupabaseUserIdByEmail,
 } from "../services/supabase.service.js"
 
 import {
@@ -42,7 +41,6 @@ import {
 } from "../services/storage.service.js"
 
 import {
-  getLocalUserIdByEmail,
   getAllUserIdentities,
   getCanonicalUserId,
   isRegisteredUserId,
@@ -236,12 +234,6 @@ async function requireOwnedDocument(
     res.status(500).json({ error: "Failed to fetch document" })
 
     return null
-  }
-
-  let localUserId: string | null = null
-
-  if (userEmail) {
-    localUserId = getLocalUserIdByEmail(userEmail)
   }
 
   const guestSession = getHeaderKey(req.headers["x-user-session"])
